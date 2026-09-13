@@ -1,0 +1,6 @@
+[submodule "third_party/python-adb"]
+	path = third_party/python-adb
+	url = https://github.com/google/python-adb.git
+[submodule "third_party/aosp-adb"]
+	path = third_party/aosp-adb
+	url = https://github.com/mirror/platform_packages_modules_adb.git

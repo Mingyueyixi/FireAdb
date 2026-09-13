@@ -1,0 +1,27 @@
+# Dart / Flutter
+.dart_tool/
+.pub-cache/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# IDE / 编辑器
+*.iml
+.idea/
+.vscode/
+
+# Android / Gradle 本地缓存
+android/.gradle/
+.gradle-probe/
+.gradle-probe-groovy/
+
+# 日志与本地产物
+*.log
+keys/
+*.key
+
+# 工具/临时产物
+.github/modernize/
+
+# 参考源码以 git submodule 引入（见 .gitmodules），内容由 submodule 管理

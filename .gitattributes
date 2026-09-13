@@ -1,0 +1,25 @@
+# 统一按 LF 入库，避免跨平台（Windows/macOS/Linux）协作时的换行噪音
+* text=auto eol=lf
+
+# Windows 可执行/脚本保持 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制文件不做换行转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.jar binary
+*.so binary
+*.dll binary
+*.dylib binary
+
+# 生成产物不计入语言统计
+*.lock linguist-generated
+pubspec.lock linguist-generated
+
+# 折叠生成文件
+app/android/**/generated_plugin_registrant.* linguist-generated
+app/**/generated_plugins.cmake linguist-generated

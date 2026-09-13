@@ -1,0 +1,20 @@
+name: adb_usb
+description: adb_core 的 USB 传输层实现（桌面端基于 dart_libusb，Android 端走 android.hardware.usb）。
+version: 0.1.0
+publish_to: none
+resolution: workspace
+# repository: https://gitee.com/mingyueyixi/fire-adb
+
+environment:
+  sdk: ^3.13.1
+
+# Add regular dependencies here.
+dependencies:
+  adb_core:
+    path: ../adb_core
+  dart_libusb: ^1.0.1
+  # path: ^1.9.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6

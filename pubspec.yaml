@@ -1,0 +1,23 @@
+# FireAdb 单仓库（monorepo）工作区根。
+#
+# 使用 Dart 官方 pub workspace 统一管理 app 与 packages 的依赖解析、
+# 单一 lockfile（pubspec.lock）与共享的 .dart_tool 缓存。
+# 常用命令都在仓库根执行，例如：
+#   flutter pub get         # 一次性拉取全部成员依赖
+#   dart analyze            # 静态分析整个工作区
+#   flutter test app        # 运行 app 测试
+#   dart test packages/adb_core
+name: fire_adb_workspace
+description: FireAdb 工作区根（Flutter app + 纯 Dart packages）。
+publish_to: none
+
+environment:
+  sdk: ^3.13.1
+
+dev_dependencies:
+  lints: ^6.0.0
+
+workspace:
+  - app
+  - packages/adb_core
+  - packages/adb_usb

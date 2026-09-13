@@ -1,0 +1,12 @@
+# Flutter 应用：先启用 flutter_lints，再叠加工作区共享规则。
+include:
+  - package:flutter_lints/flutter.yaml
+  - ../analysis_options.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - windows/**
+    - macos/**
+    - linux/**

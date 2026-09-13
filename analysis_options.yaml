@@ -1,0 +1,30 @@
+# FireAdb 工作区共享的静态分析配置。
+#
+# 各成员包通过 `include:` 继承本文件（见 app/packages 各自的 analysis_options.yaml），
+# 从而避免在每个包中重复维护 lint 规则。
+#
+# - 纯 Dart 包：include: ../../analysis_options.yaml
+# - Flutter 包 ：include: [package:flutter_lints/flutter.yaml, ../../analysis_options.yaml]
+include: package:lints/recommended.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-raw-types: true
+
+  errors:
+    # TODO/FIXME 只作为提示，不作为构建失败项
+    todo: ignore
+
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "**/build/**"
+    - "third_party/**"
+
+linter:
+  rules:
+    - always_declare_return_types
+    - directives_ordering
+    - prefer_single_quotes
+    - unnecessary_parenthesis
