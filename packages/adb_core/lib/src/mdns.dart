@@ -65,11 +65,30 @@ class MdnsException implements Exception {
 /// 通过向 `224.0.0.251:5353` 发送 PTR 查询（QU bit 置位，从临时端口发出，
 /// 应答方会单播回源端口，无需加入组播组），收集 PTR / SRV / TXT / A / AAAA
 /// 记录并聚合为 [MdnsService]。
+///
+/// ⚠️ 适用场景说明（给上层 UI / 用户文档参考）：
+///
+/// ✅ **能发现的设备**：
+/// - 开启了 **Android 无线调试** 的设备（Android 11+）
+///   - 设置路径：`开发者选项` → `无线调试` → 启用
+///   - 设备会广播 `_adb-tls-pairing._tcp`（配对）和/或 `_adb-tls-connect._tcp`（连接）
+/// - 部分自定义固件/模拟器主动广播 `_adb._tcp`（legacy 传输）
+///
+/// ❌ **无法发现的设备**：
+/// - 通过 `adb connect 192.168.x.x:5555` 手动连接的设备（纯 TCP，无 mDNS 广播）
+/// - 未开启无线调试、仅开启 USB 调试的设备
+/// - 旧版本 Android（< 11）或未实现 mDNS 广播的 ROM
+///
+/// 💡 **用户引导建议**：
+/// - 如果扫描无结果，提示用户：
+///   1. 确认手机已开启「无线调试」（非 USB 调试）
+///   2. 手机与电脑在同一 Wi-Fi 网段（无 AP 隔离）
+///   3. 仍无法发现 → 改用「手动输入 IP:端口」直连（调用 [adbConnectTcp]）
 class MdnsBrowser {
   MdnsBrowser({
     InternetAddress? group,
     this.port = kMdnsPort,
-    this.timeout = const Duration(seconds: 4),
+    this.timeout = const Duration(seconds: 8),
     this.ttl = 1,
   }) : group = group ?? kMdnsGroupV4;
 
@@ -96,8 +115,32 @@ class MdnsBrowser {
       adbServiceTypeTransport,
     },
   }) async {
+    final results = <MdnsService>[];
+    
+    // 使用配置的 group 地址进行发现
+    results.addAll(await _discoverOn(InternetAddress.anyIPv4, group, serviceTypes));
+    
+    // 如果 group 是 IPv6，也尝试 IPv6 发现
+    if (group.type == InternetAddressType.IPv6) {
+      try {
+        results.addAll(await _discoverOn(InternetAddress.anyIPv6, group, serviceTypes));
+      } catch (_) {
+        // 忽略 IPv6 不可用的情况
+      }
+    }
+    
+    // 去重
+    final seen = <String>{};
+    return results.where((s) => seen.add(s.instanceName)).toList();
+  }
+
+  Future<List<MdnsService>> _discoverOn(
+    InternetAddress bindAddr,
+    InternetAddress groupAddr,
+    Set<String> serviceTypes,
+  ) async {
     final socket = await RawDatagramSocket.bind(
-        InternetAddress.anyIPv4, 0, reuseAddress: true, ttl: ttl);
+        bindAddr, 0, reuseAddress: true, ttl: ttl);
     try {
       final resolver =
           _MdnsResolver(serviceTypes: _queryTypes(serviceTypes));
@@ -106,8 +149,6 @@ class MdnsBrowser {
           final datagram = socket.receive();
           if (datagram != null) {
             resolver.handleDatagram(datagram.data);
-            // 包在此处可能早于本 socket 已 join 的组播组被路由，
-            // 先原样积存，供应答方（测试假应答方）与真实网络复用。
           }
         }
       });
@@ -119,7 +160,7 @@ class MdnsBrowser {
       try {
         for (final type in serviceTypes) {
           final qname = _encodeName('$type.$kMdnsDomain');
-          socket.send(_buildPtrQuery(qname), group, port);
+          socket.send(_buildPtrQuery(qname), groupAddr, port);
         }
         await completer.future;
       } finally {
@@ -133,10 +174,20 @@ class MdnsBrowser {
   }
 }
 
-/// 便捷函数：发现局域网内的 adb 服务（默认只查配对服务）。
+/// 便捷函数：发现局域网内的 adb 服务（默认查所有三类 adb 服务）。
+///
+/// 返回通过 mDNS 广播的设备（Android 无线调试）。
+///
+/// ⚠️ **仅适用于开启「无线调试」的 Android 11+ 设备**。
+/// 普通 `adb connect IP:PORT` 建立的连接**不会**被发现。
+/// 如需直连已知 IP:PORT，请使用 [adbConnectTcp]。
 Future<List<MdnsService>> discoverAdbServices({
-  Set<String> serviceTypes = const {adbServiceTypePairing},
-  Duration timeout = const Duration(seconds: 4),
+  Set<String> serviceTypes = const {
+    adbServiceTypeTransport,
+    adbServiceTypePairing,
+    adbServiceTypeConnect,
+  },
+  Duration timeout = const Duration(seconds: 8),
 }) {
   return MdnsBrowser(timeout: timeout).discover(serviceTypes: serviceTypes);
 }

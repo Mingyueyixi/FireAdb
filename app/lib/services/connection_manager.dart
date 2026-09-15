@@ -52,6 +52,16 @@ class ConnectionManager extends ChangeNotifier {
     }
   }
 
+  /// 直连 TCP 设备（WiFi adb connect / 模拟器端口）。
+  ///
+  /// 适用场景：
+  /// - 已知设备 IP 和端口（如 `adb connect 192.168.8.150:6666`）
+  /// - 设备**未**开启无线调试，或 mDNS 扫描无结果时
+  /// - 模拟器端口、USB 网络共享等非 mDNS 场景
+  ///
+  /// 与 [MdnsBrowser.discover] 的区别：
+  /// - 本方法：直接 TCP 握手，**不依赖 mDNS**，只要端口通即可连
+  /// - mDNS 发现：仅能发现**主动广播** `_adb-tls-pairing._tcp` 等服务的设备
   Future<AdbDevice> connectHost(String host, int port) async {
     await init();
     final device = await adbConnectTcp(host, port: port, signers: _signers);

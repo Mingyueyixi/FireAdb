@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../models/feature_spec.dart';
 import '../services/connection_manager.dart';
-import '../widgets/adaptive.dart';
+import '../widgets/adaptive.dart'
+    show isWide, isAtLeastTablet;
 import '../widgets/feature_tile.dart';
 import 'features/device_overview.dart';
 import 'features/placeholder_feature_page.dart';
+import 'features/shell_panel.dart';
 
 /// 设备工作区：切换设备 + 选择功能。
 ///
@@ -46,6 +48,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       );
       return;
     }
+    if (spec.id == 'shell') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            appBar: AppBar(title: Text(spec.title)),
+            body: ShellPanelView(serial: _serial, manager: widget.manager),
+          ),
+        ),
+      );
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => PlaceholderFeaturePage(spec: spec),
@@ -57,6 +70,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     final spec = kDeviceFeatures.firstWhere((f) => f.id == _feature);
     if (spec.id == kOverviewFeatureId) {
       return DeviceOverviewView(serial: _serial, manager: widget.manager);
+    }
+    if (spec.id == 'shell') {
+      return ShellPanelView(serial: _serial, manager: widget.manager);
     }
     return PlaceholderFeatureBody(spec: spec);
   }

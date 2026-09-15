@@ -272,6 +272,53 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 12),
+            // 说明：何时有效
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: theme.colorScheme.outlineVariant),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '仅适用于开启「无线调试」的 Android 11+ 设备',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '✅ 能发现：\n'
+                    '• 设置 → 开发者选项 → 无线调试 → 已开启\n'
+                    '• 手机与电脑在同一 Wi-Fi（无 AP 隔离）\n\n'
+                    '❌ 无法发现：\n'
+                    '• 仅开启 USB 调试、未开无线调试\n'
+                    '• 通过 `adb connect IP:PORT` 手动连接的设备\n'
+                    '• Android 11 以下或未实现 mDNS 广播的 ROM\n\n'
+                    '💡 如扫描无结果，请使用上方「手动连接」输入 IP:端口直连',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
             if (_scanError != null)
               Text(
                 '扫描失败：$_scanError',
@@ -279,7 +326,7 @@ class _HomeScreenState extends State<HomeScreen> {
               )
             else if (_discovered.isEmpty && !_scanning)
               Text(
-                '未扫描到设备。请确保设备已开启无线调试并处于同一局域网。',
+                '未扫描到设备。请确认上述条件，或改用「手动连接」。',
                 style: TextStyle(color: theme.colorScheme.outline),
               )
             else

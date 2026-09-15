@@ -62,5 +62,6 @@ const List<FeatureSpec> kDeviceFeatures = <FeatureSpec>[
     title: '命令面板',
     description: '执行 adb shell 命令并查看输出',
     icon: Icons.terminal,
+    implemented: true,
   ),
 ];
