@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../models/feature_spec.dart';
-import '../../widgets/feature_tile.dart';
+import 'data/feature_spec.dart';
+import 'feature_tile.dart';
 
 /// 未实现功能的占位页（移动端全屏）。
 class PlaceholderFeaturePage extends StatelessWidget {

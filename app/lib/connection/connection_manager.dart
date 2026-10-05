@@ -1,18 +1,19 @@
 import 'dart:io';
 
 import 'package:adb_core/adb_core.dart';
-import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/device_profile.dart';
+import 'model/device_profile.dart';
 
 /// 管理所有 ADB 连接与连接历史，负责 RSA 密钥加载与历史持久化。
-class ConnectionManager extends ChangeNotifier {
+class ConnectionManager extends GetxService {
   static const String _historyPrefsKey = 'connection_history';
 
-  final Map<String, AdbDevice> _devices = <String, AdbDevice>{};
-  final Map<String, DeviceProfile> _profiles = <String, DeviceProfile>{};
-  final List<DeviceProfile> _history = <DeviceProfile>[];
+  final RxMap<String, AdbDevice> _devices = <String, AdbDevice>{}.obs;
+  final RxMap<String, DeviceProfile> _profiles =
+      <String, DeviceProfile>{}.obs;
+  final RxList<DeviceProfile> _history = <DeviceProfile>[].obs;
   List<AdbRsaKeyPair> _signers = const <AdbRsaKeyPair>[];
   SharedPreferences? _prefs;
   bool _signerResolved = false;
@@ -73,7 +74,6 @@ class ConnectionManager extends ChangeNotifier {
     );
     _devices[device.serial] = device;
     _remember(host, port);
-    notifyListeners();
     return device;
   }
 
@@ -85,14 +85,12 @@ class ConnectionManager extends ChangeNotifier {
         await device.close();
       } catch (_) {}
     }
-    notifyListeners();
   }
 
   Future<void> removeFromHistory(DeviceProfile profile) async {
     await init();
     _history.remove(profile);
     _saveHistory();
-    notifyListeners();
   }
 
   void _remember(String host, int port) {

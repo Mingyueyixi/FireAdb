@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/feature_spec.dart';
+import 'data/feature_spec.dart';
 
 /// 功能入口卡片（移动端九宫格用）。
 class FeatureTile extends StatelessWidget {

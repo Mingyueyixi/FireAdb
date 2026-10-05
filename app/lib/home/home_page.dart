@@ -1,105 +1,49 @@
 import 'package:adb_core/adb_core.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
-import '../services/connection_manager.dart';
 import '../widgets/adaptive.dart';
-import 'workspace_screen.dart';
+import 'home_controller.dart';
 
 /// 连接中心：手动连接 / mDNS 设备发现 / 已连接设备 / 历史连接。
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.manager});
-
-  final ConnectionManager manager;
-
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  final TextEditingController _hostController = TextEditingController();
-  final TextEditingController _portController =
-      TextEditingController(text: '5555');
-  bool _connecting = false;
-  bool _scanning = false;
-  List<MdnsService> _discovered = const <MdnsService>[];
-  String? _scanError;
-
-  @override
-  void dispose() {
-    _hostController.dispose();
-    _portController.dispose();
-    super.dispose();
-  }
+class HomePage extends GetView<HomeController> {
+  const HomePage({super.key});
 
   Future<void> _connect(String host, int port) async {
-    setState(() => _connecting = true);
     try {
-      final device = await widget.manager.connectHost(host, port);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已连接：${device.serial}')),
+      final device = await controller.connect(host, port);
+      Get.snackbar(
+        '连接成功',
+        '已连接：${device.serial}',
+        snackPosition: SnackPosition.BOTTOM,
       );
-      _openWorkspace(device.serial);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('连接失败：$e')),
-      );
-    } finally {
-      if (mounted) setState(() => _connecting = false);
+      Get.toNamed<void>('/workspace', arguments: device.serial);
+    } catch (error) {
+      Get.snackbar('连接失败', '$error', snackPosition: SnackPosition.BOTTOM);
     }
   }
 
   Future<void> _connectManual() async {
-    final host = _hostController.text.trim();
-    final port = int.tryParse(_portController.text.trim());
+    final host = controller.hostController.text.trim();
+    final port = int.tryParse(controller.portController.text.trim());
     if (host.isEmpty || port == null || port <= 0 || port > 65535) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入有效的主机地址与端口（1-65535）')),
+      Get.snackbar(
+        '输入无效',
+        '请输入有效的主机地址与端口（1-65535）',
+        snackPosition: SnackPosition.BOTTOM,
       );
       return;
     }
     await _connect(host, port);
   }
 
-  Future<void> _scan() async {
-    setState(() {
-      _scanning = true;
-      _scanError = null;
-    });
-    try {
-      final services = await discoverAdbServices(
-        serviceTypes: const <String>{
-          adbServiceTypeTransport,
-          adbServiceTypeConnect,
-          adbServiceTypePairing,
-        },
-      );
-      if (!mounted) return;
-      setState(() => _discovered = services);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _scanError = '$e');
-    } finally {
-      if (mounted) setState(() => _scanning = false);
-    }
+  Future<void> _disconnect(String serial) async {
+    await controller.manager.disconnect(serial);
+    Get.snackbar('设备已断开', '已断开连接', snackPosition: SnackPosition.BOTTOM);
   }
 
   void _openWorkspace(String serial) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            WorkspaceScreen(serial: serial, manager: widget.manager),
-      ),
-    );
-  }
-
-  Future<void> _disconnect(String serial) async {
-    await widget.manager.disconnect(serial);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已断开连接')),
-    );
+    Get.toNamed<void>('/workspace', arguments: serial);
   }
 
   String _serviceTypeLabel(String type) {
@@ -116,39 +60,32 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('FireAdb')),
-      body: ListenableBuilder(
-        listenable: widget.manager,
-        builder: (context, _) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 920),
-                child: _buildSections(context),
-              ),
+      body: Obx(
+        () => SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 920),
+              child: _buildSections(context),
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildSections(BuildContext context) {
-    final manual = _buildManualConnect();
-    final discovery = _buildDiscovery();
-    final connected = _buildConnectedDevices();
-    final history = _buildHistory();
+    final manual = _buildManualConnect(context);
+    final discovery = _buildDiscovery(context);
+    final connected = _buildConnectedDevices(context);
+    final history = _buildHistory(context);
     if (isWide(context)) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Expanded(
             child: Column(
-              children: <Widget>[
-                manual,
-                const SizedBox(height: 16),
-                discovery,
-              ],
+              children: <Widget>[manual, const SizedBox(height: 16), discovery],
             ),
           ),
           const SizedBox(width: 16),
@@ -178,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _sectionHeader(IconData icon, String title) {
+  Widget _sectionHeader(BuildContext context, IconData icon, String title) {
     return Row(
       children: <Widget>[
         Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
@@ -188,21 +125,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildManualConnect() {
+  Widget _buildManualConnect(BuildContext context) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            _sectionHeader(Icons.link, '手动连接'),
+            _sectionHeader(context, Icons.link, '手动连接'),
             const SizedBox(height: 12),
             Row(
               children: <Widget>[
                 Expanded(
                   flex: 3,
                   child: TextField(
-                    controller: _hostController,
+                    controller: controller.hostController,
                     decoration: const InputDecoration(
                       labelText: '主机地址',
                       hintText: '例如 192.168.1.100',
@@ -216,7 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SizedBox(
                   width: 90,
                   child: TextField(
-                    controller: _portController,
+                    controller: controller.portController,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       labelText: '端口',
@@ -228,15 +165,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(width: 12),
                 FilledButton.icon(
-                  onPressed: _connecting ? null : _connectManual,
-                  icon: _connecting
+                  onPressed: controller.connecting.value
+                      ? null
+                      : _connectManual,
+                  icon: controller.connecting.value
                       ? const SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.link),
-                  label: Text(_connecting ? '连接中…' : '连接'),
+                  label: Text(controller.connecting.value ? '连接中…' : '连接'),
                 ),
               ],
             ),
@@ -246,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildDiscovery() {
+  Widget _buildDiscovery(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
       child: Padding(
@@ -256,27 +195,28 @@ class _HomeScreenState extends State<HomeScreen> {
           children: <Widget>[
             Row(
               children: <Widget>[
-                _sectionHeader(Icons.radar, '设备发现（mDNS）'),
+                _sectionHeader(context, Icons.radar, '设备发现（mDNS）'),
                 const Spacer(),
                 FilledButton.tonalIcon(
-                  onPressed: _scanning ? null : _scan,
-                  icon: _scanning
+                  onPressed: controller.scanning.value ? null : controller.scan,
+                  icon: controller.scanning.value
                       ? const SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.search),
-                  label: Text(_scanning ? '扫描中…' : '扫描'),
+                  label: Text(controller.scanning.value ? '扫描中…' : '扫描'),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            // 说明：何时有效
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.5,
+                ),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: theme.colorScheme.outlineVariant),
               ),
@@ -319,18 +259,19 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            if (_scanError != null)
+            if (controller.scanError.value != null)
               Text(
-                '扫描失败：$_scanError',
+                '扫描失败：${controller.scanError.value}',
                 style: TextStyle(color: theme.colorScheme.error),
               )
-            else if (_discovered.isEmpty && !_scanning)
+            else if (controller.discovered.isEmpty &&
+                !controller.scanning.value)
               Text(
                 '未扫描到设备。请确认上述条件，或改用「手动连接」。',
                 style: TextStyle(color: theme.colorScheme.outline),
               )
             else
-              for (final s in _discovered)
+              for (final s in controller.discovered)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   dense: true,
@@ -344,8 +285,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   trailing: _serviceConnectable(s)
                       ? TextButton(
-                          onPressed:
-                              _connecting ? null : () => _connect(s.addressText, s.port),
+                          onPressed: controller.connecting.value
+                              ? null
+                              : () => _connect(s.addressText, s.port),
                           child: const Text('连接'),
                         )
                       : null,
@@ -356,16 +298,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildConnectedDevices() {
+  Widget _buildConnectedDevices(BuildContext context) {
     final theme = Theme.of(context);
-    final devices = widget.manager.profiles;
+    final devices = controller.manager.profiles;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            _sectionHeader(Icons.devices, '已连接设备（${devices.length}）'),
+            _sectionHeader(
+              context,
+              Icons.devices,
+              '已连接设备（${devices.length}）',
+            ),
             const SizedBox(height: 4),
             if (devices.isEmpty)
               Padding(
@@ -401,16 +347,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildHistory() {
+  Widget _buildHistory(BuildContext context) {
     final theme = Theme.of(context);
-    final history = widget.manager.history;
+    final history = controller.manager.history;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            _sectionHeader(Icons.history, '历史连接'),
+            _sectionHeader(context, Icons.history, '历史连接'),
             const SizedBox(height: 4),
             if (history.isEmpty)
               Padding(
@@ -430,7 +376,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   trailing: IconButton(
                     tooltip: '移除历史',
                     icon: const Icon(Icons.delete_outline),
-                    onPressed: () => widget.manager.removeFromHistory(h),
+                    onPressed: () => controller.manager.removeFromHistory(h),
                   ),
                   onTap: () {
                     final host = h.host;

@@ -1,35 +1,21 @@
+import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
-import '../models/feature_spec.dart';
-import '../services/connection_manager.dart';
-import '../widgets/adaptive.dart'
-    show isWide, isAtLeastTablet;
-import '../widgets/feature_tile.dart';
-import 'features/device_overview.dart';
-import 'features/placeholder_feature_page.dart';
-import 'features/shell_panel.dart';
+import '../device_overview/device_overview_page.dart';
+import '../shell/shell_page.dart';
+import '../widgets/adaptive.dart' show isWide, isAtLeastTablet;
+import 'data/feature_spec.dart';
+import 'feature_tile.dart';
+import 'placeholder_feature_page.dart';
+import 'workspace_controller.dart';
 
 /// 设备工作区：切换设备 + 选择功能。
 ///
 /// 桌面（宽屏）：左侧设备栏 + 功能栏 + 内容面板（三栏分栏）。
 /// 移动端（窄屏）：顶部下拉切换设备，功能九宫格，点击进入全屏页。
-class WorkspaceScreen extends StatefulWidget {
-  const WorkspaceScreen({
-    super.key,
-    required this.serial,
-    required this.manager,
-  });
-
-  final String serial;
-  final ConnectionManager manager;
-
-  @override
-  State<WorkspaceScreen> createState() => _WorkspaceScreenState();
-}
-
-class _WorkspaceScreenState extends State<WorkspaceScreen> {
-  late String _serial = widget.serial;
-  String _feature = kOverviewFeatureId;
+class WorkspacePage extends GetView<WorkspaceController> {
+  const WorkspacePage({super.key});
 
   String _shortName(String serial) {
     final colon = serial.indexOf(':');
@@ -38,54 +24,47 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   void _openFeature(BuildContext context, FeatureSpec spec) {
     if (spec.id == kOverviewFeatureId) {
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => Scaffold(
-            appBar: AppBar(title: Text(spec.title)),
-            body: DeviceOverviewView(serial: _serial, manager: widget.manager),
-          ),
+      Get.to<void>(
+        () => Scaffold(
+          appBar: AppBar(title: Text(spec.title)),
+          body: DeviceOverviewPage(serial: controller.selectedSerial.value),
         ),
       );
       return;
     }
     if (spec.id == 'shell') {
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => Scaffold(
-            appBar: AppBar(title: Text(spec.title)),
-            body: ShellPanelView(serial: _serial, manager: widget.manager),
-          ),
+      Get.to<void>(
+        () => Scaffold(
+          appBar: AppBar(title: Text(spec.title)),
+          body: ShellPage(serial: controller.selectedSerial.value),
         ),
       );
       return;
     }
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PlaceholderFeaturePage(spec: spec),
-      ),
-    );
+    Get.to<void>(() => PlaceholderFeaturePage(spec: spec));
   }
 
   Widget _buildFeaturePane() {
-    final spec = kDeviceFeatures.firstWhere((f) => f.id == _feature);
+    final spec = kDeviceFeatures.firstWhere(
+      (f) => f.id == controller.selectedFeature.value,
+    );
     if (spec.id == kOverviewFeatureId) {
-      return DeviceOverviewView(serial: _serial, manager: widget.manager);
+      return DeviceOverviewPage(serial: controller.selectedSerial.value);
     }
     if (spec.id == 'shell') {
-      return ShellPanelView(serial: _serial, manager: widget.manager);
+      return ShellPage(serial: controller.selectedSerial.value);
     }
     return PlaceholderFeatureBody(spec: spec);
   }
 
   Widget _buildWide(BuildContext context, List<String> serials) {
-    final selectedIndex = serials.indexOf(_serial);
+    final selectedIndex = serials.indexOf(controller.selectedSerial.value);
     return Scaffold(
       body: Row(
         children: <Widget>[
           NavigationRail(
             selectedIndex: selectedIndex,
-            onDestinationSelected: (i) =>
-                setState(() => _serial = serials[i]),
+            onDestinationSelected: (i) => controller.selectSerial(serials[i]),
             labelType: NavigationRailLabelType.all,
             destinations: <NavigationRailDestination>[
               for (final s in serials)
@@ -113,17 +92,15 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                   for (final spec in kDeviceFeatures)
                     FeatureListTile(
                       spec: spec,
-                      selected: spec.id == _feature,
-                      onTap: () => setState(() => _feature = spec.id),
+                      selected: spec.id == controller.selectedFeature.value,
+                      onTap: () => controller.selectFeature(spec.id),
                     ),
                 ],
               ),
             ),
           ),
           const VerticalDivider(width: 1),
-          Expanded(
-            child: SafeArea(child: _buildFeaturePane()),
-          ),
+          Expanded(child: SafeArea(child: _buildFeaturePane())),
         ],
       ),
     );
@@ -135,14 +112,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       appBar: AppBar(
         title: DropdownButtonHideUnderline(
           child: DropdownButton<String>(
-            value: _serial,
+            value: controller.selectedSerial.value,
             isDense: true,
             items: <DropdownMenuItem<String>>[
               for (final s in serials)
                 DropdownMenuItem<String>(value: s, child: Text(_shortName(s))),
             ],
             onChanged: (s) {
-              if (s != null) setState(() => _serial = s);
+              if (s != null) controller.selectSerial(s);
             },
           ),
         ),
@@ -155,10 +132,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           crossAxisSpacing: 12,
           children: <Widget>[
             for (final spec in kDeviceFeatures)
-              FeatureTile(
-                spec: spec,
-                onTap: () => _openFeature(context, spec),
-              ),
+              FeatureTile(spec: spec, onTap: () => _openFeature(context, spec)),
           ],
         ),
       ),
@@ -179,8 +153,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             const SizedBox(height: 12),
             FilledButton(
               onPressed: hasAny
-                  ? () => setState(() => _serial = serials.first)
-                  : () => Navigator.of(context).maybePop(),
+                  ? () => controller.selectSerial(serials.first)
+                  : () => Get.back<void>(),
               child: Text(hasAny ? '切换到其他设备' : '返回连接页'),
             ),
           ],
@@ -191,19 +165,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: widget.manager,
-      builder: (context, _) {
-        final serials =
-            widget.manager.profiles.map((p) => p.serial).toList();
-        if (!serials.contains(_serial)) {
-          return _buildDisconnected(context, serials);
-        }
-        if (isWide(context)) {
-          return _buildWide(context, serials);
-        }
-        return _buildNarrow(context, serials);
-      },
-    );
+    final manager = Get.find<ConnectionManager>();
+    return Obx(() {
+      final serials = manager.profiles.map((p) => p.serial).toList();
+      if (!serials.contains(controller.selectedSerial.value)) {
+        return _buildDisconnected(context, serials);
+      }
+      if (isWide(context)) {
+        return _buildWide(context, serials);
+      }
+      return _buildNarrow(context, serials);
+    });
   }
 }

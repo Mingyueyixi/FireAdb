@@ -1,25 +1,25 @@
 import 'dart:async';
 
+import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:flutter/material.dart';
-
-import '../../services/connection_manager.dart';
+import 'package:get/get.dart';
 
 /// 设备基本信息面板（连接后按需读取 getprop）。
-class DeviceOverviewView extends StatefulWidget {
-  const DeviceOverviewView({
+class DeviceOverviewPage extends StatefulWidget {
+  const DeviceOverviewPage({
     super.key,
     required this.serial,
-    required this.manager,
   });
 
   final String serial;
-  final ConnectionManager manager;
 
   @override
-  State<DeviceOverviewView> createState() => _DeviceOverviewViewState();
+  State<DeviceOverviewPage> createState() => _DeviceOverviewPageState();
 }
 
-class _DeviceOverviewViewState extends State<DeviceOverviewView> {
+class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
+  ConnectionManager get _manager => Get.find<ConnectionManager>();
+
   static const Map<String, String> _fieldLabels = <String, String>{
     'ro.product.model': '设备型号',
     'ro.product.manufacturer': '制造商',
@@ -40,7 +40,7 @@ class _DeviceOverviewViewState extends State<DeviceOverviewView> {
   }
 
   Future<void> _load() async {
-    final device = widget.manager.deviceOf(widget.serial);
+    final device = _manager.deviceOf(widget.serial);
     if (device == null) {
       setState(() => _error = '设备未连接');
       return;
@@ -63,7 +63,7 @@ class _DeviceOverviewViewState extends State<DeviceOverviewView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final profile = widget.manager.profileOf(widget.serial);
+    final profile = _manager.profileOf(widget.serial);
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
