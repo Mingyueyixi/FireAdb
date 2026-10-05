@@ -4,31 +4,50 @@ import 'package:adb_core/adb_core.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../app_feedback.dart';
+import 'model/connected_device.dart';
 import 'model/device_profile.dart';
 
 /// 管理所有 ADB 连接与连接历史，负责 RSA 密钥加载与历史持久化。
 class ConnectionManager extends GetxService {
   static const String _historyPrefsKey = 'connection_history';
 
-  final RxMap<String, AdbDevice> _devices = <String, AdbDevice>{}.obs;
-  final RxMap<String, DeviceProfile> _profiles =
-      <String, DeviceProfile>{}.obs;
+  final RxMap<String, ConnectedDevice> _devices =
+      <String, ConnectedDevice>{}.obs;
+  final RxMap<String, DeviceProfile> _profiles = <String, DeviceProfile>{}.obs;
   final RxList<DeviceProfile> _history = <DeviceProfile>[].obs;
   List<AdbRsaKeyPair> _signers = const <AdbRsaKeyPair>[];
   SharedPreferences? _prefs;
   bool _signerResolved = false;
 
-  List<AdbDevice> get devices => _devices.values.toList();
+  List<ConnectedDevice> get devices => _devices.values.toList();
 
   List<DeviceProfile> get profiles => _profiles.values.toList();
 
   List<DeviceProfile> get history => List<DeviceProfile>.unmodifiable(_history);
 
-  AdbDevice? deviceOf(String serial) => _devices[serial];
+  ConnectedDevice? deviceOf(String serial) => _devices[serial];
 
   DeviceProfile? profileOf(String serial) => _profiles[serial];
 
   bool isConnected(String serial) => _devices.containsKey(serial);
+
+  bool canConnectAdbDevice(AdbDeviceInfo info) => info.isOnline;
+
+  DeviceProfile? profileForAdbDevice(AdbDeviceInfo info) {
+    for (final profile in _profiles.values) {
+      if (profile.serial == info.serial || profile.adbSerial == info.serial) {
+        return profile;
+      }
+      final endpoint = _adbEndpoint(info.serial);
+      if (endpoint != null &&
+          profile.host == endpoint.$1 &&
+          profile.port == endpoint.$2) {
+        return profile;
+      }
+    }
+    return null;
+  }
 
   Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
@@ -42,13 +61,15 @@ class ConnectionManager extends GetxService {
     try {
       final home = Platform.environment['HOME'];
       if (home == null || home.isEmpty) return;
-      final dir = '$home${Platform.pathSeparator}.config'
+      final dir =
+          '$home${Platform.pathSeparator}.config'
           '${Platform.pathSeparator}fire_adb';
       Directory(dir).createSync(recursive: true);
       _signers = <AdbRsaKeyPair>[
         loadOrCreateAdbKey('$dir${Platform.pathSeparator}adbkey.pem'),
       ];
-    } catch (_) {
+    } catch (error, stackTrace) {
+      logAppError('加载 ADB RSA 签名密钥失败', error, stackTrace);
       _signers = const <AdbRsaKeyPair>[];
     }
   }
@@ -72,8 +93,35 @@ class ConnectionManager extends GetxService {
       port: port,
       label: host,
     );
-    _devices[device.serial] = device;
+    _devices[device.serial] = ConnectedDevice.direct(device);
     _remember(host, port);
+    return device;
+  }
+
+  Future<ConnectedDevice> connectAdbDevice(
+    AdbDeviceInfo info, {
+    required AdbHostClient hostClient,
+  }) async {
+    await init();
+    final existingProfile = profileForAdbDevice(info);
+    if (existingProfile != null) {
+      final existingDevice = _devices[existingProfile.serial];
+      if (existingDevice != null) return existingDevice;
+    }
+
+    if (!info.isOnline) {
+      throw StateError('设备 ${info.serial} 当前状态为 ${info.state}，无法连接');
+    }
+    final device = ConnectedDevice.viaHost(hostClient, info.serial);
+    final endpoint = _adbEndpoint(info.serial);
+    _profiles[device.serial] = DeviceProfile(
+      serial: device.serial,
+      host: endpoint?.$1,
+      port: endpoint?.$2,
+      label: info.model?.replaceAll('_', ' ') ?? info.product ?? device.serial,
+      adbSerial: info.serial,
+    );
+    _devices[device.serial] = device;
     return device;
   }
 
@@ -83,7 +131,9 @@ class ConnectionManager extends GetxService {
     if (device != null) {
       try {
         await device.close();
-      } catch (_) {}
+      } catch (error, stackTrace) {
+        logAppError('关闭 ADB 设备连接失败：$serial', error, stackTrace);
+      }
     }
   }
 
@@ -96,28 +146,26 @@ class ConnectionManager extends GetxService {
   void _remember(String host, int port) {
     _history
       ..removeWhere((h) => h.host == host && h.port == port)
-      ..insert(
-        0,
-        DeviceProfile(serial: '$host:$port', host: host, port: port),
-      );
+      ..insert(0, DeviceProfile(serial: '$host:$port', host: host, port: port));
     _saveHistory();
   }
 
   void _loadHistory() {
     _history.clear();
-    final entries =
-        _prefs?.getStringList(_historyPrefsKey) ?? const <String>[];
+    final entries = _prefs?.getStringList(_historyPrefsKey) ?? const <String>[];
     for (final entry in entries) {
       final parts = entry.split(':');
       if (parts.length != 2) continue;
       final port = int.tryParse(parts[1]);
       if (port == null || port <= 0) continue;
-      _history.add(DeviceProfile(
-        serial: entry,
-        host: parts[0],
-        port: port,
-        label: parts[0],
-      ));
+      _history.add(
+        DeviceProfile(
+          serial: entry,
+          host: parts[0],
+          port: port,
+          label: parts[0],
+        ),
+      );
     }
   }
 
@@ -126,5 +174,17 @@ class ConnectionManager extends GetxService {
       _historyPrefsKey,
       _history.map((h) => h.toHistoryKey()).toList(),
     );
+  }
+
+  static (String, int)? _adbEndpoint(String serial) {
+    final separator = serial.lastIndexOf(':');
+    if (separator < 1 || separator == serial.length - 1) return null;
+    final port = int.tryParse(serial.substring(separator + 1));
+    if (port == null || port <= 0 || port > 65535) return null;
+    var host = serial.substring(0, separator);
+    if (host.startsWith('[') && host.endsWith(']')) {
+      host = host.substring(1, host.length - 1);
+    }
+    return (host, port);
   }
 }

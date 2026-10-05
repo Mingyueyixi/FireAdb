@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:adb_core/adb_core.dart';
 import 'package:test/test.dart';
@@ -10,7 +11,9 @@ void main() {
   late AdbHostClient client;
 
   setUp(() async {
-    server = FakeAdbServer(devices: ['emulator-5554\tdevice', 'a1b2\tunauthorized']);
+    server = FakeAdbServer(
+      devices: ['emulator-5554\tdevice', 'a1b2\tunauthorized'],
+    );
     await server.start();
     client = AdbHostClient(host: '127.0.0.1', port: server.port!);
   });
@@ -39,9 +42,11 @@ void main() {
     server.devices.clear();
     // transport.cpp:append_transport：serial %-22s 左对齐，字段空格分隔。
     server.devices.add(
-        'emulator-5556          device product:PD2309 model:V2366GA device:PD2309 transport_id:2');
-    server.devices
-        .add('emulator-0105     device /dev/bus/usb/001/002 product:crosshatch model:Pixel.2 device:walleye transport_id:3');
+      'emulator-5556          device product:PD2309 model:V2366GA device:PD2309 transport_id:2',
+    );
+    server.devices.add(
+      'emulator-0105     device /dev/bus/usb/001/002 product:crosshatch model:Pixel.2 device:walleye transport_id:3',
+    );
     final devices = await client.devices(long: true);
     expect(devices, hasLength(2));
     expect(devices[0].serial, 'emulator-5556');
@@ -63,6 +68,15 @@ void main() {
   test('connect 返回服务端描述', () async {
     final result = await client.connectToDevice('192.168.1.5', 5555);
     expect(result, 'connected to 192.168.1.5:5555');
+  });
+
+  test('通过 host transport 打开设备 shell 服务', () async {
+    final shell = await client.openShell('usb-device-1', 'getprop');
+    expect(server.requests, contains('host:transport:usb-device-1'));
+    expect(server.requests, contains('shell:getprop'));
+    final output = await shell.readStream.transform(utf8.decoder).join();
+    expect(output, 'fake shell output\n');
+    await shell.close();
   });
 
   test('disconnect 全量断开', () async {
@@ -92,7 +106,10 @@ void main() {
   });
 
   test('未知 host 服务抛 AdbHostError', () async {
-    await expectLater(client.serialNo(serial: 'nope'), throwsA(isA<AdbHostError>()));
+    await expectLater(
+      client.serialNo(serial: 'nope'),
+      throwsA(isA<AdbHostError>()),
+    );
   });
 
   test('host 前缀设备查询（get-serialno/get-state）', () async {

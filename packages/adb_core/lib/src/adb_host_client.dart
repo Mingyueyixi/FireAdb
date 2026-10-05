@@ -185,6 +185,27 @@ class AdbHostClient {
     return _parseDevices(payload, long: long);
   }
 
+  /// Opens a shell service on any device managed by the ADB server, including
+  /// USB devices. The returned stream contains raw shell output.
+  Future<AdbHostShell> openShell(String serial, String command) async {
+    final socket = await _connectRaw();
+    final reader = AdbSizedReader(socket);
+    try {
+      final transportService = 'host:transport:$serial';
+      await _sendRequest(socket, transportService);
+      await _readStatus(reader, transportService);
+
+      final shellService = 'shell:$command';
+      await _sendRequest(socket, shellService);
+      await _readStatus(reader, shellService);
+      return AdbHostShell(socket, reader);
+    } catch (_) {
+      await reader.close();
+      await socket.close();
+      rethrow;
+    }
+  }
+
   static List<AdbDeviceInfo> _parseDevices(Uint8List payload,
       {required bool long}) {
     final text = utf8.decode(payload, allowMalformed: true);
@@ -198,6 +219,7 @@ class AdbHostClient {
         list.add(AdbDeviceInfo(serial, state));
         continue;
       }
+
       String? devPath;
       String? product;
       String? model;
@@ -358,5 +380,30 @@ class AdbHostClient {
       throw AdbInvalidResponseError('transport id 应为 4 字节，实际 ${b.length}');
     }
     return (b[3] << 24) | (b[2] << 16) | (b[1] << 8) | b[0];
+  }
+}
+
+/// A shell stream routed through the local ADB server.
+class AdbHostShell {
+  AdbHostShell(this._socket, AdbSizedReader reader)
+    : readStream = reader.takeRemainingStream(),
+      _reader = reader;
+
+  final Socket _socket;
+  final AdbSizedReader _reader;
+  final Stream<List<int>> readStream;
+  bool _closed = false;
+
+  Future<void> write(List<int> data) async {
+    if (_closed) throw StateError('Shell 连接已关闭');
+    _socket.add(data);
+    await _socket.flush();
+  }
+
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    await _reader.close();
+    await _socket.close();
   }
 }

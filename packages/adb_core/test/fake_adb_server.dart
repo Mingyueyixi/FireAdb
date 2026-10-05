@@ -50,30 +50,37 @@ class FakeAdbServer {
     unawaited(trackUpdates.close());
   }
 
-  String get devicesPayload => devices.join('\n') + (devices.isEmpty ? '' : '\n');
+  String get devicesPayload =>
+      devices.join('\n') + (devices.isEmpty ? '' : '\n');
 
   Future<void> _onConnection(Socket socket) async {
     _connections.add(socket);
     try {
-      socket.done.then((_) => _connections.remove(socket),
-          onError: (_) => _connections.remove(socket));
+      socket.done.then(
+        (_) => _connections.remove(socket),
+        onError: (_) => _connections.remove(socket),
+      );
       final reader = AdbSizedReader(socket);
-      final lenText =
-          ascii.decode(await reader.readExactly(4), allowInvalid: true);
-      final len = int.tryParse(lenText.trim(), radix: 16);
-      if (len == null || len <= 0 || len > 1024 * 1024) {
-        await _fail(socket, 'bad request length');
-        return;
+      while (true) {
+        final lenText = ascii.decode(
+          await reader.readExactly(4),
+          allowInvalid: true,
+        );
+        final len = int.tryParse(lenText.trim(), radix: 16);
+        if (len == null || len <= 0 || len > 1024 * 1024) {
+          await _fail(socket, 'bad request length');
+          return;
+        }
+        final service = utf8.decode(await reader.readExactly(len));
+        requests.add(service);
+        if (!await _dispatch(socket, service)) return;
       }
-      final service = utf8.decode(await reader.readExactly(len));
-      requests.add(service);
-      await _dispatch(socket, service);
     } catch (_) {
       // 客户端断开等。
     }
   }
 
-  Future<void> _dispatch(Socket socket, String service) async {
+  Future<bool> _dispatch(Socket socket, String service) async {
     if (service == 'host:version') {
       await _okayPayload(socket, '0039');
     } else if (service == 'host:kill') {
@@ -88,29 +95,46 @@ class FakeAdbServer {
     } else if (service.startsWith('host:connect:')) {
       final target = service.substring('host:connect:'.length);
       await _okayPayload(socket, 'connected to $target');
+    } else if (service.startsWith('shell:')) {
+      await _okay(socket);
+      socket.add(utf8.encode('fake shell output\n'));
+      await socket.close();
+      return false;
     } else if (service.startsWith('host:disconnect')) {
       await _okayPayload(socket, 'disconnected everything');
     } else if (service.startsWith('host:tport:')) {
       await _okay(socket);
       final id = _nextTransportId++;
       socket.add(
-          Uint8List.fromList([id & 0xff, (id >> 8) & 0xff, (id >> 16) & 0xff, (id >> 24) & 0xff]));
+        Uint8List.fromList([
+          id & 0xff,
+          (id >> 8) & 0xff,
+          (id >> 16) & 0xff,
+          (id >> 24) & 0xff,
+        ]),
+      );
       await socket.flush();
-    } else if (service == 'host:transport-any' ||
-        service.startsWith('host:transport:')) {
-      // 旧式键控传输：只回 OKAY 后关闭连接，不附带 transport id。
+    } else if (service == 'host:transport-any') {
       await _okay(socket);
       await socket.close();
+      return false;
+    } else if (service == 'host:transport:usb-device-1') {
+      // 选择设备后，同一连接继续接收设备服务请求。
+      await _okay(socket);
+      return true;
+    } else if (service.startsWith('host:transport:')) {
+      await _okay(socket);
+      await socket.close();
+      return false;
     } else if (service.startsWith('host-serial:') ||
         service.startsWith('host-usb:') ||
         service.startsWith('host:')) {
       // host 前缀设备查询：get-serialno / get-state / get-devpath。
       final method = service.split(':').last;
-      final serialMatch =
-          RegExp(r'^host-serial:([^:]+):').firstMatch(service);
+      final serialMatch = RegExp(r'^host-serial:([^:]+):').firstMatch(service);
       if (serialMatch != null && serialMatch.group(1) != 'fake12345') {
         await _fail(socket, 'device \'${serialMatch.group(1)}\' not found');
-        return;
+        return false;
       }
       switch (method) {
         case 'get-serialno':
@@ -125,6 +149,7 @@ class FakeAdbServer {
     } else {
       await _fail(socket, 'unknown host service \'$service\'');
     }
+    return false;
   }
 
   Future<void> _trackLoop(Socket socket) async {

@@ -1,10 +1,12 @@
 import 'dart:async';
 
-import 'package:adb_core/adb_core.dart';
 import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+
+import '../app_feedback.dart';
+import '../connection/model/connected_device.dart';
 
 /// 交互式 Shell 命令面板。
 class ShellPage extends StatefulWidget {
@@ -26,14 +28,15 @@ class _ShellPageState extends State<ShellPage> {
   int _historyIndex = -1;
   final List<_OutputLine> _output = <_OutputLine>[];
   bool _running = false;
-  StreamSubscription<Uint8List>? _streamSubscription;
-  AdbStream? _currentStream;
+  bool _disposing = false;
+  StreamSubscription<List<int>>? _streamSubscription;
+  ConnectedShell? _currentStream;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
+      if (mounted && !_disposing) {
         _keyFocusNode.requestFocus();
         _textFocusNode.requestFocus();
       }
@@ -42,11 +45,35 @@ class _ShellPageState extends State<ShellPage> {
 
   @override
   void dispose() {
+    _disposing = true;
+    final subscription = _streamSubscription;
+    _streamSubscription = null;
+    if (subscription != null) unawaited(_cancelSubscription(subscription));
+    final stream = _currentStream;
+    _currentStream = null;
+    if (stream != null) unawaited(_closeStream(stream));
     _controller.dispose();
     _textFocusNode.dispose();
     _keyFocusNode.dispose();
-    _abortCommand();
     super.dispose();
+  }
+
+  Future<void> _closeStream(ConnectedShell stream) async {
+    try {
+      await stream.close();
+    } catch (error, stackTrace) {
+      logAppError('关闭 Shell 命令流失败：${widget.serial}', error, stackTrace);
+    }
+  }
+
+  Future<void> _cancelSubscription(
+    StreamSubscription<List<int>> subscription,
+  ) async {
+    try {
+      await subscription.cancel();
+    } catch (error, stackTrace) {
+      logAppError('取消 Shell 命令订阅失败：${widget.serial}', error, stackTrace);
+    }
   }
 
   Future<void> _runCommand() async {
@@ -73,12 +100,16 @@ class _ShellPageState extends State<ShellPage> {
     }
 
     try {
-      final stream = await device.connection.open('shell:$cmd');
+      final stream = await device.openShell(cmd);
+      if (!mounted || _disposing) {
+        await _closeStream(stream);
+        return;
+      }
       _currentStream = stream;
       final buffer = StringBuffer();
-      _streamSubscription = stream.readStream().listen(
+      _streamSubscription = stream.readStream.listen(
         (chunk) {
-          if (!mounted) return;
+          if (!mounted || _disposing) return;
           final text = String.fromCharCodes(chunk);
           buffer.write(text);
           final lines = buffer.toString().split('\n');
@@ -86,7 +117,7 @@ class _ShellPageState extends State<ShellPage> {
           buffer.write(lines.last);
           for (var i = 0; i < lines.length - 1; i++) {
             if (lines[i].isNotEmpty) {
-              if (mounted) {
+              if (mounted && !_disposing) {
                 setState(
                   () => _output.add(
                     _OutputLine(type: _OutputType.output, text: lines[i]),
@@ -97,7 +128,7 @@ class _ShellPageState extends State<ShellPage> {
           }
         },
         onDone: () {
-          if (!mounted) return;
+          if (!mounted || _disposing) return;
           final remaining = buffer.toString();
           if (remaining.isNotEmpty) {
             setState(
@@ -108,21 +139,24 @@ class _ShellPageState extends State<ShellPage> {
           }
           _finishCommand();
         },
-        onError: (e) {
-          if (!mounted) return;
+        onError: (Object error, StackTrace stackTrace) {
+          logAppError('Shell 命令流失败：$cmd', error, stackTrace);
+          if (!mounted || _disposing) return;
           setState(
             () => _output.add(
-              _OutputLine(type: _OutputType.error, text: '错误: $e'),
+              _OutputLine(type: _OutputType.error, text: '错误: $error'),
             ),
           );
           _finishCommand();
         },
       );
-    } catch (e) {
-      if (mounted) {
+    } catch (error, stackTrace) {
+      logAppError('执行 Shell 命令失败：$cmd', error, stackTrace);
+      if (mounted && !_disposing) {
         setState(
-          () =>
-              _output.add(_OutputLine(type: _OutputType.error, text: '错误: $e')),
+          () => _output.add(
+            _OutputLine(type: _OutputType.error, text: '错误: $error'),
+          ),
         );
       }
       _finishCommand();
@@ -130,20 +164,25 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   void _finishCommand() {
-    _streamSubscription?.cancel();
+    final subscription = _streamSubscription;
     _streamSubscription = null;
+    if (subscription != null) unawaited(_cancelSubscription(subscription));
+    final stream = _currentStream;
     _currentStream = null;
-    if (mounted) {
+    if (stream != null) unawaited(_closeStream(stream));
+    if (mounted && !_disposing) {
       setState(() => _running = false);
     }
   }
 
   void _abortCommand() {
-    _streamSubscription?.cancel();
+    final subscription = _streamSubscription;
     _streamSubscription = null;
-    _currentStream?.close();
+    if (subscription != null) unawaited(_cancelSubscription(subscription));
+    final stream = _currentStream;
     _currentStream = null;
-    if (mounted) {
+    if (stream != null) unawaited(_closeStream(stream));
+    if (mounted && !_disposing) {
       setState(() {
         _output.add(_OutputLine(type: _OutputType.hint, text: '^C (已中止)'));
         _running = false;
@@ -180,16 +219,18 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   Future<void> _sendCtrlC() async {
-    final device = _manager.deviceOf(widget.serial);
-    if (device == null) return;
+    final stream = _currentStream;
+    if (stream == null) return;
     try {
-      await device.shell('\x03');
+      await stream.write(const <int>[3]);
       if (mounted) {
         setState(
           () => _output.add(_OutputLine(type: _OutputType.hint, text: '^C')),
         );
       }
-    } catch (_) {}
+    } catch (error, stackTrace) {
+      logAppError('中断 Shell 命令失败：${widget.serial}', error, stackTrace);
+    }
   }
 
   void _clearOutput() {

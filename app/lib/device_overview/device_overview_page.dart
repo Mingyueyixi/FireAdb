@@ -4,6 +4,8 @@ import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../app_feedback.dart';
+
 /// 设备基本信息面板（连接后按需读取 getprop）。
 class DeviceOverviewPage extends StatefulWidget {
   const DeviceOverviewPage({
@@ -54,9 +56,10 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
         _props = props;
         _loaded = true;
       });
-    } catch (e) {
+    } catch (error, stackTrace) {
+      logAppError('读取设备信息失败：${widget.serial}', error, stackTrace);
       if (!mounted) return;
-      setState(() => _error = '$e');
+      setState(() => _error = '$error');
     }
   }
 

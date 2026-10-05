@@ -30,8 +30,14 @@ class AdbSizedReader {
   final Queue<_ReadRequest> _requests = Queue();
   Object? _error;
   bool _done = false;
+  bool _rawMode = false;
+  StreamController<List<int>>? _rawController;
 
   void _onData(List<int> chunk) {
+    if (_rawMode) {
+      if (chunk.isNotEmpty) _rawController?.add(Uint8List.fromList(chunk));
+      return;
+    }
     if (chunk.isNotEmpty) {
       _buffer.addAll(chunk);
     }
@@ -40,11 +46,19 @@ class AdbSizedReader {
 
   void _onError(Object error, StackTrace stack) {
     _error = error;
+    if (_rawMode) {
+      _rawController?.addError(error, stack);
+      unawaited(_rawController?.close());
+    }
     _failAll(error, stack);
   }
 
   void _onDone() {
     _done = true;
+    if (_rawMode) {
+      unawaited(_rawController?.close());
+      return;
+    }
     final left = _buffer.length;
     final err = StateError('流已结束，仍有 $left 字节未消费');
     _failAll(err, StackTrace.current);
@@ -98,9 +112,36 @@ class AdbSizedReader {
     return req.completer.future;
   }
 
+  /// Transfers all remaining bytes and subsequent chunks as a stream.
+  ///
+  /// This is used when a framed protocol handshake transitions into an
+  /// unframed byte stream without subscribing to the underlying stream twice.
+  Stream<List<int>> takeRemainingStream() {
+    if (_rawMode) throw StateError('原始字节流已被取出');
+    if (_requests.isNotEmpty) {
+      throw StateError('仍有未完成的定长读取请求');
+    }
+    _rawMode = true;
+    final controller = StreamController<List<int>>();
+    _rawController = controller;
+    if (_buffer.isNotEmpty) {
+      controller.add(Uint8List.fromList(_buffer));
+      _buffer.clear();
+    }
+    if (_done) unawaited(controller.close());
+    if (_error case final error?) {
+      controller.addError(error);
+      unawaited(controller.close());
+    }
+    return controller.stream;
+  }
+
   /// 关闭底层订阅并丢弃未完成请求。
   Future<void> close() async {
     await _sub.cancel();
     _failAll(StateError('读取器已关闭'), StackTrace.current);
+    if (_rawController case final controller? when !controller.isClosed) {
+      await controller.close();
+    }
   }
 }

@@ -5,12 +5,14 @@ class DeviceProfile {
     this.host,
     this.port,
     this.label = '',
+    this.adbSerial,
   });
 
   final String serial;
   final String? host;
   final int? port;
   final String label;
+  final String? adbSerial;
 
   String get displayName => label.isNotEmpty ? label : (host ?? serial);
 
