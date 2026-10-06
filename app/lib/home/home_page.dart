@@ -334,11 +334,13 @@ class HomePage extends GetView<HomeController> {
                         color: theme.colorScheme.primary,
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        '仅适用于开启「无线调试」的 Android 11+ 设备',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
+                      Expanded(
+                        child: Text(
+                          '仅适用于开启「无线调试」的 Android 11+ 设备',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],

@@ -12,6 +12,7 @@ Future<void> main() async {
   final manager = ConnectionManager();
   await manager.init();
   Get.put<ConnectionManager>(manager, permanent: true);
+  Get.put<HomeController>(HomeController(), permanent: true);
   runApp(const FireAdbApp());
 }
 
@@ -32,9 +33,6 @@ class FireAdbApp extends StatelessWidget {
         GetPage<void>(
           name: '/',
           page: () => const HomePage(),
-          binding: BindingsBuilder(() {
-            Get.lazyPut<HomeController>(HomeController.new);
-          }),
         ),
         GetPage<void>(
           name: '/workspace',
