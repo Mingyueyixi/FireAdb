@@ -1,15 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:adb_core/adb_core.dart';
 
-import '../connection/model/connected_device.dart';
-import '../files/remote_file_export.dart';
-import 'app_freeze.dart';
-import 'app_inventory.dart';
-import 'installed_app.dart';
+import '../../../connection/model/connected_device.dart';
+import '../../../files/remote_file_export.dart';
+import '../bean/app_freeze.dart';
+import '../bean/installed_app.dart';
+import '../source/app_inventory.dart';
 
 /// 通过 ADB shell / sync 读取并管理设备应用。
 class DeviceAppRepository {
@@ -20,37 +19,42 @@ class DeviceAppRepository {
   ConnectedShell? _shellSession;
   ConnectedSync? _syncSession;
   static const _shellTimeout = Duration(seconds: 20);
-  static const _dumpsysTimeout = Duration(seconds: 60);
+  static const _slowShellTimeout = Duration(seconds: 60);
 
+  /// 首屏列出用户应用和 APK 路径。名称、图标、版本和体积在行显示时再取。
   Future<List<InstalledApp>> listApps() async {
     final listed = parsePmListPackages(
-      await _device.shell('pm list packages -f').timeout(_shellTimeout),
+      await _device
+          .shell(pmListUserPackagesCommand())
+          .timeout(_slowShellTimeout),
       withPath: true,
     );
-    final system = parsePmListPackages(
-      await _device.shell('pm list packages -s').timeout(_shellTimeout),
-    );
-    final disabled = parsePmListPackages(
-      await _device.shell('pm list packages -d').timeout(_shellTimeout),
-    );
-    var dumpsys = const <String, InstalledApp>{};
-    try {
-      dumpsys = parseDumpsysPackages(
-        await _device.shell('dumpsys package').timeout(_dumpsysTimeout),
+    final apps = listed.values.toList()
+      ..sort(
+        (a, b) =>
+            a.packageName.toLowerCase().compareTo(b.packageName.toLowerCase()),
       );
-    } catch (_) {
-      // 部分设备 dumpsys 过大或超时，仍展示 pm list 的基本信息。
-    }
-    final amFrozen = await listAmFrozenPackages();
-    var apps = mergeInstalledApps(
-      listed: listed,
-      systemPackages: system,
-      disabledPackages: disabled,
-      dumpsys: dumpsys,
-      amFrozenPackages: amFrozen,
-    );
-    apps = await _fillSizes(apps);
     return apps;
+  }
+
+  /// 系统应用（含路径）与已停用包。不含 `dumpsys package`。
+  Future<
+    ({
+      Set<String> systemPackages,
+      Map<String, List<String>> systemPaths,
+      Set<String> disabledPackages,
+    })
+  >
+  loadPackageFlags() async {
+    final output = await _device
+        .shell(pmListFlagsCommand())
+        .timeout(_slowShellTimeout);
+    return parsePmFlagLists(output);
+  }
+
+  /// 按已有路径补体积。
+  Future<List<InstalledApp>> loadPackageSizes(List<InstalledApp> apps) {
+    return _fillSizes(apps);
   }
 
   Future<List<InstalledApp>> _fillSizes(List<InstalledApp> apps) async {
@@ -126,35 +130,6 @@ class DeviceAppRepository {
           if (size != null) sizes[path] = size;
         }
       } catch (_) {}
-    }
-  }
-
-  Future<Uint8List?> loadIcon(InstalledApp app) async {
-    final apk = app.primaryPath;
-    if (apk == null || !apk.toLowerCase().endsWith('.apk')) return null;
-    final quoted = quoteShellArg(apk);
-    String listOutput;
-    try {
-      listOutput = await _device
-          .shell('unzip -l $quoted 2>/dev/null || toybox unzip -l $quoted')
-          .timeout(_shellTimeout);
-    } catch (_) {
-      return null;
-    }
-    final entry = pickBestIconEntry(listOutput);
-    if (entry == null) return null;
-    try {
-      var bytes = await _device
-          .execOut('unzip -p $quoted ${quoteShellArg(entry)}')
-          .timeout(_shellTimeout);
-      if (!looksLikeImageBytes(bytes)) {
-        bytes = await _device
-            .execOut('toybox unzip -p $quoted ${quoteShellArg(entry)}')
-            .timeout(_shellTimeout);
-      }
-      return looksLikeImageBytes(bytes) ? bytes : null;
-    } catch (_) {
-      return null;
     }
   }
 

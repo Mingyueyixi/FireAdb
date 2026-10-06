@@ -52,3 +52,26 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// 版本不一致或缺 jar 时，先打 jar 再跑 flutter assemble。
+// 一致则不挂这个任务，避免每次编译都编 fire_app_service。
+// 外层已经打好后，钩子看到版本一致，不会再开一次 Gradle。
+val fireAppServiceVersion = rootProject.file("fire_app_service/service.version")
+val fireAppServiceBuiltVersion = rootProject.file("../assets/fire-app-service.version")
+val fireAppServiceJar = rootProject.file("../assets/fire-app-service.jar")
+
+fun fireAppServiceJarIsCurrent(): Boolean {
+    if (!fireAppServiceJar.isFile ||
+        !fireAppServiceVersion.isFile ||
+        !fireAppServiceBuiltVersion.isFile
+    ) {
+        return false
+    }
+    return fireAppServiceVersion.readText().trim() == fireAppServiceBuiltVersion.readText().trim()
+}
+
+tasks.configureEach {
+    if (name.startsWith("compileFlutterBuild") && !fireAppServiceJarIsCurrent()) {
+        dependsOn(":fire_app_service:packageAppServiceJar")
+    }
+}

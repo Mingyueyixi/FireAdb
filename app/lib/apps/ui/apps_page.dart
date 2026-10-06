@@ -1,0 +1,268 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+
+import '../../app_feedback.dart';
+import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../l10n/generated/fire_adb_localizations.dart';
+import '../../widgets/locale_selector.dart';
+import '../apps_controller.dart';
+import '../data/bean/installed_app.dart';
+import 'app_dialogs.dart';
+import 'app_freeze_dialogs.dart';
+import 'app_list_tile.dart';
+import 'app_task_view.dart';
+import 'apps_toolbar.dart';
+
+class AppsPage extends StatefulWidget {
+  const AppsPage({super.key, required this.serial});
+
+  final String serial;
+
+  @override
+  State<AppsPage> createState() => _AppsPageState();
+}
+
+class _AppsPageState extends State<AppsPage> {
+  late final AppsController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = Get.put(AppsController(widget.serial), tag: widget.serial);
+  }
+
+  @override
+  void dispose() {
+    unawaited(Get.delete<AppsController>(tag: widget.serial, force: true));
+    super.dispose();
+  }
+
+  void _show(AppNotice? notice) {
+    if (notice == null || !mounted) return;
+    showAppMessage(
+      ScaffoldMessenger.of(context),
+      Theme.of(context),
+      title: notice.title,
+      message: notice.message,
+      isError: notice.isError,
+    );
+  }
+
+  Future<void> _showWhenDone(
+    Future<AppNotice?> future, {
+    bool exportDialog = false,
+  }) async {
+    if (exportDialog && controller.task.value?.byBytes == true && mounted) {
+      unawaited(
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => ExportProgressDialog(controller: controller),
+        ),
+      );
+    }
+    final notice = await future;
+    _show(notice);
+  }
+
+  Future<void> _uninstall(InstalledApp app) async {
+    if (!await confirmUninstallApp(context, app) || !mounted) return;
+    await _showWhenDone(controller.uninstall(context.l10n, app));
+  }
+
+  Future<void> _freeze(InstalledApp app) async {
+    if (app.isSystem || app.isCoreSystem) {
+      final confirmed = await confirmFreezeSystemApp(context, app);
+      if (!confirmed || !mounted) return;
+    }
+    final method = await showFreezeMethodDialog(
+      context,
+      app: app,
+      preferred: controller.freezeMethod.value,
+    );
+    if (method == null || !mounted) return;
+    await _showWhenDone(controller.freeze(context.l10n, app, method));
+  }
+
+  Future<void> _unfreeze(InstalledApp app) async {
+    await _showWhenDone(controller.unfreeze(context.l10n, app));
+  }
+
+  Future<void> _batchUninstall() async {
+    final targets = controller.selectedApps;
+    if (targets.isEmpty || !mounted) return;
+    if (!await confirmBatchUninstall(context, targets) || !mounted) return;
+    await _showWhenDone(controller.uninstallMany(context.l10n, targets));
+  }
+
+  Future<void> _batchFreeze() async {
+    final targets = controller.selectedApps;
+    if (targets.isEmpty || !mounted) return;
+    final method = await confirmBatchFreeze(
+      context,
+      apps: targets,
+      preferred: controller.freezeMethod.value,
+    );
+    if (method == null || !mounted) return;
+    await _showWhenDone(controller.freezeMany(context.l10n, targets, method));
+  }
+
+  Future<void> _export(
+    List<InstalledApp> targets, {
+    required String prompt,
+    bool exitSelection = false,
+    bool singlePath = false,
+  }) async {
+    if (targets.isEmpty || !mounted) return;
+    final directory = await askAppExportDirectory(context, prompt);
+    if (directory == null || !mounted) return;
+    final future = controller.export(
+      context.l10n,
+      targets,
+      directory,
+      exitSelection: exitSelection,
+      singlePath: singlePath,
+    );
+    await _showWhenDone(future, exportDialog: true);
+  }
+
+  void _onAction(InstalledApp app, AppTileAction action) {
+    switch (action) {
+      case AppTileAction.export:
+        unawaited(
+          _export(
+            <InstalledApp>[app],
+            prompt: context.l10n.appsExportPrompt(app.displayName),
+            singlePath: true,
+          ),
+        );
+      case AppTileAction.uninstall:
+        unawaited(_uninstall(app));
+      case AppTileAction.freeze:
+        unawaited(_freeze(app));
+      case AppTileAction.unfreeze:
+        unawaited(_unfreeze(app));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final l10n = context.l10n;
+      final theme = Theme.of(context);
+      final visible = controller.visible;
+      final currentTask = controller.task.value;
+      final loadError = controller.error.value;
+      controller.taskTick.value;
+      return Column(
+        children: <Widget>[
+          AppsToolbar(
+            search: controller.search,
+            filter: controller.filter.value,
+            onFilter: controller.setFilter,
+            selecting: controller.selecting.value,
+            busy: controller.busy.value,
+            loading: controller.loading.value,
+            visibleCount: visible.length,
+            markedCount: controller.selected.length,
+            selectedCount: controller.selectedApps.length,
+            onToggleSelecting: controller.toggleSelecting,
+            onRefresh: () => controller.reload(),
+            onSelectAll: controller.selectAllVisible,
+            onClearSelection: controller.clearSelection,
+            onExport: () => _export(
+              controller.selectedApps,
+              prompt: l10n.appsBatchExportPrompt(
+                controller.selectedApps.length,
+              ),
+              exitSelection: true,
+            ),
+            onFreeze: () => _batchFreeze(),
+            onUninstall: () => _batchUninstall(),
+          ),
+          if (currentTask != null && !currentTask.byBytes)
+            AppTaskBar(task: currentTask, onCancel: controller.requestCancel),
+          if (controller.loading.value && currentTask == null)
+            const LinearProgressIndicator(minHeight: 2),
+          Expanded(
+            child: _body(
+              l10n: l10n,
+              theme: theme,
+              visible: visible,
+              loadError: loadError,
+            ),
+          ),
+        ],
+      );
+    });
+  }
+
+  Widget _body({
+    required FireAdbLocalizations l10n,
+    required ThemeData theme,
+    required List<InstalledApp> visible,
+    required Object? loadError,
+  }) {
+    if (controller.loading.value) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (loadError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            l10n.appsLoadFailed(
+              loadError is DeviceNotConnectedException
+                  ? l10n.deviceOverviewNotConnected
+                  : '$loadError',
+            ),
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        ),
+      );
+    }
+    if (visible.isEmpty) {
+      return Center(child: Text(l10n.appsEmpty));
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+      itemCount: visible.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final app = visible[index];
+        controller.ensure(app);
+        return AppListTile(
+          app: app,
+          icon: controller.iconOf(app.packageName),
+          selecting: controller.selecting.value,
+          selected: controller.selected.contains(app.packageName),
+          busy: controller.busy.value,
+          onToggleSelected: () => controller.toggleSelected(app),
+          onStartSelecting: () => controller.startSelecting(app),
+          onUnfreeze: () => _unfreeze(app),
+          onAction: (action) => _onAction(app, action),
+        );
+      },
+    );
+  }
+}
+
+/// 移动端全屏应用管理页。
+class AppsFeaturePage extends StatelessWidget {
+  const AppsFeaturePage({super.key, required this.serial});
+
+  final String serial;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(context.l10n.workspaceAppsTitle),
+        actions: const <Widget>[LocaleSelector()],
+      ),
+      body: AppsPage(serial: serial),
+    );
+  }
+}

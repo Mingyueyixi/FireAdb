@@ -1,8 +1,32 @@
-import 'package:fire_adb/apps/app_inventory.dart';
-import 'package:fire_adb/apps/installed_app.dart';
+import 'package:fire_adb/apps/data/bean/installed_app.dart';
+import 'package:fire_adb/apps/data/source/app_inventory.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('首屏命令只列第三方包名', () {
+    expect(pmListUserPackagesCommand(), 'pm list packages -3 -f');
+    expect(pmListFlagsCommand(), contains('pm list packages -s -f'));
+    expect(pmListFlagsCommand(), isNot(contains('dumpsys package')));
+    expect(pmListFlagsCommand(), isNot(contains('pm list packages -f')));
+  });
+
+  test('parsePmFlagLists 分开系统包和已停用包', () {
+    final lists = parsePmFlagLists('''
+package:/system/priv-app/Settings/Settings.apk=com.android.settings
+package:com.android.systemui
+$pmListSectionMarker
+package:com.example.disabled
+''');
+    expect(lists.systemPackages, {
+      'com.android.settings',
+      'com.android.systemui',
+    });
+    expect(lists.systemPaths['com.android.settings'], [
+      '/system/priv-app/Settings/Settings.apk',
+    ]);
+    expect(lists.disabledPackages, {'com.example.disabled'});
+  });
+
   test('parsePmListPackages 解析带路径的包列表', () {
     const output = '''
 package:/data/app/~~abc==/com.example.app-xyz/base.apk=com.example.app
@@ -126,19 +150,6 @@ Packages:
       ]),
       SystemAppRisk.core,
     );
-  });
-
-  test('pickBestIconEntry 优先选择高密度启动图标', () {
-    const listing = '''
-Archive:  base.apk
-  Length      Date    Time    Name
----------  ---------- -----   ----
-     1024  1981-01-01 01:01   res/mipmap-mdpi-v4/ic_launcher.png
-     4096  1981-01-01 01:01   res/mipmap-xxhdpi-v4/ic_launcher.png
-     2048  1981-01-01 01:01   res/drawable-xxhdpi-v4/ic_launcher_background.png
----------                     -------
-''';
-    expect(pickBestIconEntry(listing), 'res/mipmap-xxhdpi-v4/ic_launcher.png');
   });
 
   test('ensurePmSuccess 识别成功与失败输出', () {

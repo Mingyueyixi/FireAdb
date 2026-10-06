@@ -57,6 +57,19 @@ class ConnectedDevice {
     return properties;
   }
 
+  /// 打开一条可读写的 `exec:`。没有终端，适合来回传输二进制帧。
+  Future<ConnectedShell> openExec(String command) async {
+    final device = _device;
+    if (device != null) {
+      return ConnectedShell.direct(
+        await device.connection.open('exec:$command'),
+      );
+    }
+    return ConnectedShell.viaHost(
+      await _hostClient!.openDeviceService(_adbSerial!, 'exec:$command'),
+    );
+  }
+
   /// exec：精确字节输出（不经过 shell tty/CRLF 处理）。
   Future<Uint8List> execOut(String command) async {
     final device = _device;

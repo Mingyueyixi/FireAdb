@@ -1,4 +1,4 @@
-import 'package:fire_adb/apps/app_freeze.dart';
+import 'package:fire_adb/apps/data/bean/app_freeze.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

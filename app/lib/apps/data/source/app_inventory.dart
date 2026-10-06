@@ -1,14 +1,45 @@
-import 'installed_app.dart';
+import '../bean/installed_app.dart';
 
 final _packageHeader = RegExp(r'^\s{2}Package \[([^\]]+)\]');
 final _userZero = RegExp(r'^\s+User 0:');
 final _enabledValue = RegExp(r'\benabled=([0-9A-Za-z_]+)');
 final _suspendedValue = RegExp(r'\bsuspended=([A-Za-z]+)');
 final _userFrozenValue = RegExp(r'\bfrozen=([A-Za-z]+)');
-final _iconEntry = RegExp(
-  r'(?:^|\s)((?:res|assets)/[^\s]+\.(?:png|webp))$',
-  caseSensitive: false,
-);
+
+/// 一次 shell 里分段的分隔行。路径里不会出现这串字符。
+const String pmListSectionMarker = '---FIRE-ADB---';
+
+/// 首屏列出第三方应用，并带上 APK 路径。
+String pmListUserPackagesCommand() => 'pm list packages -3 -f';
+
+/// 系统应用补路径，已停用包只补包名。
+String pmListFlagsCommand() =>
+    'pm list packages -s -f; echo $pmListSectionMarker; pm list packages -d';
+
+/// 解析 [pmListFlagsCommand] 的输出。
+({
+  Set<String> systemPackages,
+  Map<String, List<String>> systemPaths,
+  Set<String> disabledPackages,
+})
+parsePmFlagLists(String output) {
+  final parts = output.split(pmListSectionMarker);
+  final system = parsePmListPackages(
+    parts.isEmpty ? '' : parts.first,
+    withPath: true,
+  );
+  final disabled = parts.length > 1
+      ? parsePmListPackages(parts[1]).keys.toSet()
+      : const <String>{};
+  return (
+    systemPackages: system.keys.toSet(),
+    systemPaths: {
+      for (final app in system.values)
+        if (app.apkPaths.isNotEmpty) app.packageName: app.apkPaths,
+    },
+    disabledPackages: disabled,
+  );
+}
 
 /// 解析 `pm list packages` / `pm list packages -f` 输出。
 Map<String, InstalledApp> parsePmListPackages(
@@ -205,74 +236,6 @@ List<InstalledApp> filterInstalledApps(
     return app.displayName.toLowerCase().contains(needle) ||
         app.packageName.toLowerCase().contains(needle);
   }).toList();
-}
-
-/// 从 `unzip -l` 输出中挑选最合适的启动图标条目。
-String? pickBestIconEntry(String unzipListOutput) {
-  String? best;
-  var bestScore = -1;
-  for (final raw in const LineSplitterCompat().convert(unzipListOutput)) {
-    final match = _iconEntry.firstMatch(raw.trim());
-    if (match == null) continue;
-    final entry = match.group(1)!;
-    final lower = entry.toLowerCase();
-    if (lower.contains('background') && !lower.contains('foreground')) {
-      continue;
-    }
-    final score = _iconScore(lower);
-    if (score > bestScore) {
-      bestScore = score;
-      best = entry;
-    }
-  }
-  return best;
-}
-
-int _iconScore(String path) {
-  var score = 0;
-  if (path.contains('xxxhdpi')) {
-    score += 40;
-  } else if (path.contains('xxhdpi')) {
-    score += 35;
-  } else if (path.contains('xhdpi')) {
-    score += 30;
-  } else if (path.contains('hdpi')) {
-    score += 20;
-  } else if (path.contains('mdpi')) {
-    score += 10;
-  }
-  if (path.contains('mipmap')) score += 8;
-  if (path.contains('ic_launcher_foreground')) {
-    score += 6;
-  } else if (path.contains('ic_launcher')) {
-    score += 10;
-  } else if (path.contains('icon')) {
-    score += 4;
-  }
-  if (path.endsWith('.png')) score += 2;
-  return score;
-}
-
-bool looksLikeImageBytes(List<int> bytes) {
-  if (bytes.length < 12) return false;
-  if (bytes[0] == 0x89 &&
-      bytes[1] == 0x50 &&
-      bytes[2] == 0x4e &&
-      bytes[3] == 0x47) {
-    return true;
-  }
-  if (bytes[0] == 0x52 &&
-      bytes[1] == 0x49 &&
-      bytes[2] == 0x46 &&
-      bytes[3] == 0x46 &&
-      bytes[8] == 0x57 &&
-      bytes[9] == 0x45 &&
-      bytes[10] == 0x42 &&
-      bytes[11] == 0x50) {
-    return true;
-  }
-  if (bytes[0] == 0xff && bytes[1] == 0xd8) return true;
-  return false;
 }
 
 String formatByteSize(int bytes) {

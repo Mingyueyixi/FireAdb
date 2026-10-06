@@ -1,28 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../l10n/fire_adb_localizations_ext.dart';
-import '../l10n/generated/fire_adb_localizations.dart';
-import 'app_freeze.dart';
-import 'installed_app.dart';
-
-class AppFreezeSettings {
-  AppFreezeSettings._();
-
-  static const String _preferenceKey = 'appsFreezeMethod';
-
-  static Future<AppFreezeMethod> loadMethod() async {
-    final preferences = await SharedPreferences.getInstance();
-    return AppFreezeMethodCommands.fromId(
-      preferences.getString(_preferenceKey),
-    );
-  }
-
-  static Future<void> saveMethod(AppFreezeMethod method) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_preferenceKey, method.id);
-  }
-}
+import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../l10n/generated/fire_adb_localizations.dart';
+import '../data/bean/app_freeze.dart';
+import '../data/bean/installed_app.dart';
 
 String freezeMethodTitle(FireAdbLocalizations l10n, AppFreezeMethod method) {
   return switch (method) {

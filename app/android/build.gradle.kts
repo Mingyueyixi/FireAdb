@@ -16,6 +16,9 @@ subprojects {
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
 subprojects {
+    if (name == "fire_app_service") {
+        return@subprojects
+    }
     project.evaluationDependsOn(":app")
 }
 
