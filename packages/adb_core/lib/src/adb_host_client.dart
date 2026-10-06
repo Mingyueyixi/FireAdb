@@ -20,6 +20,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'adb_exceptions.dart';
+import 'adb_filesync.dart';
 import 'adb_smart_socket.dart';
 import 'adb_stream_reader.dart';
 
@@ -41,12 +42,15 @@ enum AdbTransportType {
 /// 长格式（`host:devices-l`）：`%-22s <state> [devpath] product:<p> model:<m> device:<d> transport_id:<id>`
 /// （AOSP `transport.cpp:append_transport`，`%22s` 左对齐填充空格，非空时才带编制）。
 class AdbDeviceInfo {
-  const AdbDeviceInfo(this.serial, this.state,
-      {this.devPath,
-      this.product,
-      this.model,
-      this.device,
-      this.transportId});
+  const AdbDeviceInfo(
+    this.serial,
+    this.state, {
+    this.devPath,
+    this.product,
+    this.model,
+    this.device,
+    this.transportId,
+  });
 
   final String serial;
   final String state;
@@ -110,16 +114,19 @@ class AdbHostClient {
   }
 
   /// 读取 4 字节状态；OKAY 返回 true，FAIL 抛 [AdbHostError]。
-  static Future<bool> _readStatus(
-      AdbSizedReader reader, String service) async {
-    final status =
-        ascii.decode(await reader.readExactly(4), allowInvalid: true);
+  static Future<bool> _readStatus(AdbSizedReader reader, String service) async {
+    final status = ascii.decode(
+      await reader.readExactly(4),
+      allowInvalid: true,
+    );
     if (status == 'OKAY') {
       return true;
     }
     if (status == 'FAIL') {
-      final lenText =
-          ascii.decode(await reader.readExactly(4), allowInvalid: true);
+      final lenText = ascii.decode(
+        await reader.readExactly(4),
+        allowInvalid: true,
+      );
       final len = decodeHex4(lenText.trim());
       final reason = len > 0
           ? utf8.decode(await reader.readExactly(len), allowMalformed: true)
@@ -136,8 +143,10 @@ class AdbHostClient {
       await _sendRequest(socket, service);
       final reader = AdbSizedReader(socket);
       await _readStatus(reader, service);
-      final lenText =
-          ascii.decode(await reader.readExactly(4), allowInvalid: true);
+      final lenText = ascii.decode(
+        await reader.readExactly(4),
+        allowInvalid: true,
+      );
       final len = decodeHex4(lenText.trim());
       return await reader.readExactly(len);
     } finally {
@@ -149,7 +158,8 @@ class AdbHostClient {
   Future<AdbServerVersion> version() async {
     final payload = await _query('host:version');
     return AdbServerVersion.parse(
-        utf8.decode(payload, allowMalformed: true).trim());
+      utf8.decode(payload, allowMalformed: true).trim(),
+    );
   }
 
   /// 请求服务端退出（等价于 `adb kill-server`）。
@@ -158,16 +168,19 @@ class AdbHostClient {
     try {
       await _sendRequest(socket, 'host:kill');
       final reader = AdbSizedReader(socket);
-      final status =
-          ascii.decode(await reader.readExactly(4), allowInvalid: true);
+      final status = ascii.decode(
+        await reader.readExactly(4),
+        allowInvalid: true,
+      );
       if (status != 'OKAY') {
         if (status == 'FAIL') {
-          final lenText =
-              ascii.decode(await reader.readExactly(4), allowInvalid: true);
+          final lenText = ascii.decode(
+            await reader.readExactly(4),
+            allowInvalid: true,
+          );
           final len = decodeHex4(lenText.trim());
           final reason = len > 0
-              ? utf8.decode(await reader.readExactly(len),
-                  allowMalformed: true)
+              ? utf8.decode(await reader.readExactly(len), allowMalformed: true)
               : '';
           throw AdbHostError('host:kill: $reason');
         }
@@ -180,8 +193,7 @@ class AdbHostClient {
 
   /// 列出已连接设备（`host:devices` 或 `host:devices-l`）。
   Future<List<AdbDeviceInfo>> devices({bool long = false}) async {
-    final payload =
-        await _query(long ? 'host:devices-l' : 'host:devices');
+    final payload = await _query(long ? 'host:devices-l' : 'host:devices');
     return _parseDevices(payload, long: long);
   }
 
@@ -206,8 +218,78 @@ class AdbHostClient {
     }
   }
 
-  static List<AdbDeviceInfo> _parseDevices(Uint8List payload,
-      {required bool long}) {
+  /// 经 `host:transport:<serial>` 打开任意设备服务（`shell:` / `exec:` 等）。
+  Future<AdbHostShell> openDeviceService(String serial, String service) async {
+    final session = await _openTransport(serial);
+    try {
+      await _sendRequest(session.socket, service);
+      await _readStatus(session.reader, service);
+      return AdbHostShell(session.socket, session.reader);
+    } catch (_) {
+      await session.reader.close();
+      await session.socket.close();
+      rethrow;
+    }
+  }
+
+  /// 经 host 打开设备 `sync:` 会话，用于 pull/stat。
+  ///
+  /// [AdbSyncChannel.close] 关掉这条 socket。上层持有它即可停止传输。
+  Future<AdbSyncChannel> openSync(String serial) async {
+    final session = await _openTransport(serial);
+    var closed = false;
+    Future<void> close() async {
+      if (closed) return;
+      closed = true;
+      try {
+        await session.reader.close();
+      } catch (_) {}
+      try {
+        await session.socket.close();
+      } catch (_) {}
+    }
+
+    try {
+      await _sendRequest(session.socket, 'sync:');
+      await _readStatus(session.reader, 'sync:');
+      return AdbSyncChannel(
+        AdbSyncClient.fromChannel(
+          reader: session.reader,
+          write: (data) async {
+            session.socket.add(data);
+            await session.socket.flush();
+          },
+          close: close,
+        ),
+        close,
+      );
+    } catch (_) {
+      await close();
+      rethrow;
+    }
+  }
+
+  Future<({Socket socket, AdbSizedReader reader})> _openTransport(
+    String serial,
+  ) async {
+    final socket = await _connectRaw();
+    final reader = AdbSizedReader(socket);
+    try {
+      final transportService = 'host:transport:$serial';
+      await _sendRequest(socket, transportService);
+      await _readStatus(reader, transportService);
+      return (socket: socket, reader: reader);
+    } catch (_) {
+      await reader.close();
+      await socket.close();
+      rethrow;
+    }
+  }
+
+  static List<AdbDeviceInfo> _parseDevices(
+    Uint8List payload, {
+    required bool long,
+  }) {
     final text = utf8.decode(payload, allowMalformed: true);
     final list = <AdbDeviceInfo>[];
     for (final rawLine in const LineSplitter().convert(text)) {
@@ -245,12 +327,17 @@ class AdbHostClient {
           devPath ??= token;
         }
       }
-      list.add(AdbDeviceInfo(serial, state,
+      list.add(
+        AdbDeviceInfo(
+          serial,
+          state,
           devPath: devPath,
           product: product,
           model: model,
           device: device,
-          transportId: transportId));
+          transportId: transportId,
+        ),
+      );
     }
     return list;
   }
@@ -269,11 +356,15 @@ class AdbHostClient {
       reader = AdbSizedReader(s);
       try {
         await _sendRequest(
-            s, long ? 'host:track-devices-l' : 'host:track-devices');
+          s,
+          long ? 'host:track-devices-l' : 'host:track-devices',
+        );
         await _readStatus(reader, 'host:track-devices');
         while (!closed) {
-          final lenText =
-              ascii.decode(await reader.readExactly(4), allowInvalid: true);
+          final lenText = ascii.decode(
+            await reader.readExactly(4),
+            allowInvalid: true,
+          );
           final len = decodeHex4(lenText.trim());
           final payload = await reader.readExactly(len);
           if (closed) break;
@@ -319,7 +410,10 @@ class AdbHostClient {
 
   /// `<host-prefix>:get-serialno` 等设备元信息查询。
   Future<String> _deviceQuery(
-      String prefix, String method, {String? serial}) async {
+    String prefix,
+    String method, {
+    String? serial,
+  }) async {
     final service = serial != null
         ? 'host-serial:$serial:$method'
         : '$prefix:$method';
@@ -328,17 +422,21 @@ class AdbHostClient {
   }
 
   /// 通过序列号查询设备序列号（自描述查询）。
-  Future<String> serialNo({String? serial}) =>
-      _deviceQuery(serial != null ? 'host-serial:$serial' : 'host',
-          'get-serialno', serial: serial);
+  Future<String> serialNo({String? serial}) => _deviceQuery(
+    serial != null ? 'host-serial:$serial' : 'host',
+    'get-serialno',
+    serial: serial,
+  );
 
   /// 查询设备状态：`device` / `offline` / `unauthorized` 等。
   Future<String> state({String? serial}) =>
       _deviceQuery('host', 'get-state', serial: serial);
 
   /// 绑定到一条传输（`host:tport:*`），返回服务端分配的 transport id。
-  Future<int> bindTransport(
-      {String? serial, AdbTransportType type = AdbTransportType.any}) async {
+  Future<int> bindTransport({
+    String? serial,
+    AdbTransportType type = AdbTransportType.any,
+  }) async {
     final service = serial != null
         ? 'host:tport:serial:$serial'
         : 'host:tport:${type.name}';
@@ -381,6 +479,14 @@ class AdbHostClient {
     }
     return (b[3] << 24) | (b[2] << 16) | (b[1] << 8) | b[0];
   }
+}
+
+/// 一条 `sync:` 通道：协议客户端，以及关掉底层 socket 的方法。
+class AdbSyncChannel {
+  AdbSyncChannel(this.client, this.close);
+
+  final AdbSyncClient client;
+  final Future<void> Function() close;
 }
 
 /// A shell stream routed through the local ADB server.

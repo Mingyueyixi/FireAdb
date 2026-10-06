@@ -192,7 +192,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get workspaceAppsDescription =>
-      'View installed apps, uninstall apps, and install APKs';
+      'View installed apps, export APKs, uninstall, and freeze apps';
 
   @override
   String get workspaceTransferTitle => 'File transfer';
@@ -336,4 +336,313 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get shellEarlierOutputOmitted => '…earlier output omitted…';
+
+  @override
+  String get appsSearchHint => 'Search by app name or package name';
+
+  @override
+  String get appsFilterUser => 'User apps';
+
+  @override
+  String get appsFilterSystem => 'System apps';
+
+  @override
+  String get appsFilterFrozen => 'Frozen';
+
+  @override
+  String get appsFilterAll => 'All';
+
+  @override
+  String get appsRefresh => 'Refresh app list';
+
+  @override
+  String appsCount(int count) {
+    return '$count apps';
+  }
+
+  @override
+  String get appsEmpty => 'No apps match the current filters';
+
+  @override
+  String appsLoadFailed(Object error) {
+    return 'Could not load the app list: $error';
+  }
+
+  @override
+  String appsVersion(Object version) {
+    return 'Version $version';
+  }
+
+  @override
+  String appsSize(Object size) {
+    return 'Size $size';
+  }
+
+  @override
+  String appsPath(Object path) {
+    return 'Path $path';
+  }
+
+  @override
+  String get appsFrozenBadge => 'Frozen';
+
+  @override
+  String get appsDisabledBadge => 'Disabled';
+
+  @override
+  String get appsSuspendedBadge => 'Suspended';
+
+  @override
+  String get appsAmFrozenBadge => 'AM frozen';
+
+  @override
+  String get appsFreezeMethod => 'Freeze method';
+
+  @override
+  String get appsFreezeTitle => 'Freeze app';
+
+  @override
+  String get appsUnfreezeTitle => 'Unfreeze app';
+
+  @override
+  String appsFreezePrompt(Object name) {
+    return 'Choose how to freeze $name';
+  }
+
+  @override
+  String appsUnfreezePrompt(Object name) {
+    return 'Choose how to unfreeze $name';
+  }
+
+  @override
+  String get appsFreezeMethodDisableUser => 'Disable app';
+
+  @override
+  String get appsFreezeMethodDisableUserDescription =>
+      'pm disable-user: disables the app for the user so it cannot start. Works on most devices.';
+
+  @override
+  String get appsFreezeMethodSuspend => 'Suspend app';
+
+  @override
+  String get appsFreezeMethodSuspendDescription =>
+      'pm suspend: hides and pauses the app while keeping its data.';
+
+  @override
+  String get appsFreezeMethodAmFreeze => 'AM freeze';
+
+  @override
+  String get appsFreezeMethodAmFreezeDescription =>
+      'am freeze: ActivityManager process freeze. Requires Android 15+.';
+
+  @override
+  String get appsExportAction => 'Export APK';
+
+  @override
+  String get appsExportTitle => 'Export app';
+
+  @override
+  String appsExportPrompt(Object name) {
+    return 'Enter the folder where $name should be pulled';
+  }
+
+  @override
+  String get appsExportDirectory => 'Destination folder';
+
+  @override
+  String appsExportSucceeded(Object path) {
+    return 'Exported to $path';
+  }
+
+  @override
+  String get appsUninstallAction => 'Uninstall';
+
+  @override
+  String get appsUninstallTitle => 'Uninstall app';
+
+  @override
+  String appsUninstallConfirm(Object name, Object packageName) {
+    return 'Uninstall $name ($packageName)?';
+  }
+
+  @override
+  String get appsUninstallSystemTitle => 'Uninstall system app';
+
+  @override
+  String appsUninstallSystemConfirm(Object name, Object packageName) {
+    return '$name ($packageName) is a system app. Uninstalling it may break related features and is usually hard to undo. Continue?';
+  }
+
+  @override
+  String get appsUninstallCoreTitle => 'Uninstall core system app';
+
+  @override
+  String appsUninstallCoreConfirm(Object name, Object packageName) {
+    return '$name ($packageName) is a core system component. Uninstalling it may prevent the device from booting, showing a home screen, making calls, or opening Settings, and is very hard to undo. Uninstall it anyway?';
+  }
+
+  @override
+  String get appsUninstallConfirmAction => 'Uninstall anyway';
+
+  @override
+  String appsUninstallSucceeded(Object name) {
+    return 'Uninstalled $name';
+  }
+
+  @override
+  String get appsFreezeSystemTitle => 'Freeze system app';
+
+  @override
+  String appsFreezeSystemConfirm(Object name, Object packageName) {
+    return '$name ($packageName) is a system app. Freezing it may break related features. Continue?';
+  }
+
+  @override
+  String get appsFreezeCoreTitle => 'Freeze core system app';
+
+  @override
+  String appsFreezeCoreConfirm(Object name, Object packageName) {
+    return '$name ($packageName) is a core system component. Freezing it may prevent the device from booting, showing a home screen, making calls, or opening Settings. Freeze it anyway?';
+  }
+
+  @override
+  String get appsFreezeConfirmAction => 'Freeze anyway';
+
+  @override
+  String get appsFreezeAction => 'Freeze';
+
+  @override
+  String get appsUnfreezeAction => 'Unfreeze';
+
+  @override
+  String appsFreezeSucceeded(Object name) {
+    return 'Froze $name';
+  }
+
+  @override
+  String appsUnfreezeSucceeded(Object name) {
+    return 'Unfroze $name';
+  }
+
+  @override
+  String get appsActionFailed => 'Action failed';
+
+  @override
+  String get appsSelect => 'Select';
+
+  @override
+  String get appsSelectDone => 'Done';
+
+  @override
+  String get appsSelectAll => 'Select all';
+
+  @override
+  String get appsSelectClear => 'Clear';
+
+  @override
+  String appsSelectedCount(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String appsBatchUninstallConfirm(int count) {
+    return 'Uninstall the $count selected apps?';
+  }
+
+  @override
+  String appsBatchUninstallSystemConfirm(int count, Object names) {
+    return 'The $count selected apps include system apps ($names). Uninstalling them may break related features and is usually hard to undo. Continue?';
+  }
+
+  @override
+  String appsBatchUninstallCoreConfirm(int count, Object names) {
+    return 'The $count selected apps include core system components ($names). Uninstalling them may prevent the device from booting, showing a home screen, making calls, or opening Settings, and is very hard to undo. Uninstall them anyway?';
+  }
+
+  @override
+  String appsBatchFreezeConfirm(int count) {
+    return 'Freeze the $count selected apps?';
+  }
+
+  @override
+  String appsBatchFreezeSystemConfirm(int count, Object names) {
+    return 'The $count selected apps include system apps ($names). Freezing them may break related features. Continue?';
+  }
+
+  @override
+  String appsBatchFreezeCoreConfirm(int count, Object names) {
+    return 'The $count selected apps include core system components ($names). Freezing them may prevent the device from booting, showing a home screen, making calls, or opening Settings. Freeze them anyway?';
+  }
+
+  @override
+  String appsBatchExportPrompt(int count) {
+    return 'Enter the folder where the $count selected apps should be pulled';
+  }
+
+  @override
+  String appsBatchUninstallSucceeded(int count) {
+    return 'Uninstalled $count apps';
+  }
+
+  @override
+  String appsBatchFreezeSucceeded(int count) {
+    return 'Froze $count apps';
+  }
+
+  @override
+  String appsBatchExportSucceeded(int count, Object path) {
+    return 'Exported $count apps to $path';
+  }
+
+  @override
+  String get appsTaskExport => 'Exporting';
+
+  @override
+  String get appsTaskUninstall => 'Uninstalling';
+
+  @override
+  String get appsTaskFreeze => 'Freezing';
+
+  @override
+  String get appsTaskUnfreeze => 'Unfreezing';
+
+  @override
+  String appsTaskProgress(
+    Object action,
+    Object name,
+    int completed,
+    int total,
+    int percent,
+  ) {
+    return '$action $name ($completed/$total, $percent%)';
+  }
+
+  @override
+  String get appsExportMeasuring => 'Calculating size…';
+
+  @override
+  String appsExportBytes(Object done, Object total) {
+    return '$done / $total';
+  }
+
+  @override
+  String appsExportPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get appsCancelTask => 'Cancel';
+
+  @override
+  String get appsTaskCancelled => 'Cancelled';
+
+  @override
+  String appsTaskCancelledDone(int count) {
+    return 'Cancelled, $count completed';
+  }
+
+  @override
+  String appsBatchPartial(int succeeded, int failed) {
+    return '$succeeded succeeded, $failed failed';
+  }
 }

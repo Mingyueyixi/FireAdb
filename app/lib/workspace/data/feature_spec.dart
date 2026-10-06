@@ -54,6 +54,7 @@ const List<FeatureSpec> kDeviceFeatures = <FeatureSpec>[
   FeatureSpec(
     id: 'apps',
     icon: Icons.apps,
+    implemented: true,
   ),
   FeatureSpec(
     id: 'transfer',

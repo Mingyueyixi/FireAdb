@@ -434,7 +434,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @workspaceAppsDescription.
   ///
   /// In zh, this message translates to:
-  /// **'查看已安装应用、卸载应用、安装 APK'**
+  /// **'查看已安装应用、导出 APK、卸载与冻结'**
   String get workspaceAppsDescription;
 
   /// No description provided for @workspaceTransferTitle.
@@ -682,6 +682,480 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'…较早的输出已省略…'**
   String get shellEarlierOutputOmitted;
+
+  /// No description provided for @appsSearchHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索应用名称或包名'**
+  String get appsSearchHint;
+
+  /// No description provided for @appsFilterUser.
+  ///
+  /// In zh, this message translates to:
+  /// **'用户应用'**
+  String get appsFilterUser;
+
+  /// No description provided for @appsFilterSystem.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统应用'**
+  String get appsFilterSystem;
+
+  /// No description provided for @appsFilterFrozen.
+  ///
+  /// In zh, this message translates to:
+  /// **'已冻结'**
+  String get appsFilterFrozen;
+
+  /// No description provided for @appsFilterAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部'**
+  String get appsFilterAll;
+
+  /// No description provided for @appsRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新应用列表'**
+  String get appsRefresh;
+
+  /// No description provided for @appsCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 个应用'**
+  String appsCount(int count);
+
+  /// No description provided for @appsEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有符合条件的应用'**
+  String get appsEmpty;
+
+  /// No description provided for @appsLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'读取应用列表失败：{error}'**
+  String appsLoadFailed(Object error);
+
+  /// No description provided for @appsVersion.
+  ///
+  /// In zh, this message translates to:
+  /// **'版本 {version}'**
+  String appsVersion(Object version);
+
+  /// No description provided for @appsSize.
+  ///
+  /// In zh, this message translates to:
+  /// **'大小 {size}'**
+  String appsSize(Object size);
+
+  /// No description provided for @appsPath.
+  ///
+  /// In zh, this message translates to:
+  /// **'路径 {path}'**
+  String appsPath(Object path);
+
+  /// No description provided for @appsFrozenBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'已冻结'**
+  String get appsFrozenBadge;
+
+  /// No description provided for @appsDisabledBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'已停用'**
+  String get appsDisabledBadge;
+
+  /// No description provided for @appsSuspendedBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'已暂停'**
+  String get appsSuspendedBadge;
+
+  /// No description provided for @appsAmFrozenBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'AM 冻结'**
+  String get appsAmFrozenBadge;
+
+  /// No description provided for @appsFreezeMethod.
+  ///
+  /// In zh, this message translates to:
+  /// **'冻结方式'**
+  String get appsFreezeMethod;
+
+  /// No description provided for @appsFreezeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'冻结应用'**
+  String get appsFreezeTitle;
+
+  /// No description provided for @appsUnfreezeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'解冻应用'**
+  String get appsUnfreezeTitle;
+
+  /// No description provided for @appsFreezePrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择冻结 {name} 的方式'**
+  String appsFreezePrompt(Object name);
+
+  /// No description provided for @appsUnfreezePrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择解除 {name} 冻结的方式'**
+  String appsUnfreezePrompt(Object name);
+
+  /// No description provided for @appsFreezeMethodDisableUser.
+  ///
+  /// In zh, this message translates to:
+  /// **'停用应用'**
+  String get appsFreezeMethodDisableUser;
+
+  /// No description provided for @appsFreezeMethodDisableUserDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'pm disable-user：用户停用，应用无法启动。适配范围最广。'**
+  String get appsFreezeMethodDisableUserDescription;
+
+  /// No description provided for @appsFreezeMethodSuspend.
+  ///
+  /// In zh, this message translates to:
+  /// **'暂停应用'**
+  String get appsFreezeMethodSuspend;
+
+  /// No description provided for @appsFreezeMethodSuspendDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'pm suspend：暂停并隐藏应用，数据保留，可随时恢复。'**
+  String get appsFreezeMethodSuspendDescription;
+
+  /// No description provided for @appsFreezeMethodAmFreeze.
+  ///
+  /// In zh, this message translates to:
+  /// **'AM 冻结'**
+  String get appsFreezeMethodAmFreeze;
+
+  /// No description provided for @appsFreezeMethodAmFreezeDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'am freeze：由 ActivityManager 冻结进程，需要 Android 15+。'**
+  String get appsFreezeMethodAmFreezeDescription;
+
+  /// No description provided for @appsExportAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出 APK'**
+  String get appsExportAction;
+
+  /// No description provided for @appsExportTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出应用'**
+  String get appsExportTitle;
+
+  /// No description provided for @appsExportPrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入要将 {name} 拉取到的目标目录'**
+  String appsExportPrompt(Object name);
+
+  /// No description provided for @appsExportDirectory.
+  ///
+  /// In zh, this message translates to:
+  /// **'目标目录'**
+  String get appsExportDirectory;
+
+  /// No description provided for @appsExportSucceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已导出到 {path}'**
+  String appsExportSucceeded(Object path);
+
+  /// No description provided for @appsUninstallAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'卸载'**
+  String get appsUninstallAction;
+
+  /// No description provided for @appsUninstallTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'卸载应用'**
+  String get appsUninstallTitle;
+
+  /// No description provided for @appsUninstallConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定卸载 {name}（{packageName}）吗？'**
+  String appsUninstallConfirm(Object name, Object packageName);
+
+  /// No description provided for @appsUninstallSystemTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'卸载系统应用'**
+  String get appsUninstallSystemTitle;
+
+  /// No description provided for @appsUninstallSystemConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'{name}（{packageName}）是系统应用。卸载后可能影响相关功能，且通常很难恢复。确定继续吗？'**
+  String appsUninstallSystemConfirm(Object name, Object packageName);
+
+  /// No description provided for @appsUninstallCoreTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'卸载核心系统应用'**
+  String get appsUninstallCoreTitle;
+
+  /// No description provided for @appsUninstallCoreConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'{name}（{packageName}）是核心系统组件。卸载后可能导致无法开机、没有桌面、无法拨号或无法打开设置，且很难恢复。确定仍要卸载吗？'**
+  String appsUninstallCoreConfirm(Object name, Object packageName);
+
+  /// No description provided for @appsUninstallConfirmAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'仍然卸载'**
+  String get appsUninstallConfirmAction;
+
+  /// No description provided for @appsUninstallSucceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已卸载 {name}'**
+  String appsUninstallSucceeded(Object name);
+
+  /// No description provided for @appsFreezeSystemTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'冻结系统应用'**
+  String get appsFreezeSystemTitle;
+
+  /// No description provided for @appsFreezeSystemConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'{name}（{packageName}）是系统应用。冻结后可能影响相关功能，确定继续吗？'**
+  String appsFreezeSystemConfirm(Object name, Object packageName);
+
+  /// No description provided for @appsFreezeCoreTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'冻结核心系统应用'**
+  String get appsFreezeCoreTitle;
+
+  /// No description provided for @appsFreezeCoreConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'{name}（{packageName}）是核心系统组件。冻结后可能导致无法开机、没有桌面、无法拨号或无法打开设置。确定仍要冻结吗？'**
+  String appsFreezeCoreConfirm(Object name, Object packageName);
+
+  /// No description provided for @appsFreezeConfirmAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'仍然冻结'**
+  String get appsFreezeConfirmAction;
+
+  /// No description provided for @appsFreezeAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'冻结'**
+  String get appsFreezeAction;
+
+  /// No description provided for @appsUnfreezeAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'解冻'**
+  String get appsUnfreezeAction;
+
+  /// No description provided for @appsFreezeSucceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已冻结 {name}'**
+  String appsFreezeSucceeded(Object name);
+
+  /// No description provided for @appsUnfreezeSucceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已解冻 {name}'**
+  String appsUnfreezeSucceeded(Object name);
+
+  /// No description provided for @appsActionFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'操作失败'**
+  String get appsActionFailed;
+
+  /// No description provided for @appsSelect.
+  ///
+  /// In zh, this message translates to:
+  /// **'多选'**
+  String get appsSelect;
+
+  /// No description provided for @appsSelectDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'完成'**
+  String get appsSelectDone;
+
+  /// No description provided for @appsSelectAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全选'**
+  String get appsSelectAll;
+
+  /// No description provided for @appsSelectClear.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消选择'**
+  String get appsSelectClear;
+
+  /// No description provided for @appsSelectedCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'已选 {count} 个'**
+  String appsSelectedCount(int count);
+
+  /// No description provided for @appsBatchUninstallConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定卸载选中的 {count} 个应用吗？'**
+  String appsBatchUninstallConfirm(int count);
+
+  /// No description provided for @appsBatchUninstallSystemConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'选中的 {count} 个应用包含系统应用（{names}）。卸载后可能影响相关功能，且通常很难恢复。确定继续吗？'**
+  String appsBatchUninstallSystemConfirm(int count, Object names);
+
+  /// No description provided for @appsBatchUninstallCoreConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'选中的 {count} 个应用包含核心系统组件（{names}）。卸载后可能导致无法开机、没有桌面、无法拨号或无法打开设置，且很难恢复。确定仍要卸载吗？'**
+  String appsBatchUninstallCoreConfirm(int count, Object names);
+
+  /// No description provided for @appsBatchFreezeConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定冻结选中的 {count} 个应用吗？'**
+  String appsBatchFreezeConfirm(int count);
+
+  /// No description provided for @appsBatchFreezeSystemConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'选中的 {count} 个应用包含系统应用（{names}）。冻结后可能影响相关功能，确定继续吗？'**
+  String appsBatchFreezeSystemConfirm(int count, Object names);
+
+  /// No description provided for @appsBatchFreezeCoreConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'选中的 {count} 个应用包含核心系统组件（{names}）。冻结后可能导致无法开机、没有桌面、无法拨号或无法打开设置。确定仍要冻结吗？'**
+  String appsBatchFreezeCoreConfirm(int count, Object names);
+
+  /// No description provided for @appsBatchExportPrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入要将选中的 {count} 个应用拉取到的目标目录'**
+  String appsBatchExportPrompt(int count);
+
+  /// No description provided for @appsBatchUninstallSucceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已卸载 {count} 个应用'**
+  String appsBatchUninstallSucceeded(int count);
+
+  /// No description provided for @appsBatchFreezeSucceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已冻结 {count} 个应用'**
+  String appsBatchFreezeSucceeded(int count);
+
+  /// No description provided for @appsBatchExportSucceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已导出 {count} 个应用到 {path}'**
+  String appsBatchExportSucceeded(int count, Object path);
+
+  /// No description provided for @appsTaskExport.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在导出'**
+  String get appsTaskExport;
+
+  /// No description provided for @appsTaskUninstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在卸载'**
+  String get appsTaskUninstall;
+
+  /// No description provided for @appsTaskFreeze.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在冻结'**
+  String get appsTaskFreeze;
+
+  /// No description provided for @appsTaskUnfreeze.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在解冻'**
+  String get appsTaskUnfreeze;
+
+  /// No description provided for @appsTaskProgress.
+  ///
+  /// In zh, this message translates to:
+  /// **'{action} {name}（{completed}/{total}，{percent}%）'**
+  String appsTaskProgress(
+    Object action,
+    Object name,
+    int completed,
+    int total,
+    int percent,
+  );
+
+  /// No description provided for @appsExportMeasuring.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在计算大小…'**
+  String get appsExportMeasuring;
+
+  /// No description provided for @appsExportBytes.
+  ///
+  /// In zh, this message translates to:
+  /// **'{done} / {total}'**
+  String appsExportBytes(Object done, Object total);
+
+  /// No description provided for @appsExportPercent.
+  ///
+  /// In zh, this message translates to:
+  /// **'{percent}%'**
+  String appsExportPercent(int percent);
+
+  /// No description provided for @appsCancelTask.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消'**
+  String get appsCancelTask;
+
+  /// No description provided for @appsTaskCancelled.
+  ///
+  /// In zh, this message translates to:
+  /// **'已取消'**
+  String get appsTaskCancelled;
+
+  /// No description provided for @appsTaskCancelledDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'已取消，已完成 {count} 个'**
+  String appsTaskCancelledDone(int count);
+
+  /// No description provided for @appsBatchPartial.
+  ///
+  /// In zh, this message translates to:
+  /// **'成功 {succeeded} 个，失败 {failed} 个'**
+  String appsBatchPartial(int succeeded, int failed);
 }
 
 class _FireAdbLocalizationsDelegate

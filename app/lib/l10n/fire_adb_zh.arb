@@ -82,7 +82,7 @@
   "workspaceOverviewTitle": "设备总览",
   "workspaceOverviewDescription": "设备型号、品牌、系统版本等基本信息",
   "workspaceAppsTitle": "设备应用",
-  "workspaceAppsDescription": "查看已安装应用、卸载应用、安装 APK",
+  "workspaceAppsDescription": "查看已安装应用、导出 APK、卸载与冻结",
   "workspaceTransferTitle": "文件传输",
   "workspaceTransferDescription": "推送文件到设备 / 从设备拉取文件",
   "workspaceFilesTitle": "文件管理",
@@ -153,5 +153,302 @@
       "error": {}
     }
   },
-  "shellEarlierOutputOmitted": "…较早的输出已省略…"
+  "shellEarlierOutputOmitted": "…较早的输出已省略…",
+  "appsSearchHint": "搜索应用名称或包名",
+  "appsFilterUser": "用户应用",
+  "appsFilterSystem": "系统应用",
+  "appsFilterFrozen": "已冻结",
+  "appsFilterAll": "全部",
+  "appsRefresh": "刷新应用列表",
+  "appsCount": "{count} 个应用",
+  "@appsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsEmpty": "没有符合条件的应用",
+  "appsLoadFailed": "读取应用列表失败：{error}",
+  "@appsLoadFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "appsVersion": "版本 {version}",
+  "@appsVersion": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "appsSize": "大小 {size}",
+  "@appsSize": {
+    "placeholders": {
+      "size": {}
+    }
+  },
+  "appsPath": "路径 {path}",
+  "@appsPath": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "appsFrozenBadge": "已冻结",
+  "appsDisabledBadge": "已停用",
+  "appsSuspendedBadge": "已暂停",
+  "appsAmFrozenBadge": "AM 冻结",
+  "appsFreezeMethod": "冻结方式",
+  "appsFreezeTitle": "冻结应用",
+  "appsUnfreezeTitle": "解冻应用",
+  "appsFreezePrompt": "选择冻结 {name} 的方式",
+  "@appsFreezePrompt": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsUnfreezePrompt": "选择解除 {name} 冻结的方式",
+  "@appsUnfreezePrompt": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsFreezeMethodDisableUser": "停用应用",
+  "appsFreezeMethodDisableUserDescription": "pm disable-user：用户停用，应用无法启动。适配范围最广。",
+  "appsFreezeMethodSuspend": "暂停应用",
+  "appsFreezeMethodSuspendDescription": "pm suspend：暂停并隐藏应用，数据保留，可随时恢复。",
+  "appsFreezeMethodAmFreeze": "AM 冻结",
+  "appsFreezeMethodAmFreezeDescription": "am freeze：由 ActivityManager 冻结进程，需要 Android 15+。",
+  "appsExportAction": "导出 APK",
+  "appsExportTitle": "导出应用",
+  "appsExportPrompt": "请输入要将 {name} 拉取到的目标目录",
+  "@appsExportPrompt": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsExportDirectory": "目标目录",
+  "appsExportSucceeded": "已导出到 {path}",
+  "@appsExportSucceeded": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "appsUninstallAction": "卸载",
+  "appsUninstallTitle": "卸载应用",
+  "appsUninstallConfirm": "确定卸载 {name}（{packageName}）吗？",
+  "@appsUninstallConfirm": {
+    "placeholders": {
+      "name": {},
+      "packageName": {}
+    }
+  },
+  "appsUninstallSystemTitle": "卸载系统应用",
+  "appsUninstallSystemConfirm": "{name}（{packageName}）是系统应用。卸载后可能影响相关功能，且通常很难恢复。确定继续吗？",
+  "@appsUninstallSystemConfirm": {
+    "placeholders": {
+      "name": {},
+      "packageName": {}
+    }
+  },
+  "appsUninstallCoreTitle": "卸载核心系统应用",
+  "appsUninstallCoreConfirm": "{name}（{packageName}）是核心系统组件。卸载后可能导致无法开机、没有桌面、无法拨号或无法打开设置，且很难恢复。确定仍要卸载吗？",
+  "@appsUninstallCoreConfirm": {
+    "placeholders": {
+      "name": {},
+      "packageName": {}
+    }
+  },
+  "appsUninstallConfirmAction": "仍然卸载",
+  "appsUninstallSucceeded": "已卸载 {name}",
+  "@appsUninstallSucceeded": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsFreezeSystemTitle": "冻结系统应用",
+  "appsFreezeSystemConfirm": "{name}（{packageName}）是系统应用。冻结后可能影响相关功能，确定继续吗？",
+  "@appsFreezeSystemConfirm": {
+    "placeholders": {
+      "name": {},
+      "packageName": {}
+    }
+  },
+  "appsFreezeCoreTitle": "冻结核心系统应用",
+  "appsFreezeCoreConfirm": "{name}（{packageName}）是核心系统组件。冻结后可能导致无法开机、没有桌面、无法拨号或无法打开设置。确定仍要冻结吗？",
+  "@appsFreezeCoreConfirm": {
+    "placeholders": {
+      "name": {},
+      "packageName": {}
+    }
+  },
+  "appsFreezeConfirmAction": "仍然冻结",
+  "appsFreezeAction": "冻结",
+  "appsUnfreezeAction": "解冻",
+  "appsFreezeSucceeded": "已冻结 {name}",
+  "@appsFreezeSucceeded": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsUnfreezeSucceeded": "已解冻 {name}",
+  "@appsUnfreezeSucceeded": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsActionFailed": "操作失败",
+  "appsSelect": "多选",
+  "appsSelectDone": "完成",
+  "appsSelectAll": "全选",
+  "appsSelectClear": "取消选择",
+  "appsSelectedCount": "已选 {count} 个",
+  "@appsSelectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchUninstallConfirm": "确定卸载选中的 {count} 个应用吗？",
+  "@appsBatchUninstallConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchUninstallSystemConfirm": "选中的 {count} 个应用包含系统应用（{names}）。卸载后可能影响相关功能，且通常很难恢复。确定继续吗？",
+  "@appsBatchUninstallSystemConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {}
+    }
+  },
+  "appsBatchUninstallCoreConfirm": "选中的 {count} 个应用包含核心系统组件（{names}）。卸载后可能导致无法开机、没有桌面、无法拨号或无法打开设置，且很难恢复。确定仍要卸载吗？",
+  "@appsBatchUninstallCoreConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {}
+    }
+  },
+  "appsBatchFreezeConfirm": "确定冻结选中的 {count} 个应用吗？",
+  "@appsBatchFreezeConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchFreezeSystemConfirm": "选中的 {count} 个应用包含系统应用（{names}）。冻结后可能影响相关功能，确定继续吗？",
+  "@appsBatchFreezeSystemConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {}
+    }
+  },
+  "appsBatchFreezeCoreConfirm": "选中的 {count} 个应用包含核心系统组件（{names}）。冻结后可能导致无法开机、没有桌面、无法拨号或无法打开设置。确定仍要冻结吗？",
+  "@appsBatchFreezeCoreConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {}
+    }
+  },
+  "appsBatchExportPrompt": "请输入要将选中的 {count} 个应用拉取到的目标目录",
+  "@appsBatchExportPrompt": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchUninstallSucceeded": "已卸载 {count} 个应用",
+  "@appsBatchUninstallSucceeded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchFreezeSucceeded": "已冻结 {count} 个应用",
+  "@appsBatchFreezeSucceeded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchExportSucceeded": "已导出 {count} 个应用到 {path}",
+  "@appsBatchExportSucceeded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "path": {}
+    }
+  },
+  "appsTaskExport": "正在导出",
+  "appsTaskUninstall": "正在卸载",
+  "appsTaskFreeze": "正在冻结",
+  "appsTaskUnfreeze": "正在解冻",
+  "appsTaskProgress": "{action} {name}（{completed}/{total}，{percent}%）",
+  "@appsTaskProgress": {
+    "placeholders": {
+      "action": {},
+      "name": {},
+      "completed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "appsExportMeasuring": "正在计算大小…",
+  "appsExportBytes": "{done} / {total}",
+  "@appsExportBytes": {
+    "placeholders": {
+      "done": {},
+      "total": {}
+    }
+  },
+  "appsExportPercent": "{percent}%",
+  "@appsExportPercent": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "appsCancelTask": "取消",
+  "appsTaskCancelled": "已取消",
+  "appsTaskCancelledDone": "已取消，已完成 {count} 个",
+  "@appsTaskCancelledDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchPartial": "成功 {succeeded} 个，失败 {failed} 个",
+  "@appsBatchPartial": {
+    "placeholders": {
+      "succeeded": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  }
 }

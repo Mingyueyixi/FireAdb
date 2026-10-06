@@ -82,7 +82,7 @@
   "workspaceOverviewTitle": "Device overview",
   "workspaceOverviewDescription": "Device model, brand, Android version, and other details",
   "workspaceAppsTitle": "Device apps",
-  "workspaceAppsDescription": "View installed apps, uninstall apps, and install APKs",
+  "workspaceAppsDescription": "View installed apps, export APKs, uninstall, and freeze apps",
   "workspaceTransferTitle": "File transfer",
   "workspaceTransferDescription": "Push files to a device or pull files from it",
   "workspaceFilesTitle": "File manager",
@@ -153,5 +153,302 @@
       "error": {}
     }
   },
-  "shellEarlierOutputOmitted": "…earlier output omitted…"
+  "shellEarlierOutputOmitted": "…earlier output omitted…",
+  "appsSearchHint": "Search by app name or package name",
+  "appsFilterUser": "User apps",
+  "appsFilterSystem": "System apps",
+  "appsFilterFrozen": "Frozen",
+  "appsFilterAll": "All",
+  "appsRefresh": "Refresh app list",
+  "appsCount": "{count} apps",
+  "@appsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsEmpty": "No apps match the current filters",
+  "appsLoadFailed": "Could not load the app list: {error}",
+  "@appsLoadFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "appsVersion": "Version {version}",
+  "@appsVersion": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "appsSize": "Size {size}",
+  "@appsSize": {
+    "placeholders": {
+      "size": {}
+    }
+  },
+  "appsPath": "Path {path}",
+  "@appsPath": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "appsFrozenBadge": "Frozen",
+  "appsDisabledBadge": "Disabled",
+  "appsSuspendedBadge": "Suspended",
+  "appsAmFrozenBadge": "AM frozen",
+  "appsFreezeMethod": "Freeze method",
+  "appsFreezeTitle": "Freeze app",
+  "appsUnfreezeTitle": "Unfreeze app",
+  "appsFreezePrompt": "Choose how to freeze {name}",
+  "@appsFreezePrompt": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsUnfreezePrompt": "Choose how to unfreeze {name}",
+  "@appsUnfreezePrompt": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsFreezeMethodDisableUser": "Disable app",
+  "appsFreezeMethodDisableUserDescription": "pm disable-user: disables the app for the user so it cannot start. Works on most devices.",
+  "appsFreezeMethodSuspend": "Suspend app",
+  "appsFreezeMethodSuspendDescription": "pm suspend: hides and pauses the app while keeping its data.",
+  "appsFreezeMethodAmFreeze": "AM freeze",
+  "appsFreezeMethodAmFreezeDescription": "am freeze: ActivityManager process freeze. Requires Android 15+.",
+  "appsExportAction": "Export APK",
+  "appsExportTitle": "Export app",
+  "appsExportPrompt": "Enter the folder where {name} should be pulled",
+  "@appsExportPrompt": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsExportDirectory": "Destination folder",
+  "appsExportSucceeded": "Exported to {path}",
+  "@appsExportSucceeded": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "appsUninstallAction": "Uninstall",
+  "appsUninstallTitle": "Uninstall app",
+  "appsUninstallConfirm": "Uninstall {name} ({packageName})?",
+  "@appsUninstallConfirm": {
+    "placeholders": {
+      "name": {},
+      "packageName": {}
+    }
+  },
+  "appsUninstallSystemTitle": "Uninstall system app",
+  "appsUninstallSystemConfirm": "{name} ({packageName}) is a system app. Uninstalling it may break related features and is usually hard to undo. Continue?",
+  "@appsUninstallSystemConfirm": {
+    "placeholders": {
+      "name": {},
+      "packageName": {}
+    }
+  },
+  "appsUninstallCoreTitle": "Uninstall core system app",
+  "appsUninstallCoreConfirm": "{name} ({packageName}) is a core system component. Uninstalling it may prevent the device from booting, showing a home screen, making calls, or opening Settings, and is very hard to undo. Uninstall it anyway?",
+  "@appsUninstallCoreConfirm": {
+    "placeholders": {
+      "name": {},
+      "packageName": {}
+    }
+  },
+  "appsUninstallConfirmAction": "Uninstall anyway",
+  "appsUninstallSucceeded": "Uninstalled {name}",
+  "@appsUninstallSucceeded": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsFreezeSystemTitle": "Freeze system app",
+  "appsFreezeSystemConfirm": "{name} ({packageName}) is a system app. Freezing it may break related features. Continue?",
+  "@appsFreezeSystemConfirm": {
+    "placeholders": {
+      "name": {},
+      "packageName": {}
+    }
+  },
+  "appsFreezeCoreTitle": "Freeze core system app",
+  "appsFreezeCoreConfirm": "{name} ({packageName}) is a core system component. Freezing it may prevent the device from booting, showing a home screen, making calls, or opening Settings. Freeze it anyway?",
+  "@appsFreezeCoreConfirm": {
+    "placeholders": {
+      "name": {},
+      "packageName": {}
+    }
+  },
+  "appsFreezeConfirmAction": "Freeze anyway",
+  "appsFreezeAction": "Freeze",
+  "appsUnfreezeAction": "Unfreeze",
+  "appsFreezeSucceeded": "Froze {name}",
+  "@appsFreezeSucceeded": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsUnfreezeSucceeded": "Unfroze {name}",
+  "@appsUnfreezeSucceeded": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsActionFailed": "Action failed",
+  "appsSelect": "Select",
+  "appsSelectDone": "Done",
+  "appsSelectAll": "Select all",
+  "appsSelectClear": "Clear",
+  "appsSelectedCount": "{count} selected",
+  "@appsSelectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchUninstallConfirm": "Uninstall the {count} selected apps?",
+  "@appsBatchUninstallConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchUninstallSystemConfirm": "The {count} selected apps include system apps ({names}). Uninstalling them may break related features and is usually hard to undo. Continue?",
+  "@appsBatchUninstallSystemConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {}
+    }
+  },
+  "appsBatchUninstallCoreConfirm": "The {count} selected apps include core system components ({names}). Uninstalling them may prevent the device from booting, showing a home screen, making calls, or opening Settings, and is very hard to undo. Uninstall them anyway?",
+  "@appsBatchUninstallCoreConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {}
+    }
+  },
+  "appsBatchFreezeConfirm": "Freeze the {count} selected apps?",
+  "@appsBatchFreezeConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchFreezeSystemConfirm": "The {count} selected apps include system apps ({names}). Freezing them may break related features. Continue?",
+  "@appsBatchFreezeSystemConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {}
+    }
+  },
+  "appsBatchFreezeCoreConfirm": "The {count} selected apps include core system components ({names}). Freezing them may prevent the device from booting, showing a home screen, making calls, or opening Settings. Freeze them anyway?",
+  "@appsBatchFreezeCoreConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {}
+    }
+  },
+  "appsBatchExportPrompt": "Enter the folder where the {count} selected apps should be pulled",
+  "@appsBatchExportPrompt": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchUninstallSucceeded": "Uninstalled {count} apps",
+  "@appsBatchUninstallSucceeded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchFreezeSucceeded": "Froze {count} apps",
+  "@appsBatchFreezeSucceeded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchExportSucceeded": "Exported {count} apps to {path}",
+  "@appsBatchExportSucceeded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "path": {}
+    }
+  },
+  "appsTaskExport": "Exporting",
+  "appsTaskUninstall": "Uninstalling",
+  "appsTaskFreeze": "Freezing",
+  "appsTaskUnfreeze": "Unfreezing",
+  "appsTaskProgress": "{action} {name} ({completed}/{total}, {percent}%)",
+  "@appsTaskProgress": {
+    "placeholders": {
+      "action": {},
+      "name": {},
+      "completed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "appsExportMeasuring": "Calculating size…",
+  "appsExportBytes": "{done} / {total}",
+  "@appsExportBytes": {
+    "placeholders": {
+      "done": {},
+      "total": {}
+    }
+  },
+  "appsExportPercent": "{percent}%",
+  "@appsExportPercent": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "appsCancelTask": "Cancel",
+  "appsTaskCancelled": "Cancelled",
+  "appsTaskCancelledDone": "Cancelled, {count} completed",
+  "@appsTaskCancelledDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "appsBatchPartial": "{succeeded} succeeded, {failed} failed",
+  "@appsBatchPartial": {
+    "placeholders": {
+      "succeeded": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  }
 }

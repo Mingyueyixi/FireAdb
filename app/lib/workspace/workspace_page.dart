@@ -2,6 +2,7 @@ import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../apps/apps_page.dart';
 import '../device_overview/device_overview_page.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
 import '../shell/shell_page.dart';
@@ -38,9 +39,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
         () => Scaffold(
           appBar: AppBar(
             title: Builder(
-              builder: (context) => Text(
-                featureTitle(context, spec),
-              ),
+              builder: (context) => Text(featureTitle(context, spec)),
             ),
             actions: const <Widget>[LocaleSelector()],
           ),
@@ -54,14 +53,18 @@ class WorkspacePage extends GetView<WorkspaceController> {
         () => Scaffold(
           appBar: AppBar(
             title: Builder(
-              builder: (context) => Text(
-                featureTitle(context, spec),
-              ),
+              builder: (context) => Text(featureTitle(context, spec)),
             ),
             actions: const <Widget>[LocaleSelector()],
           ),
           body: ShellPage(serial: controller.selectedSerial.value),
         ),
+      );
+      return;
+    }
+    if (spec.id == 'apps') {
+      Get.to<void>(
+        () => AppsFeaturePage(serial: controller.selectedSerial.value),
       );
       return;
     }
@@ -77,6 +80,9 @@ class WorkspacePage extends GetView<WorkspaceController> {
     }
     if (spec.id == 'shell') {
       return ShellPage(serial: controller.selectedSerial.value);
+    }
+    if (spec.id == 'apps') {
+      return AppsPage(serial: controller.selectedSerial.value);
     }
     return PlaceholderFeatureBody(spec: spec);
   }

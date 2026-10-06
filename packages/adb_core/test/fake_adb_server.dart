@@ -100,6 +100,11 @@ class FakeAdbServer {
       socket.add(utf8.encode('fake shell output\n'));
       await socket.close();
       return false;
+    } else if (service.startsWith('exec:')) {
+      await _okay(socket);
+      socket.add(utf8.encode('fake exec output'));
+      await socket.close();
+      return false;
     } else if (service.startsWith('host:disconnect')) {
       await _okayPayload(socket, 'disconnected everything');
     } else if (service.startsWith('host:tport:')) {
@@ -118,12 +123,12 @@ class FakeAdbServer {
       await _okay(socket);
       await socket.close();
       return false;
-    } else if (service == 'host:transport:usb-device-1') {
-      // 选择设备后，同一连接继续接收设备服务请求。
-      await _okay(socket);
-      return true;
     } else if (service.startsWith('host:transport:')) {
       await _okay(socket);
+      // 选择设备后同一连接继续接收设备服务；其它 serial 用于旧式 bind 测试，OKAY 后关闭。
+      if (service == 'host:transport:usb-device-1') {
+        return true;
+      }
       await socket.close();
       return false;
     } else if (service.startsWith('host-serial:') ||

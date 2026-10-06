@@ -33,8 +33,7 @@ const String kSyncIdQuit = 'QUIT';
 /// 单帧最大数据长度（协议要求 ≤ 64KB）。
 const int kMaxSyncData = 64 * 1024;
 
-Uint8List _encodeSyncId(String id) =>
-    Uint8List.fromList(id.codeUnits);
+Uint8List _encodeSyncId(String id) => Uint8List.fromList(id.codeUnits);
 
 int _readUint32LE(Uint8List b, int offset) =>
     (b[offset + 3] << 24) |
@@ -51,14 +50,17 @@ void _writeUint32LE(BytesBuilder b, int value) {
 
 /// 设备的单个文件属性。
 class AdbFileStat {
-  const AdbFileStat({required this.mode, required this.size, required this.mtime});
+  const AdbFileStat({
+    required this.mode,
+    required this.size,
+    required this.mtime,
+  });
 
   final int mode;
   final int size;
   final int mtime;
 
-  bool get isDirectory =>
-      mode & 0xf000 == 0x4000; // 0o40000 S_IFDIR
+  bool get isDirectory => mode & 0xf000 == 0x4000; // 0o40000 S_IFDIR
 
   @override
   String toString() =>
@@ -81,12 +83,27 @@ class AdbFileEntry {
 typedef AdbTransferProgress = void Function(int bytesDone, int totalBytes);
 
 /// 绑定到一条 `sync:` 流的 file_sync 客户端。
+///
+/// 既可用于直连 adbd 的 [AdbStream]，也可用于经 `adb server` 转发的 socket。
 class AdbSyncClient {
-  AdbSyncClient(this._stream)
-      : _reader = AdbSizedReader(_stream.readStream());
+  AdbSyncClient(AdbStream stream)
+    : this.fromChannel(
+        reader: AdbSizedReader(stream.readStream()),
+        write: (data) async {
+          await stream.write(data);
+        },
+        close: stream.close,
+      );
 
-  final AdbStream _stream;
+  AdbSyncClient.fromChannel({
+    required this._reader,
+    required this._write,
+    required this._close,
+  });
+
   final AdbSizedReader _reader;
+  final Future<void> Function(List<int> data) _write;
+  final Future<void> Function() _close;
 
   /// 读取一帧：返回 (id, length, data)。
   Future<(String, int, Uint8List)> _readFrame() async {
@@ -98,13 +115,12 @@ class AdbSyncClient {
   }
 
   /// 发送一帧。
-  /// 发送一帧。
   Future<void> _writeFrame(String id, {Uint8List? data}) async {
     final d = data ?? Uint8List(0);
     final builder = BytesBuilder()..add(_encodeSyncId(id));
     _writeUint32LE(builder, d.length);
     builder.add(d);
-    await _stream.write(builder.takeBytes());
+    await _write(builder.takeBytes());
   }
 
   /// 读取 STAT/LIST 的 16/20 字节固定头部响应。
@@ -145,22 +161,23 @@ class AdbSyncClient {
       if (id != kSyncIdDent) {
         throw AdbInvalidResponseError('期望 DENT/DONE，收到 $id');
       }
-      final nameBytes = nameLen > 0 ? await _reader.readExactly(nameLen) : Uint8List(0);
-      entries.add(AdbFileEntry(
-        utf8.decode(nameBytes, allowMalformed: true),
-        _readUint32LE(Uint8List.fromList(fields), 0),
-        _readUint32LE(Uint8List.fromList(fields), 4),
-        _readUint32LE(Uint8List.fromList(fields), 8),
-      ));
+      final nameBytes = nameLen > 0
+          ? await _reader.readExactly(nameLen)
+          : Uint8List(0);
+      entries.add(
+        AdbFileEntry(
+          utf8.decode(nameBytes, allowMalformed: true),
+          _readUint32LE(Uint8List.fromList(fields), 0),
+          _readUint32LE(Uint8List.fromList(fields), 4),
+          _readUint32LE(Uint8List.fromList(fields), 8),
+        ),
+      );
     }
     return entries;
   }
 
   /// 拉取远端文件为字节。
-  Future<Uint8List> pull(
-    String path, {
-    AdbTransferProgress? onProgress,
-  }) async {
+  Future<Uint8List> pull(String path, {AdbTransferProgress? onProgress}) async {
     await _sendPath(kSyncIdRecv, path);
     final builder = BytesBuilder();
     while (true) {
@@ -178,6 +195,32 @@ class AdbSyncClient {
     return builder.takeBytes();
   }
 
+  /// 按 DATA 帧把远端文件写入 [sink]，不在内存中保留完整内容。
+  ///
+  /// 与 [pull] 分开，避免改变原有的整包读取。调用方持有底层流或 socket 时，
+  /// 关掉那条连接即可停止读取。
+  Future<int> pullTo(
+    String path,
+    StreamSink<List<int>> sink, {
+    AdbTransferProgress? onProgress,
+  }) async {
+    await _sendPath(kSyncIdRecv, path);
+    var received = 0;
+    while (true) {
+      final (id, _, data) = await _readFrame();
+      if (id == kSyncIdDone) return received;
+      if (id == kSyncIdData) {
+        sink.add(data);
+        received += data.length;
+        onProgress?.call(received, -1);
+      } else if (id == kSyncIdFail) {
+        throw AdbSyncError(utf8.decode(data, allowMalformed: true));
+      } else {
+        throw AdbInvalidResponseError('期望 DATA/DONE/FAIL，收到 $id');
+      }
+    }
+  }
+
   /// 推送字节到远端。
   Future<void> push(
     List<int> bytes,
@@ -187,8 +230,10 @@ class AdbSyncClient {
     AdbTransferProgress? onProgress,
   }) async {
     final spec = '$remotePath,$mode';
-    await _writeFrame(kSyncIdSend,
-        data: Uint8List.fromList([...utf8.encode(spec), 0]));
+    await _writeFrame(
+      kSyncIdSend,
+      data: Uint8List.fromList([...utf8.encode(spec), 0]),
+    );
     final data = Uint8List.fromList(bytes);
     var written = 0;
     while (written < data.length) {
@@ -201,7 +246,7 @@ class AdbSyncClient {
     final m = mtime ?? (DateTime.now().millisecondsSinceEpoch ~/ 1000);
     final done = BytesBuilder()..add(_encodeSyncId(kSyncIdDone));
     _writeUint32LE(done, m);
-    await _stream.write(done.takeBytes());
+    await _write(done.takeBytes());
     final (id, _, failData) = await _readFrame();
     if (id == kSyncIdFail) {
       throw AdbSyncError(utf8.decode(failData, allowMalformed: true));
@@ -221,7 +266,7 @@ class AdbSyncClient {
     } catch (_) {
       // 对端可能已关闭。
     }
-    await _stream.close();
+    await _close();
   }
 }
 

@@ -7,7 +7,7 @@
 
 ### Added
 
-- 采用 Dart 官方 pub workspace 统一管理 `app` 与 `packages/*`（单一 `pubspec.lock`、共享 `.dart_tool`）。
+- 设备应用管理：列出已安装应用（图标/大小/路径/名称/版本），支持导出 APK、卸载、多种冻结方式（`pm disable-user` / `pm suspend` / `am freeze`），默认过滤系统应用。
 - 工作区共享静态分析配置（根 `analysis_options.yaml`），各成员包继承。
 - 补充 `.editorconfig`、`.gitattributes`。
 

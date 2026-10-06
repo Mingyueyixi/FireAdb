@@ -79,6 +79,15 @@ void main() {
     await shell.close();
   });
 
+  test('通过 host transport 打开设备 exec 服务', () async {
+    final exec = await client.openDeviceService('usb-device-1', 'exec:screencap -p');
+    expect(server.requests, contains('host:transport:usb-device-1'));
+    expect(server.requests, contains('exec:screencap -p'));
+    final output = await exec.readStream.transform(utf8.decoder).join();
+    expect(output, 'fake exec output');
+    await exec.close();
+  });
+
   test('disconnect 全量断开', () async {
     final result = await client.disconnect();
     expect(result, contains('disconnected'));

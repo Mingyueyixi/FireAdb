@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -17,15 +18,16 @@ void main() {
     pair = MemoryPair.create();
     device = FakeAdbd(
       verifyKey: null,
-      syncFiles: syncFiles ??
-          {
-            '/sdcard/hello.txt':
-                Uint8List.fromList(utf8.encode('hello adb\n')),
-          },
+      syncFiles:
+          syncFiles ??
+          {'/sdcard/hello.txt': Uint8List.fromList(utf8.encode('hello adb\n'))},
     );
     device.serve(pair.device);
-    conn = AdbConnection(pair.host,
-        signers: [key], authTimeout: const Duration(seconds: 5));
+    conn = AdbConnection(
+      pair.host,
+      signers: [key],
+      authTimeout: const Duration(seconds: 5),
+    );
     await conn.connect();
   }
 
@@ -57,11 +59,13 @@ void main() {
   });
 
   test('list 目录含文件与子目录', () async {
-    await setup(syncFiles: {
-      '/sdcard/a.txt': Uint8List.fromList([1, 2]),
-      '/sdcard/b.log': Uint8List.fromList([3]),
-      '/sdcard/sub/c.txt': Uint8List.fromList([4, 5, 6]),
-    });
+    await setup(
+      syncFiles: {
+        '/sdcard/a.txt': Uint8List.fromList([1, 2]),
+        '/sdcard/b.log': Uint8List.fromList([3]),
+        '/sdcard/sub/c.txt': Uint8List.fromList([4, 5, 6]),
+      },
+    );
     final stream = await conn.open('sync:');
     sync = AdbSyncClient(stream);
     final entries = await sync.list('/sdcard');
@@ -72,13 +76,25 @@ void main() {
   });
 
   test('list 根目录', () async {
-    await setup(syncFiles: {
-      '/sdcard/a.txt': Uint8List.fromList([1]),
-    });
+    await setup(
+      syncFiles: {
+        '/sdcard/a.txt': Uint8List.fromList([1]),
+      },
+    );
     final stream = await conn.open('sync:');
     sync = AdbSyncClient(stream);
     final entries = await sync.list('/');
     expect(entries.map((e) => e.name), contains('sdcard'));
+  });
+
+  test('pullTo 按帧写入 sink', () async {
+    await setup();
+    final stream = await conn.open('sync:');
+    sync = AdbSyncClient(stream);
+    final sink = _ListSink();
+    final size = await sync.pullTo('/sdcard/hello.txt', sink);
+    expect(size, 'hello adb\n'.length);
+    expect(utf8.decode(sink.bytes), 'hello adb\n');
   });
 
   test('pull 小文件内容一致', () async {
@@ -106,7 +122,9 @@ void main() {
     final stream = await conn.open('sync:');
     sync = AdbSyncClient(stream);
     await expectLater(
-        sync.pull('/sdcard/nope.txt'), throwsA(isA<AdbSyncError>()));
+      sync.pull('/sdcard/nope.txt'),
+      throwsA(isA<AdbSyncError>()),
+    );
   });
 
   test('push 后 stat 与 pull 一致', () async {
@@ -128,4 +146,27 @@ void main() {
     await sync.quit();
     expect(stream.isClosed, isTrue);
   });
+}
+
+class _ListSink implements StreamSink<List<int>> {
+  final bytes = <int>[];
+
+  @override
+  void add(List<int> event) => bytes.addAll(event);
+
+  @override
+  void addError(Object error, [StackTrace? stackTrace]) {}
+
+  @override
+  Future<void> addStream(Stream<List<int>> stream) async {
+    await for (final chunk in stream) {
+      add(chunk);
+    }
+  }
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<void> get done => close();
 }

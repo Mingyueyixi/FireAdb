@@ -186,7 +186,7 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get workspaceAppsTitle => '设备应用';
 
   @override
-  String get workspaceAppsDescription => '查看已安装应用、卸载应用、安装 APK';
+  String get workspaceAppsDescription => '查看已安装应用、导出 APK、卸载与冻结';
 
   @override
   String get workspaceTransferTitle => '文件传输';
@@ -321,4 +321,313 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get shellEarlierOutputOmitted => '…较早的输出已省略…';
+
+  @override
+  String get appsSearchHint => '搜索应用名称或包名';
+
+  @override
+  String get appsFilterUser => '用户应用';
+
+  @override
+  String get appsFilterSystem => '系统应用';
+
+  @override
+  String get appsFilterFrozen => '已冻结';
+
+  @override
+  String get appsFilterAll => '全部';
+
+  @override
+  String get appsRefresh => '刷新应用列表';
+
+  @override
+  String appsCount(int count) {
+    return '$count 个应用';
+  }
+
+  @override
+  String get appsEmpty => '没有符合条件的应用';
+
+  @override
+  String appsLoadFailed(Object error) {
+    return '读取应用列表失败：$error';
+  }
+
+  @override
+  String appsVersion(Object version) {
+    return '版本 $version';
+  }
+
+  @override
+  String appsSize(Object size) {
+    return '大小 $size';
+  }
+
+  @override
+  String appsPath(Object path) {
+    return '路径 $path';
+  }
+
+  @override
+  String get appsFrozenBadge => '已冻结';
+
+  @override
+  String get appsDisabledBadge => '已停用';
+
+  @override
+  String get appsSuspendedBadge => '已暂停';
+
+  @override
+  String get appsAmFrozenBadge => 'AM 冻结';
+
+  @override
+  String get appsFreezeMethod => '冻结方式';
+
+  @override
+  String get appsFreezeTitle => '冻结应用';
+
+  @override
+  String get appsUnfreezeTitle => '解冻应用';
+
+  @override
+  String appsFreezePrompt(Object name) {
+    return '选择冻结 $name 的方式';
+  }
+
+  @override
+  String appsUnfreezePrompt(Object name) {
+    return '选择解除 $name 冻结的方式';
+  }
+
+  @override
+  String get appsFreezeMethodDisableUser => '停用应用';
+
+  @override
+  String get appsFreezeMethodDisableUserDescription =>
+      'pm disable-user：用户停用，应用无法启动。适配范围最广。';
+
+  @override
+  String get appsFreezeMethodSuspend => '暂停应用';
+
+  @override
+  String get appsFreezeMethodSuspendDescription =>
+      'pm suspend：暂停并隐藏应用，数据保留，可随时恢复。';
+
+  @override
+  String get appsFreezeMethodAmFreeze => 'AM 冻结';
+
+  @override
+  String get appsFreezeMethodAmFreezeDescription =>
+      'am freeze：由 ActivityManager 冻结进程，需要 Android 15+。';
+
+  @override
+  String get appsExportAction => '导出 APK';
+
+  @override
+  String get appsExportTitle => '导出应用';
+
+  @override
+  String appsExportPrompt(Object name) {
+    return '请输入要将 $name 拉取到的目标目录';
+  }
+
+  @override
+  String get appsExportDirectory => '目标目录';
+
+  @override
+  String appsExportSucceeded(Object path) {
+    return '已导出到 $path';
+  }
+
+  @override
+  String get appsUninstallAction => '卸载';
+
+  @override
+  String get appsUninstallTitle => '卸载应用';
+
+  @override
+  String appsUninstallConfirm(Object name, Object packageName) {
+    return '确定卸载 $name（$packageName）吗？';
+  }
+
+  @override
+  String get appsUninstallSystemTitle => '卸载系统应用';
+
+  @override
+  String appsUninstallSystemConfirm(Object name, Object packageName) {
+    return '$name（$packageName）是系统应用。卸载后可能影响相关功能，且通常很难恢复。确定继续吗？';
+  }
+
+  @override
+  String get appsUninstallCoreTitle => '卸载核心系统应用';
+
+  @override
+  String appsUninstallCoreConfirm(Object name, Object packageName) {
+    return '$name（$packageName）是核心系统组件。卸载后可能导致无法开机、没有桌面、无法拨号或无法打开设置，且很难恢复。确定仍要卸载吗？';
+  }
+
+  @override
+  String get appsUninstallConfirmAction => '仍然卸载';
+
+  @override
+  String appsUninstallSucceeded(Object name) {
+    return '已卸载 $name';
+  }
+
+  @override
+  String get appsFreezeSystemTitle => '冻结系统应用';
+
+  @override
+  String appsFreezeSystemConfirm(Object name, Object packageName) {
+    return '$name（$packageName）是系统应用。冻结后可能影响相关功能，确定继续吗？';
+  }
+
+  @override
+  String get appsFreezeCoreTitle => '冻结核心系统应用';
+
+  @override
+  String appsFreezeCoreConfirm(Object name, Object packageName) {
+    return '$name（$packageName）是核心系统组件。冻结后可能导致无法开机、没有桌面、无法拨号或无法打开设置。确定仍要冻结吗？';
+  }
+
+  @override
+  String get appsFreezeConfirmAction => '仍然冻结';
+
+  @override
+  String get appsFreezeAction => '冻结';
+
+  @override
+  String get appsUnfreezeAction => '解冻';
+
+  @override
+  String appsFreezeSucceeded(Object name) {
+    return '已冻结 $name';
+  }
+
+  @override
+  String appsUnfreezeSucceeded(Object name) {
+    return '已解冻 $name';
+  }
+
+  @override
+  String get appsActionFailed => '操作失败';
+
+  @override
+  String get appsSelect => '多选';
+
+  @override
+  String get appsSelectDone => '完成';
+
+  @override
+  String get appsSelectAll => '全选';
+
+  @override
+  String get appsSelectClear => '取消选择';
+
+  @override
+  String appsSelectedCount(int count) {
+    return '已选 $count 个';
+  }
+
+  @override
+  String appsBatchUninstallConfirm(int count) {
+    return '确定卸载选中的 $count 个应用吗？';
+  }
+
+  @override
+  String appsBatchUninstallSystemConfirm(int count, Object names) {
+    return '选中的 $count 个应用包含系统应用（$names）。卸载后可能影响相关功能，且通常很难恢复。确定继续吗？';
+  }
+
+  @override
+  String appsBatchUninstallCoreConfirm(int count, Object names) {
+    return '选中的 $count 个应用包含核心系统组件（$names）。卸载后可能导致无法开机、没有桌面、无法拨号或无法打开设置，且很难恢复。确定仍要卸载吗？';
+  }
+
+  @override
+  String appsBatchFreezeConfirm(int count) {
+    return '确定冻结选中的 $count 个应用吗？';
+  }
+
+  @override
+  String appsBatchFreezeSystemConfirm(int count, Object names) {
+    return '选中的 $count 个应用包含系统应用（$names）。冻结后可能影响相关功能，确定继续吗？';
+  }
+
+  @override
+  String appsBatchFreezeCoreConfirm(int count, Object names) {
+    return '选中的 $count 个应用包含核心系统组件（$names）。冻结后可能导致无法开机、没有桌面、无法拨号或无法打开设置。确定仍要冻结吗？';
+  }
+
+  @override
+  String appsBatchExportPrompt(int count) {
+    return '请输入要将选中的 $count 个应用拉取到的目标目录';
+  }
+
+  @override
+  String appsBatchUninstallSucceeded(int count) {
+    return '已卸载 $count 个应用';
+  }
+
+  @override
+  String appsBatchFreezeSucceeded(int count) {
+    return '已冻结 $count 个应用';
+  }
+
+  @override
+  String appsBatchExportSucceeded(int count, Object path) {
+    return '已导出 $count 个应用到 $path';
+  }
+
+  @override
+  String get appsTaskExport => '正在导出';
+
+  @override
+  String get appsTaskUninstall => '正在卸载';
+
+  @override
+  String get appsTaskFreeze => '正在冻结';
+
+  @override
+  String get appsTaskUnfreeze => '正在解冻';
+
+  @override
+  String appsTaskProgress(
+    Object action,
+    Object name,
+    int completed,
+    int total,
+    int percent,
+  ) {
+    return '$action $name（$completed/$total，$percent%）';
+  }
+
+  @override
+  String get appsExportMeasuring => '正在计算大小…';
+
+  @override
+  String appsExportBytes(Object done, Object total) {
+    return '$done / $total';
+  }
+
+  @override
+  String appsExportPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get appsCancelTask => '取消';
+
+  @override
+  String get appsTaskCancelled => '已取消';
+
+  @override
+  String appsTaskCancelledDone(int count) {
+    return '已取消，已完成 $count 个';
+  }
+
+  @override
+  String appsBatchPartial(int succeeded, int failed) {
+    return '成功 $succeeded 个，失败 $failed 个';
+  }
 }
