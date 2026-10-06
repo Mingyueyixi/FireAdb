@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:flutter/material.dart';
@@ -28,8 +29,9 @@ class _ShellPageState extends State<ShellPage> {
   int _historyIndex = -1;
   final List<_OutputLine> _output = <_OutputLine>[];
   bool _running = false;
+  String? _activeCommand;
   bool _disposing = false;
-  StreamSubscription<List<int>>? _streamSubscription;
+  StreamSubscription<String>? _streamSubscription;
   ConnectedShell? _currentStream;
 
   @override
@@ -67,7 +69,7 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   Future<void> _cancelSubscription(
-    StreamSubscription<List<int>> subscription,
+    StreamSubscription<String> subscription,
   ) async {
     try {
       await subscription.cancel();
@@ -105,51 +107,55 @@ class _ShellPageState extends State<ShellPage> {
         await _closeStream(stream);
         return;
       }
-      _currentStream = stream;
+      setState(() {
+        _currentStream = stream;
+        _activeCommand = cmd;
+      });
       final buffer = StringBuffer();
-      _streamSubscription = stream.readStream.listen(
-        (chunk) {
-          if (!mounted || _disposing) return;
-          final text = String.fromCharCodes(chunk);
-          buffer.write(text);
-          final lines = buffer.toString().split('\n');
-          buffer.clear();
-          buffer.write(lines.last);
-          for (var i = 0; i < lines.length - 1; i++) {
-            if (lines[i].isNotEmpty) {
-              if (mounted && !_disposing) {
+      _streamSubscription = const Utf8Decoder(allowMalformed: true)
+          .bind(stream.readStream)
+          .listen(
+            (text) {
+              if (!mounted || _disposing) return;
+              buffer.write(text);
+              final lines = buffer.toString().split('\n');
+              buffer.clear();
+              buffer.write(lines.last);
+              for (var i = 0; i < lines.length - 1; i++) {
+                if (lines[i].isNotEmpty) {
+                  if (mounted && !_disposing) {
+                    setState(
+                      () => _output.add(
+                        _OutputLine(type: _OutputType.output, text: lines[i]),
+                      ),
+                    );
+                  }
+                }
+              }
+            },
+            onDone: () {
+              if (!mounted || _disposing) return;
+              final remaining = buffer.toString();
+              if (remaining.isNotEmpty) {
                 setState(
                   () => _output.add(
-                    _OutputLine(type: _OutputType.output, text: lines[i]),
+                    _OutputLine(type: _OutputType.output, text: remaining),
                   ),
                 );
               }
-            }
-          }
-        },
-        onDone: () {
-          if (!mounted || _disposing) return;
-          final remaining = buffer.toString();
-          if (remaining.isNotEmpty) {
-            setState(
-              () => _output.add(
-                _OutputLine(type: _OutputType.output, text: remaining),
-              ),
-            );
-          }
-          _finishCommand();
-        },
-        onError: (Object error, StackTrace stackTrace) {
-          logAppError('Shell 命令流失败：$cmd', error, stackTrace);
-          if (!mounted || _disposing) return;
-          setState(
-            () => _output.add(
-              _OutputLine(type: _OutputType.error, text: '错误: $error'),
-            ),
+              _finishCommand();
+            },
+            onError: (Object error, StackTrace stackTrace) {
+              logAppError('Shell 命令流失败：$cmd', error, stackTrace);
+              if (!mounted || _disposing) return;
+              setState(
+                () => _output.add(
+                  _OutputLine(type: _OutputType.error, text: '错误: $error'),
+                ),
+              );
+              _finishCommand();
+            },
           );
-          _finishCommand();
-        },
-      );
     } catch (error, stackTrace) {
       logAppError('执行 Shell 命令失败：$cmd', error, stackTrace);
       if (mounted && !_disposing) {
@@ -171,7 +177,73 @@ class _ShellPageState extends State<ShellPage> {
     _currentStream = null;
     if (stream != null) unawaited(_closeStream(stream));
     if (mounted && !_disposing) {
-      setState(() => _running = false);
+      setState(() {
+        _running = false;
+        _activeCommand = null;
+      });
+    }
+  }
+
+  bool _isInteractiveShellCommand(String? command) {
+    if (command == null) return false;
+    final parts = command.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return false;
+
+    var executableIndex = 0;
+    var executable = parts[executableIndex].split('/').last;
+    if ((executable == 'busybox' || executable == 'toybox') &&
+        parts.length > 1) {
+      executable = parts[++executableIndex].split('/').last;
+    }
+
+    const shellExecutables = <String>{
+      'su',
+      'sh',
+      'ash',
+      'bash',
+      'dash',
+      'ksh',
+      'mksh',
+      'zsh',
+    };
+    if (!shellExecutables.contains(executable)) return false;
+
+    return !parts
+        .skip(executableIndex + 1)
+        .any(
+          (part) =>
+              part == '-c' ||
+              part == '--command' ||
+              part.startsWith('--command='),
+        );
+  }
+
+  void _submitInput() {
+    if (_running) {
+      unawaited(_sendInput());
+    } else {
+      unawaited(_runCommand());
+    }
+  }
+
+  Future<void> _sendInput() async {
+    final stream = _currentStream;
+    if (stream == null) return;
+
+    final input = _controller.text;
+    _controller.clear();
+    try {
+      await stream.write(utf8.encode('$input\n'));
+    } catch (error, stackTrace) {
+      logAppError('向 Shell 发送输入失败：${widget.serial}', error, stackTrace);
+      if (mounted && !_disposing) {
+        setState(
+          () => _output.add(
+            _OutputLine(type: _OutputType.error, text: '发送输入失败: $error'),
+          ),
+        );
+      }
+      _finishCommand();
     }
   }
 
@@ -186,6 +258,7 @@ class _ShellPageState extends State<ShellPage> {
       setState(() {
         _output.add(_OutputLine(type: _OutputType.hint, text: '^C (已中止)'));
         _running = false;
+        _activeCommand = null;
       });
     }
   }
@@ -291,7 +364,7 @@ class _ShellPageState extends State<ShellPage> {
                     child: Text(
                       '输入命令并按回车执行\n'
                       '↑/↓ 浏览历史\n'
-                      '运行中点击停止按钮中止\n'
+                      '运行中可输入内容并回车发送；点击停止按钮中止\n'
                       '常用: ls, ps, logcat, dumpsys, top, df',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium?.copyWith(
@@ -365,19 +438,33 @@ class _ShellPageState extends State<ShellPage> {
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontFamily: 'monospace',
               ),
-              decoration: const InputDecoration(
-                hintText: '输入命令 (如: ls -la /sdcard)',
+              decoration: InputDecoration(
+                hintText: _running
+                    ? '向当前 Shell 输入内容并回车发送'
+                    : '输入命令 (如: ls -la /sdcard)',
                 hintStyle: TextStyle(fontFamily: 'monospace'),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
               ),
-              onSubmitted: (_) => _running ? null : _runCommand(),
+              onSubmitted: (_) => _submitInput(),
               textInputAction: TextInputAction.send,
             ),
           ),
         ),
-        if (_running)
+        if (_running && _currentStream != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Text(
+              _isInteractiveShellCommand(_activeCommand)
+                  ? '交互式 Shell · 输入 exit 结束'
+                  : '会话运行中 · 输入发送给当前进程',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.secondary,
+              ),
+            ),
+          )
+        else if (_running)
           const Padding(
             padding: EdgeInsets.only(left: 8),
             child: SizedBox(
