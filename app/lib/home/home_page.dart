@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../app_feedback.dart';
+import '../connection/model/device_profile.dart';
 import '../widgets/adaptive.dart';
 import 'home_controller.dart';
 
@@ -74,6 +75,46 @@ class HomePage extends GetView<HomeController> {
         message: '$error',
         isError: true,
       );
+    }
+  }
+
+  Future<void> _connectHistory(
+    BuildContext context,
+    DeviceProfile profile,
+  ) async {
+    final activeDevice = controller.manager.deviceOf(profile.serial);
+    if (activeDevice != null) {
+      _openWorkspace(activeDevice.serial);
+      return;
+    }
+
+    final adbSerial = profile.adbSerial;
+    if (adbSerial != null) {
+      AdbDeviceInfo? info;
+      for (final device in controller.adbDevices) {
+        if (device.serial == adbSerial) {
+          info = device;
+          break;
+        }
+      }
+      if (info != null && controller.manager.canConnectAdbDevice(info)) {
+        await _connectAdbDevice(context, info);
+        return;
+      }
+      showAppMessage(
+        ScaffoldMessenger.of(context),
+        Theme.of(context),
+        title: '设备不可用',
+        message: '该设备当前未出现在 ADB 设备列表中，请先连接设备并刷新列表。',
+        isError: true,
+      );
+      return;
+    }
+
+    final host = profile.host;
+    final port = profile.port;
+    if (host != null && port != null) {
+      await _connect(context, host, port);
     }
   }
 
@@ -518,13 +559,7 @@ class HomePage extends GetView<HomeController> {
                     icon: const Icon(Icons.delete_outline),
                     onPressed: () => controller.manager.removeFromHistory(h),
                   ),
-                  onTap: () {
-                    final host = h.host;
-                    final port = h.port;
-                    if (host != null && port != null) {
-                      _connect(context, host, port);
-                    }
-                  },
+                  onTap: () => _connectHistory(context, h),
                 ),
           ],
         ),

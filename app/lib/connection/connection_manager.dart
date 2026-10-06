@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:adb_core/adb_core.dart';
@@ -19,6 +20,7 @@ class ConnectionManager extends GetxService {
   List<AdbRsaKeyPair> _signers = const <AdbRsaKeyPair>[];
   SharedPreferences? _prefs;
   bool _signerResolved = false;
+  bool _historyLoaded = false;
 
   List<ConnectedDevice> get devices => _devices.values.toList();
 
@@ -51,8 +53,7 @@ class ConnectionManager extends GetxService {
 
   Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
-    _loadHistory();
-    _resolveSigners();
+    if (!_historyLoaded) _loadHistory();
   }
 
   void _resolveSigners() {
@@ -86,15 +87,15 @@ class ConnectionManager extends GetxService {
   /// - mDNS 发现：仅能发现**主动广播** `_adb-tls-pairing._tcp` 等服务的设备
   Future<AdbDevice> connectHost(String host, int port) async {
     await init();
+    _resolveSigners();
     final device = await adbConnectTcp(host, port: port, signers: _signers);
-    _profiles[device.serial] = DeviceProfile(
+    final profile = DeviceProfile(
       serial: device.serial,
       host: host,
       port: port,
       label: host,
     );
-    _devices[device.serial] = ConnectedDevice.direct(device);
-    _remember(host, port);
+    await _registerConnection(profile, ConnectedDevice.direct(device));
     return device;
   }
 
@@ -106,7 +107,10 @@ class ConnectionManager extends GetxService {
     final existingProfile = profileForAdbDevice(info);
     if (existingProfile != null) {
       final existingDevice = _devices[existingProfile.serial];
-      if (existingDevice != null) return existingDevice;
+      if (existingDevice != null) {
+        await _remember(existingProfile);
+        return existingDevice;
+      }
     }
 
     if (!info.isOnline) {
@@ -114,14 +118,14 @@ class ConnectionManager extends GetxService {
     }
     final device = ConnectedDevice.viaHost(hostClient, info.serial);
     final endpoint = _adbEndpoint(info.serial);
-    _profiles[device.serial] = DeviceProfile(
+    final profile = DeviceProfile(
       serial: device.serial,
       host: endpoint?.$1,
       port: endpoint?.$2,
       label: info.model?.replaceAll('_', ' ') ?? info.product ?? device.serial,
       adbSerial: info.serial,
     );
-    _devices[device.serial] = device;
+    await _registerConnection(profile, device);
     return device;
   }
 
@@ -139,41 +143,104 @@ class ConnectionManager extends GetxService {
 
   Future<void> removeFromHistory(DeviceProfile profile) async {
     await init();
-    _history.remove(profile);
-    _saveHistory();
+    _history.removeWhere((entry) => entry.historyKey == profile.historyKey);
+    await _saveHistory();
   }
 
-  void _remember(String host, int port) {
+  Future<void> _registerConnection(
+    DeviceProfile profile,
+    ConnectedDevice device,
+  ) async {
+    _profiles[profile.serial] = profile;
+    _devices[device.serial] = device;
+    await _remember(profile);
+  }
+
+  Future<void> _remember(DeviceProfile profile) async {
     _history
-      ..removeWhere((h) => h.host == host && h.port == port)
-      ..insert(0, DeviceProfile(serial: '$host:$port', host: host, port: port));
-    _saveHistory();
+      ..removeWhere((entry) => entry.historyKey == profile.historyKey)
+      ..insert(0, profile);
+    await _saveHistory();
   }
 
   void _loadHistory() {
     _history.clear();
     final entries = _prefs?.getStringList(_historyPrefsKey) ?? const <String>[];
     for (final entry in entries) {
-      final parts = entry.split(':');
-      if (parts.length != 2) continue;
-      final port = int.tryParse(parts[1]);
-      if (port == null || port <= 0) continue;
-      _history.add(
-        DeviceProfile(
-          serial: entry,
-          host: parts[0],
-          port: port,
-          label: parts[0],
-        ),
-      );
+      final profile = _decodeHistoryEntry(entry);
+      if (profile == null ||
+          _history.any((item) => item.historyKey == profile.historyKey)) {
+        continue;
+      }
+      _history.add(profile);
     }
+    _historyLoaded = true;
   }
 
-  void _saveHistory() {
-    _prefs?.setStringList(
-      _historyPrefsKey,
-      _history.map((h) => h.toHistoryKey()).toList(),
+  DeviceProfile? _decodeHistoryEntry(String entry) {
+    if (entry.startsWith('{')) {
+      try {
+        final json = jsonDecode(entry);
+        if (json is! Map<String, dynamic>) return null;
+        final serial = json['serial'];
+        final host = json['host'];
+        final port = json['port'];
+        final label = json['label'];
+        final adbSerial = json['adbSerial'];
+        if (serial is! String || serial.isEmpty) return null;
+        if (host != null && host is! String) return null;
+        if (port != null && port is! int) return null;
+        if (label != null && label is! String) return null;
+        if (adbSerial != null && adbSerial is! String) return null;
+        return DeviceProfile(
+          serial: serial,
+          host: host as String?,
+          port: port as int?,
+          label: label as String? ?? '',
+          adbSerial: adbSerial as String?,
+        );
+      } on FormatException {
+        return null;
+      }
+    }
+
+    final separator = entry.lastIndexOf(':');
+    if (separator < 1 || separator == entry.length - 1) return null;
+    final port = int.tryParse(entry.substring(separator + 1));
+    if (port == null || port <= 0 || port > 65535) return null;
+    var host = entry.substring(0, separator);
+    if (host.startsWith('[') && host.endsWith(']')) {
+      host = host.substring(1, host.length - 1);
+    }
+    if (host.isEmpty) return null;
+    return DeviceProfile(
+      serial: entry,
+      host: host,
+      port: port,
+      label: host,
     );
+  }
+
+  Future<void> _saveHistory() async {
+    final preferences = _prefs;
+    if (preferences == null) return;
+    final encoded = _history
+        .map(
+          (profile) => jsonEncode(<String, Object?>{
+            'serial': profile.serial,
+            'host': profile.host,
+            'port': profile.port,
+            'label': profile.label,
+            'adbSerial': profile.adbSerial,
+          }),
+        )
+        .toList();
+    try {
+      final saved = await preferences.setStringList(_historyPrefsKey, encoded);
+      if (!saved) throw StateError('SharedPreferences 未能保存连接历史');
+    } catch (error, stackTrace) {
+      logAppError('保存连接历史失败', error, stackTrace);
+    }
   }
 
   static (String, int)? _adbEndpoint(String serial) {

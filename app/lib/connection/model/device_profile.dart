@@ -18,7 +18,18 @@ class DeviceProfile {
 
   String get shortName => host ?? serial;
 
-  String toHistoryKey() => '$host:$port';
+  String get historyKey {
+    if (host != null && port != null) return 'tcp:$host:$port';
+    return 'adb:${adbSerial ?? serial}';
+  }
+
+  String toHistoryKey() {
+    if (host != null && port != null) {
+      final formattedHost = host!.contains(':') ? '[$host]' : host!;
+      return '$formattedHost:$port';
+    }
+    return displayName;
+  }
 
   @override
   bool operator ==(Object other) =>

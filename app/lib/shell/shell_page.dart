@@ -8,6 +8,8 @@ import 'package:get/get.dart';
 
 import '../app_feedback.dart';
 import '../connection/model/connected_device.dart';
+import 'shell_output.dart';
+import 'shell_output_settings.dart';
 
 /// 交互式 Shell 命令面板。
 class ShellPage extends StatefulWidget {
@@ -27,7 +29,7 @@ class _ShellPageState extends State<ShellPage> {
   final FocusNode _keyFocusNode = FocusNode();
   final List<String> _history = <String>[];
   int _historyIndex = -1;
-  final List<_OutputLine> _output = <_OutputLine>[];
+  final ShellOutputBuffer _output = ShellOutputBuffer();
   bool _running = false;
   String? _activeCommand;
   bool _disposing = false;
@@ -37,6 +39,7 @@ class _ShellPageState extends State<ShellPage> {
   @override
   void initState() {
     super.initState();
+    unawaited(_loadOutputLimit());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !_disposing) {
         _keyFocusNode.requestFocus();
@@ -48,6 +51,7 @@ class _ShellPageState extends State<ShellPage> {
   @override
   void dispose() {
     _disposing = true;
+    _output.dispose();
     final subscription = _streamSubscription;
     _streamSubscription = null;
     if (subscription != null) unawaited(_cancelSubscription(subscription));
@@ -58,6 +62,23 @@ class _ShellPageState extends State<ShellPage> {
     _textFocusNode.dispose();
     _keyFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadOutputLimit() async {
+    try {
+      final limit = await ShellOutputSettings.loadLimitMiB();
+      if (mounted && !_disposing) _output.setLimitMiB(limit);
+    } catch (error, stackTrace) {
+      logAppError('读取 Shell 输出设置失败', error, stackTrace);
+    }
+  }
+
+  Future<void> _showOutputSettings() async {
+    await ShellOutputSettings.show(
+      context,
+      currentLimitMiB: _output.limitMiB,
+      onSaved: _output.setLimitMiB,
+    );
   }
 
   Future<void> _closeStream(ConnectedShell stream) async {
@@ -82,10 +103,8 @@ class _ShellPageState extends State<ShellPage> {
     final cmd = _controller.text.trim();
     if (cmd.isEmpty) return;
 
-    setState(() {
-      _output.add(_OutputLine(type: _OutputType.input, text: '\$ $cmd'));
-      _running = true;
-    });
+    setState(() => _running = true);
+    _output.appendLine(ShellOutputType.input, '\$ $cmd');
     _controller.clear();
     _history.insert(0, cmd);
     _historyIndex = -1;
@@ -94,10 +113,8 @@ class _ShellPageState extends State<ShellPage> {
     final device = _manager.deviceOf(widget.serial);
     if (device == null) {
       if (!mounted) return;
-      setState(() {
-        _output.add(_OutputLine(type: _OutputType.error, text: '设备未连接'));
-        _running = false;
-      });
+      _output.appendLine(ShellOutputType.error, '设备未连接');
+      setState(() => _running = false);
       return;
     }
 
@@ -111,65 +128,35 @@ class _ShellPageState extends State<ShellPage> {
         _currentStream = stream;
         _activeCommand = cmd;
       });
-      final buffer = StringBuffer();
       _streamSubscription = const Utf8Decoder(allowMalformed: true)
           .bind(stream.readStream)
           .listen(
             (text) {
               if (!mounted || _disposing) return;
-              buffer.write(text);
-              final lines = buffer.toString().split('\n');
-              buffer.clear();
-              buffer.write(lines.last);
-              for (var i = 0; i < lines.length - 1; i++) {
-                if (lines[i].isNotEmpty) {
-                  if (mounted && !_disposing) {
-                    setState(
-                      () => _output.add(
-                        _OutputLine(type: _OutputType.output, text: lines[i]),
-                      ),
-                    );
-                  }
-                }
-              }
+              _output.appendText(ShellOutputType.output, text);
             },
             onDone: () {
               if (!mounted || _disposing) return;
-              final remaining = buffer.toString();
-              if (remaining.isNotEmpty) {
-                setState(
-                  () => _output.add(
-                    _OutputLine(type: _OutputType.output, text: remaining),
-                  ),
-                );
-              }
               _finishCommand();
             },
             onError: (Object error, StackTrace stackTrace) {
               logAppError('Shell 命令流失败：$cmd', error, stackTrace);
               if (!mounted || _disposing) return;
-              setState(
-                () => _output.add(
-                  _OutputLine(type: _OutputType.error, text: '错误: $error'),
-                ),
-              );
+              _output.appendLine(ShellOutputType.error, '错误: $error');
               _finishCommand();
             },
           );
     } catch (error, stackTrace) {
       logAppError('执行 Shell 命令失败：$cmd', error, stackTrace);
       if (mounted && !_disposing) {
-        setState(
-          () => _output.add(
-            _OutputLine(type: _OutputType.error, text: '错误: $error'),
-          ),
-        );
+        _output.appendLine(ShellOutputType.error, '错误: $error');
       }
       _finishCommand();
     }
   }
 
   void _finishCommand() {
+    _output.flush();
     final subscription = _streamSubscription;
     _streamSubscription = null;
     if (subscription != null) unawaited(_cancelSubscription(subscription));
@@ -237,11 +224,7 @@ class _ShellPageState extends State<ShellPage> {
     } catch (error, stackTrace) {
       logAppError('向 Shell 发送输入失败：${widget.serial}', error, stackTrace);
       if (mounted && !_disposing) {
-        setState(
-          () => _output.add(
-            _OutputLine(type: _OutputType.error, text: '发送输入失败: $error'),
-          ),
-        );
+        _output.appendLine(ShellOutputType.error, '发送输入失败: $error');
       }
       _finishCommand();
     }
@@ -256,10 +239,10 @@ class _ShellPageState extends State<ShellPage> {
     if (stream != null) unawaited(_closeStream(stream));
     if (mounted && !_disposing) {
       setState(() {
-        _output.add(_OutputLine(type: _OutputType.hint, text: '^C (已中止)'));
         _running = false;
         _activeCommand = null;
       });
+      _output.appendLine(ShellOutputType.hint, '^C (已中止)');
     }
   }
 
@@ -297,9 +280,7 @@ class _ShellPageState extends State<ShellPage> {
     try {
       await stream.write(const <int>[3]);
       if (mounted) {
-        setState(
-          () => _output.add(_OutputLine(type: _OutputType.hint, text: '^C')),
-        );
+        _output.appendLine(ShellOutputType.hint, '^C');
       }
     } catch (error, stackTrace) {
       logAppError('中断 Shell 命令失败：${widget.serial}', error, stackTrace);
@@ -307,7 +288,7 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   void _clearOutput() {
-    setState(() => _output.clear());
+    _output.clear();
   }
 
   @override
@@ -336,6 +317,13 @@ class _ShellPageState extends State<ShellPage> {
                   onPressed: _clearOutput,
                 ),
               ),
+              Tooltip(
+                message: 'Shell 输出设置',
+                child: IconButton(
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: _showOutputSettings,
+                ),
+              ),
               if (_running)
                 Tooltip(
                   message: '中止当前命令',
@@ -359,67 +347,14 @@ class _ShellPageState extends State<ShellPage> {
         Expanded(
           child: Container(
             color: scheme.surfaceContainerHighest.withValues(alpha: 0.3),
-            child: _output.isEmpty
-                ? Center(
-                    child: Text(
-                      '输入命令并按回车执行\n'
-                      '↑/↓ 浏览历史\n'
-                      '运行中可输入内容并回车发送；点击停止按钮中止\n'
-                      '常用: ls, ps, logcat, dumpsys, top, df',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.outline,
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    reverse: true,
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _output.length,
-                    itemBuilder: (context, index) {
-                      final line = _output[_output.length - 1 - index];
-                      return SelectableText.rich(
-                        TextSpan(
-                          children: <TextSpan>[
-                            if (line.type == _OutputType.input)
-                              TextSpan(
-                                text: line.text,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontFamily: 'monospace',
-                                  color: scheme.primary,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              )
-                            else if (line.type == _OutputType.error)
-                              TextSpan(
-                                text: line.text,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontFamily: 'monospace',
-                                  color: scheme.error,
-                                ),
-                              )
-                            else if (line.type == _OutputType.hint)
-                              TextSpan(
-                                text: line.text,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontFamily: 'monospace',
-                                  color: scheme.outline,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              )
-                            else
-                              TextSpan(
-                                text: line.text,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontFamily: 'monospace',
-                                  color: scheme.onSurface,
-                                ),
-                              ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+            child: ShellOutputView(
+              output: _output,
+              emptyPrompt:
+                  '输入命令并按回车执行\n'
+                  '↑/↓ 浏览历史\n'
+                  '运行中可输入内容并回车发送；点击停止按钮中止\n'
+                  '常用: ls, ps, logcat, dumpsys, top, df',
+            ),
           ),
         ),
         // 输入行
@@ -476,12 +411,4 @@ class _ShellPageState extends State<ShellPage> {
       ],
     );
   }
-}
-
-enum _OutputType { input, output, error, hint }
-
-class _OutputLine {
-  _OutputLine({required this.type, required this.text});
-  final _OutputType type;
-  final String text;
 }
