@@ -22,6 +22,14 @@ class WorkspacePage extends GetView<WorkspaceController> {
     return colon > 0 ? serial.substring(0, colon) : serial;
   }
 
+  Widget _homeButton() {
+    return IconButton(
+      tooltip: '返回主页',
+      onPressed: () => Get.offAllNamed<void>('/'),
+      icon: const Icon(Icons.arrow_back),
+    );
+  }
+
   void _openFeature(BuildContext context, FeatureSpec spec) {
     if (spec.id == kOverviewFeatureId) {
       Get.to<void>(
@@ -60,6 +68,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
   Widget _buildWide(BuildContext context, List<String> serials) {
     final selectedIndex = serials.indexOf(controller.selectedSerial.value);
     return Scaffold(
+      appBar: AppBar(leading: _homeButton(), title: const Text('FireAdb')),
       body: Row(
         children: <Widget>[
           NavigationRail(
@@ -110,6 +119,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
     final gridCount = isAtLeastTablet(context) ? 4 : 2;
     return Scaffold(
       appBar: AppBar(
+        leading: _homeButton(),
         title: DropdownButtonHideUnderline(
           child: DropdownButton<String>(
             value: controller.selectedSerial.value,
@@ -143,6 +153,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
     final hasAny = serials.isNotEmpty;
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
+      appBar: AppBar(leading: _homeButton(), title: const Text('FireAdb')),
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
