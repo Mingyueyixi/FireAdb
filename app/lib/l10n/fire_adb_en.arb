@@ -1,0 +1,157 @@
+{
+  "@@locale": "en",
+  "settingsLanguage": "Language",
+  "settingsChinese": "Chinese",
+  "settingsEnglish": "English",
+  "settingsLanguageSaveFailed": "Could not save language settings: {error}",
+  "@settingsLanguageSaveFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "homeConnectionSucceeded": "Connected",
+  "homeConnectedDevice": "Connected: {serial}",
+  "@homeConnectedDevice": {
+    "placeholders": {
+      "serial": {}
+    }
+  },
+  "homeConnectionFailed": "Connection failed",
+  "homeInvalidInput": "Invalid input",
+  "homeInvalidHostPort": "Enter a valid host address and port (1–65535).",
+  "homeDeviceUnavailable": "Device unavailable",
+  "homeAdbDeviceMissing": "This device is not in the ADB device list. Connect the device and refresh the list first.",
+  "homeDeviceDisconnected": "Device disconnected",
+  "homeDisconnectSucceeded": "Disconnected",
+  "homeDisconnectFailed": "Disconnect failed",
+  "homeManualConnection": "Manual connection",
+  "homeHostAddress": "Host address",
+  "homeHostAddressExample": "For example, 192.168.1.100",
+  "homePort": "Port",
+  "homeConnecting": "Connecting…",
+  "commonConnect": "Connect",
+  "homeDeviceDiscovery": "Device discovery (mDNS)",
+  "homeScanning": "Scanning…",
+  "homeScan": "Scan",
+  "homeWifiDebugInfo": "For Android 11+ devices with Wireless debugging enabled",
+  "homeMdnsHelp": "✅ Discoverable:\n• Settings → Developer options → Wireless debugging is enabled\n• Phone and computer are on the same Wi-Fi network (no AP isolation)\n\n❌ Not discoverable:\n• USB debugging is enabled but Wireless debugging is off\n• Devices connected manually with `adb connect IP:PORT`\n• Android versions below 11 or ROMs without mDNS broadcasting\n\n💡 If no devices are found, enter an IP address and port in Manual connection above.",
+  "homeScanFailed": "Scan failed: {error}",
+  "@homeScanFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "homeNoDevicesFound": "No devices found. Check the requirements above or use Manual connection.",
+  "homeServiceAdbTransport": "ADB transport",
+  "homeServiceTlsConnection": "TLS connection",
+  "homeServicePairing": "Pairing service",
+  "homeDeviceCount": "Devices ({count})",
+  "@homeDeviceCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homeRefreshAdbDevices": "Refresh ADB device list",
+  "homeAdbDevicesReadError": "Could not read the ADB device list: {error}",
+  "@homeAdbDevicesReadError": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "homeNoAdbDevices": "The ADB server did not find any devices.",
+  "homeFireAdbConnected": "Connected in FireAdb",
+  "commonDisconnect": "Disconnect",
+  "homeUsbConnectionUnavailable": "USB connection unavailable",
+  "homeDeviceOnline": "Online",
+  "homeDeviceOffline": "Offline",
+  "homeDeviceUnauthorized": "Unauthorized",
+  "homeDeviceBootloader": "Bootloader",
+  "homeDeviceRecovery": "Recovery",
+  "homeDeviceSideload": "Sideload",
+  "homeDeviceUnknownState": "Unknown state",
+  "homeHistoryConnections": "Connection history",
+  "homeNoHistory": "No connection history",
+  "homeRemoveHistory": "Remove from history",
+  "workspaceBackToHome": "Back to home",
+  "workspaceFeatures": "Features",
+  "workspaceDeviceDisconnectedTitle": "Device disconnected",
+  "workspaceSwitchToOtherDevice": "Switch to another device",
+  "workspaceBackToConnections": "Back to connections",
+  "workspaceOverviewTitle": "Device overview",
+  "workspaceOverviewDescription": "Device model, brand, Android version, and other details",
+  "workspaceAppsTitle": "Device apps",
+  "workspaceAppsDescription": "View installed apps, uninstall apps, and install APKs",
+  "workspaceTransferTitle": "File transfer",
+  "workspaceTransferDescription": "Push files to a device or pull files from it",
+  "workspaceFilesTitle": "File manager",
+  "workspaceFilesDescription": "Browse device storage, download, delete, and share files",
+  "workspaceScreenshotTitle": "Screenshot",
+  "workspaceScreenshotDescription": "Capture the screen with screencap -p and save it as PNG",
+  "workspaceScreenrecordTitle": "Screen recording",
+  "workspaceScreenrecordDescription": "Record the device screen with screenrecord",
+  "workspaceShellTitle": "Command shell",
+  "workspaceShellDescription": "Run adb shell commands and view their output",
+  "workspacePlanned": "Planned",
+  "workspaceFeaturePlannedDescription": "This feature is planned for a future release.",
+  "deviceOverviewModel": "Device model",
+  "deviceOverviewManufacturer": "Manufacturer",
+  "deviceOverviewBrand": "Brand",
+  "deviceOverviewAndroidVersion": "Android version",
+  "deviceOverviewApiLevel": "API level",
+  "deviceOverviewNotConnected": "Device is not connected",
+  "deviceOverviewNetworkConnection": "Network connection · {host}:{port}",
+  "@deviceOverviewNetworkConnection": {
+    "placeholders": {
+      "host": {},
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "deviceOverviewConnected": "Connected",
+  "deviceOverviewInfoReadFailed": "Could not read device information: {error}",
+  "@deviceOverviewInfoReadFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "deviceOverviewBasicInformation": "Basic information",
+  "shellOutputSettings": "Shell output settings",
+  "shellDeviceNotConnected": "Device is not connected",
+  "shellMaxRetainedOutput": "Maximum retained output: {limit} MiB",
+  "@shellMaxRetainedOutput": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "shellOutputLimitNote": "There is no line limit. When the size limit is reached, only the oldest output is removed.",
+  "commonCancel": "Cancel",
+  "commonSave": "Save",
+  "commonSettingsSaveFailed": "Could not save settings",
+  "shellClearOutput": "Clear output",
+  "shellAbortCurrentCommand": "Stop the current command",
+  "shellSendCtrlC": "Send Ctrl+C",
+  "shellEmptyPrompt": "Enter a command and press Enter to run\n↑/↓ Browse command history\nWhile running, enter text and press Enter to send it; use Stop to abort\nCommon: ls, ps, logcat, dumpsys, top, df",
+  "shellRunningHint": "Type in the current shell and press Enter to send",
+  "shellCommandHint": "Enter a command (e.g. ls -la /sdcard)",
+  "shellInteractiveHint": "Interactive shell · type exit to quit",
+  "shellRunningSessionHint": "Session running · input is sent to the current process",
+  "shellCommandAborted": "^C (aborted)",
+  "shellCommandError": "Error: {error}",
+  "@shellCommandError": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "shellSendInputFailed": "Could not send input: {error}",
+  "@shellSendInputFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "shellEarlierOutputOmitted": "…earlier output omitted…"
+}

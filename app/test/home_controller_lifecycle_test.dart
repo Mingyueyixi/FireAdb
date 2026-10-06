@@ -1,4 +1,5 @@
 import 'package:adb_core/adb_core.dart';
+import 'package:fire_adb/app_locale_controller.dart';
 import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:fire_adb/home/home_controller.dart';
 import 'package:fire_adb/main.dart';
@@ -13,6 +14,7 @@ void main() {
   testWidgets('主页输入控制器在路由切换和窗口缩放后仍有效', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     Get.put<ConnectionManager>(ConnectionManager(), permanent: true);
+    Get.put<AppLocaleController>(AppLocaleController(), permanent: true);
     final controller = HomeController(hostClient: _FakeAdbHostClient());
     Get.put<HomeController>(controller, permanent: true);
     try {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_feedback.dart';
+import '../l10n/fire_adb_localizations_ext.dart';
 
 class ShellOutputSettings {
   ShellOutputSettings._();
@@ -23,17 +24,18 @@ class ShellOutputSettings {
     required int currentLimitMiB,
     required ValueChanged<int> onSaved,
   }) async {
+    final l10n = context.l10n;
     var selectedLimit = currentLimitMiB.clamp(minLimitMiB, maxLimitMiB).toInt();
     final newLimit = await showDialog<int>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Shell 输出设置'),
+          title: Text(l10n.shellOutputSettings),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text('最大保留输出：$selectedLimit MiB'),
+              Text(l10n.shellMaxRetainedOutput(selectedLimit)),
               Slider(
                 value: selectedLimit.toDouble(),
                 min: minLimitMiB.toDouble(),
@@ -44,17 +46,17 @@ class ShellOutputSettings {
                   setDialogState(() => selectedLimit = value.round());
                 },
               ),
-              const Text('不限制行数；达到容量后仅移除较早的输出。'),
+              Text(l10n.shellOutputLimitNote),
             ],
           ),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
+              child: Text(l10n.commonCancel),
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(selectedLimit),
-              child: const Text('保存'),
+              child: Text(l10n.commonSave),
             ),
           ],
         ),
@@ -73,7 +75,7 @@ class ShellOutputSettings {
         showAppMessage(
           ScaffoldMessenger.of(context),
           Theme.of(context),
-          title: '保存设置失败',
+          title: l10n.commonSettingsSaveFailed,
           message: '$error',
           isError: true,
         );

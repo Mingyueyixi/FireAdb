@@ -3,6 +3,8 @@ import 'dart:collection';
 
 import 'package:flutter/material.dart';
 
+import '../l10n/fire_adb_localizations_ext.dart';
+
 enum ShellOutputType { input, output, error, hint }
 
 class ShellOutputSegment {
@@ -253,7 +255,7 @@ class _ShellOutputViewState extends State<ShellOutputView> {
           itemBuilder: (context, index) {
             if (widget.output.truncated && index == 0) {
               return Text(
-                '…较早的输出已省略…',
+                context.l10n.shellEarlierOutputOmitted,
                 style: _styleFor(ShellOutputType.hint, theme),
               );
             }

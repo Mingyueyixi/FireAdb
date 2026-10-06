@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../device_overview/device_overview_page.dart';
+import '../l10n/fire_adb_localizations_ext.dart';
 import '../shell/shell_page.dart';
 import '../widgets/adaptive.dart' show isWide, isAtLeastTablet;
+import '../widgets/locale_selector.dart';
 import 'data/feature_spec.dart';
 import 'feature_tile.dart';
 import 'placeholder_feature_page.dart';
@@ -22,9 +24,9 @@ class WorkspacePage extends GetView<WorkspaceController> {
     return colon > 0 ? serial.substring(0, colon) : serial;
   }
 
-  Widget _homeButton() {
+  Widget _homeButton(BuildContext context) {
     return IconButton(
-      tooltip: '返回主页',
+      tooltip: context.l10n.workspaceBackToHome,
       onPressed: () => Get.offAllNamed<void>('/'),
       icon: const Icon(Icons.arrow_back),
     );
@@ -34,7 +36,14 @@ class WorkspacePage extends GetView<WorkspaceController> {
     if (spec.id == kOverviewFeatureId) {
       Get.to<void>(
         () => Scaffold(
-          appBar: AppBar(title: Text(spec.title)),
+          appBar: AppBar(
+            title: Builder(
+              builder: (context) => Text(
+                featureTitle(context, spec),
+              ),
+            ),
+            actions: const <Widget>[LocaleSelector()],
+          ),
           body: DeviceOverviewPage(serial: controller.selectedSerial.value),
         ),
       );
@@ -43,7 +52,14 @@ class WorkspacePage extends GetView<WorkspaceController> {
     if (spec.id == 'shell') {
       Get.to<void>(
         () => Scaffold(
-          appBar: AppBar(title: Text(spec.title)),
+          appBar: AppBar(
+            title: Builder(
+              builder: (context) => Text(
+                featureTitle(context, spec),
+              ),
+            ),
+            actions: const <Widget>[LocaleSelector()],
+          ),
           body: ShellPage(serial: controller.selectedSerial.value),
         ),
       );
@@ -52,7 +68,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
     Get.to<void>(() => PlaceholderFeaturePage(spec: spec));
   }
 
-  Widget _buildFeaturePane() {
+  Widget _buildFeaturePane(BuildContext context) {
     final spec = kDeviceFeatures.firstWhere(
       (f) => f.id == controller.selectedFeature.value,
     );
@@ -68,7 +84,11 @@ class WorkspacePage extends GetView<WorkspaceController> {
   Widget _buildWide(BuildContext context, List<String> serials) {
     final selectedIndex = serials.indexOf(controller.selectedSerial.value);
     return Scaffold(
-      appBar: AppBar(leading: _homeButton(), title: const Text('FireAdb')),
+      appBar: AppBar(
+        leading: _homeButton(context),
+        title: const Text('FireAdb'),
+        actions: const <Widget>[LocaleSelector()],
+      ),
       body: Row(
         children: <Widget>[
           NavigationRail(
@@ -94,7 +114,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                     child: Text(
-                      '功能',
+                      context.l10n.workspaceFeatures,
                       style: Theme.of(context).textTheme.labelLarge,
                     ),
                   ),
@@ -109,7 +129,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
             ),
           ),
           const VerticalDivider(width: 1),
-          Expanded(child: SafeArea(child: _buildFeaturePane())),
+          Expanded(child: SafeArea(child: _buildFeaturePane(context))),
         ],
       ),
     );
@@ -119,7 +139,8 @@ class WorkspacePage extends GetView<WorkspaceController> {
     final gridCount = isAtLeastTablet(context) ? 4 : 2;
     return Scaffold(
       appBar: AppBar(
-        leading: _homeButton(),
+        leading: _homeButton(context),
+        actions: const <Widget>[LocaleSelector()],
         title: DropdownButtonHideUnderline(
           child: DropdownButton<String>(
             value: controller.selectedSerial.value,
@@ -153,20 +174,28 @@ class WorkspacePage extends GetView<WorkspaceController> {
     final hasAny = serials.isNotEmpty;
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(leading: _homeButton(), title: const Text('FireAdb')),
+      appBar: AppBar(
+        leading: _homeButton(context),
+        title: const Text('FireAdb'),
+        actions: const <Widget>[LocaleSelector()],
+      ),
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Icon(Icons.usb_off, size: 64, color: scheme.outline),
             const SizedBox(height: 16),
-            const Text('设备已断开连接'),
+            Text(context.l10n.workspaceDeviceDisconnectedTitle),
             const SizedBox(height: 12),
             FilledButton(
               onPressed: hasAny
                   ? () => controller.selectSerial(serials.first)
                   : () => Get.back<void>(),
-              child: Text(hasAny ? '切换到其他设备' : '返回连接页'),
+              child: Text(
+                hasAny
+                    ? context.l10n.workspaceSwitchToOtherDevice
+                    : context.l10n.workspaceBackToConnections,
+              ),
             ),
           ],
         ),

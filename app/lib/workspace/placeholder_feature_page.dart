@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/locale_selector.dart';
 import 'data/feature_spec.dart';
 import 'feature_tile.dart';
 
@@ -12,7 +13,10 @@ class PlaceholderFeaturePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(spec.title)),
+      appBar: AppBar(
+        title: Text(featureTitle(context, spec)),
+        actions: const <Widget>[LocaleSelector()],
+      ),
       body: PlaceholderFeatureBody(spec: spec),
     );
   }

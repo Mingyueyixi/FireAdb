@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/fire_adb_localizations_ext.dart';
 import 'data/feature_spec.dart';
 
 /// 功能入口卡片（移动端九宫格用）。
@@ -13,6 +14,7 @@ class FeatureTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final l10n = context.l10n;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -30,28 +32,35 @@ class FeatureTile extends StatelessWidget {
                   if (!spec.implemented)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: scheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        '规划中',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: scheme.outline),
+                        l10n.workspacePlanned,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.outline,
+                        ),
                       ),
                     ),
                 ],
               ),
               const SizedBox(height: 12),
-              Text(spec.title, style: theme.textTheme.titleMedium),
+              Text(
+                featureTitle(context, spec),
+                style: theme.textTheme.titleMedium,
+              ),
               const SizedBox(height: 4),
               Text(
-                spec.description,
+                featureDescription(context, spec),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style:
-                    theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.outline,
+                ),
               ),
             ],
           ),
@@ -76,10 +85,11 @@ class FeatureListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return ListTile(
       leading: Icon(spec.icon),
-      title: Text(spec.title),
-      subtitle: spec.implemented ? null : const Text('规划中'),
+      title: Text(featureTitle(context, spec)),
+      subtitle: spec.implemented ? null : Text(l10n.workspacePlanned),
       selected: selected,
       onTap: onTap,
     );
@@ -96,6 +106,7 @@ class PlaceholderFeatureBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final l10n = context.l10n;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -104,17 +115,21 @@ class PlaceholderFeatureBody extends StatelessWidget {
           children: <Widget>[
             Icon(spec.icon, size: 72, color: scheme.outline),
             const SizedBox(height: 16),
-            Text(spec.title, style: theme.textTheme.headlineSmall),
+            Text(
+              featureTitle(context, spec),
+              style: theme.textTheme.headlineSmall,
+            ),
             const SizedBox(height: 8),
             Text(
-              spec.description,
+              featureDescription(context, spec),
               textAlign: TextAlign.center,
-              style:
-                  theme.textTheme.bodyMedium?.copyWith(color: scheme.outline),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.outline,
+              ),
             ),
             const SizedBox(height: 12),
             Text(
-              '该功能正在规划中，将在后续版本开放。',
+              l10n.workspaceFeaturePlannedDescription,
               style: theme.textTheme.bodySmall,
             ),
           ],

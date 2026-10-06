@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../app_feedback.dart';
+import '../l10n/fire_adb_localizations_ext.dart';
 
 /// 设备基本信息面板（连接后按需读取 getprop）。
 class DeviceOverviewPage extends StatefulWidget {
@@ -22,14 +23,18 @@ class DeviceOverviewPage extends StatefulWidget {
 class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
   ConnectionManager get _manager => Get.find<ConnectionManager>();
 
-  static const Map<String, String> _fieldLabels = <String, String>{
-    'ro.product.model': '设备型号',
-    'ro.product.manufacturer': '制造商',
-    'ro.product.brand': '品牌',
-    'ro.build.version.release': 'Android 版本',
-    'ro.build.version.sdk': 'API 级别',
-    'ro.product.cpu.abi': 'ABI',
-  };
+  static String _fieldLabel(BuildContext context, String key) {
+    final l10n = context.l10n;
+    return switch (key) {
+      'ro.product.model' => l10n.deviceOverviewModel,
+      'ro.product.manufacturer' => l10n.deviceOverviewManufacturer,
+      'ro.product.brand' => l10n.deviceOverviewBrand,
+      'ro.build.version.release' => l10n.deviceOverviewAndroidVersion,
+      'ro.build.version.sdk' => l10n.deviceOverviewApiLevel,
+      'ro.product.cpu.abi' => 'ABI',
+      _ => key,
+    };
+  }
 
   Map<String, String> _props = const <String, String>{};
   Object? _error;
@@ -44,7 +49,7 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
   Future<void> _load() async {
     final device = _manager.deviceOf(widget.serial);
     if (device == null) {
-      setState(() => _error = '设备未连接');
+      setState(() => _error = const _DeviceNotConnectedException());
       return;
     }
     try {
@@ -66,6 +71,7 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final profile = _manager.profileOf(widget.serial);
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -76,8 +82,8 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
             title: Text(widget.serial, style: theme.textTheme.titleMedium),
             subtitle: Text(
               profile != null && profile.host != null
-                  ? '网络连接 · ${profile.host}:${profile.port}'
-                  : '已连接',
+                  ? l10n.deviceOverviewNetworkConnection(profile.host!, profile.port!)
+                  : l10n.deviceOverviewConnected,
             ),
           ),
         ),
@@ -86,7 +92,11 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Text(
-              '读取设备信息失败：$_error',
+              l10n.deviceOverviewInfoReadFailed(
+                _error is _DeviceNotConnectedException
+                    ? l10n.deviceOverviewNotConnected
+                    : '$_error',
+              ),
               style: TextStyle(color: theme.colorScheme.error),
             ),
           )
@@ -100,17 +110,31 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
             child: Column(
               children: <Widget>[
                 ListTile(
-                  title: Text('基本信息', style: theme.textTheme.titleMedium),
+                  title: Text(l10n.deviceOverviewBasicInformation, style: theme.textTheme.titleMedium),
                 ),
                 const Divider(height: 1),
-                for (final entry in _fieldLabels.entries)
-                  _InfoRow(label: entry.value, value: _props[entry.key]),
+                for (final key in const <String>[
+                  'ro.product.model',
+                  'ro.product.manufacturer',
+                  'ro.product.brand',
+                  'ro.build.version.release',
+                  'ro.build.version.sdk',
+                  'ro.product.cpu.abi',
+                ])
+                  _InfoRow(
+                    label: _fieldLabel(context, key),
+                    value: _props[key],
+                  ),
               ],
             ),
           ),
       ],
     );
   }
+}
+
+class _DeviceNotConnectedException implements Exception {
+  const _DeviceNotConnectedException();
 }
 
 class _InfoRow extends StatelessWidget {

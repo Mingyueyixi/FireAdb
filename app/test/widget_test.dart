@@ -1,5 +1,6 @@
 import 'package:adb_core/adb_core.dart';
 import 'package:fire_adb/app_feedback.dart';
+import 'package:fire_adb/app_locale_controller.dart';
 import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:fire_adb/home/home_controller.dart';
 import 'package:fire_adb/main.dart';
@@ -12,6 +13,7 @@ void main() {
   testWidgets('连接中心首页正常渲染', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     Get.put<ConnectionManager>(ConnectionManager(), permanent: true);
+    Get.put<AppLocaleController>(AppLocaleController(), permanent: true);
     final hostClient = _FakeAdbHostClient(const <AdbDeviceInfo>[
       AdbDeviceInfo(
         'R5CT123456A',
@@ -68,6 +70,47 @@ void main() {
     await tester.pump(HomeController.adbDeviceRefreshInterval * 2);
     expect(hostClient.deviceListRequests, requestsAfterControllerClose);
     Get.reset();
+  });
+
+  testWidgets('语言可以在中文和英文之间切换并保存', (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    Get.put<ConnectionManager>(ConnectionManager(), permanent: true);
+    final localeController = AppLocaleController();
+    await localeController.load();
+    expect(localeController.locale.value.languageCode, 'zh');
+    Get.put<AppLocaleController>(localeController, permanent: true);
+    final homeController = HomeController(
+      hostClient: _FakeAdbHostClient(const <AdbDeviceInfo>[]),
+    );
+    Get.put<HomeController>(homeController);
+    try {
+      await tester.pumpWidget(const FireAdbApp());
+      await tester.pump();
+      expect(find.text('手动连接'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.language));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('英文'));
+      await tester.pumpAndSettle();
+      expect(localeController.locale.value.languageCode, 'en');
+      expect(find.text('Manual connection'), findsOneWidget);
+      expect(
+        (await SharedPreferences.getInstance()).getString('appLocale'),
+        'en',
+      );
+      final restoredController = AppLocaleController();
+      await restoredController.load();
+      expect(restoredController.locale.value.languageCode, 'en');
+
+      await tester.tap(find.byIcon(Icons.language));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Chinese'));
+      await tester.pumpAndSettle();
+      expect(find.text('手动连接'), findsOneWidget);
+    } finally {
+      homeController.onClose();
+      Get.reset();
+    }
   });
 }
 

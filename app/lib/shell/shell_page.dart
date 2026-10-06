@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 
 import '../app_feedback.dart';
 import '../connection/model/connected_device.dart';
+import '../l10n/fire_adb_localizations_ext.dart';
 import 'shell_output.dart';
 import 'shell_output_settings.dart';
 
@@ -113,7 +114,10 @@ class _ShellPageState extends State<ShellPage> {
     final device = _manager.deviceOf(widget.serial);
     if (device == null) {
       if (!mounted) return;
-      _output.appendLine(ShellOutputType.error, '设备未连接');
+      _output.appendLine(
+        ShellOutputType.error,
+        context.l10n.shellDeviceNotConnected,
+      );
       setState(() => _running = false);
       return;
     }
@@ -142,14 +146,20 @@ class _ShellPageState extends State<ShellPage> {
             onError: (Object error, StackTrace stackTrace) {
               logAppError('Shell 命令流失败：$cmd', error, stackTrace);
               if (!mounted || _disposing) return;
-              _output.appendLine(ShellOutputType.error, '错误: $error');
+              _output.appendLine(
+                ShellOutputType.error,
+                context.l10n.shellCommandError('$error'),
+              );
               _finishCommand();
             },
           );
     } catch (error, stackTrace) {
       logAppError('执行 Shell 命令失败：$cmd', error, stackTrace);
       if (mounted && !_disposing) {
-        _output.appendLine(ShellOutputType.error, '错误: $error');
+        _output.appendLine(
+          ShellOutputType.error,
+          context.l10n.shellCommandError('$error'),
+        );
       }
       _finishCommand();
     }
@@ -224,7 +234,10 @@ class _ShellPageState extends State<ShellPage> {
     } catch (error, stackTrace) {
       logAppError('向 Shell 发送输入失败：${widget.serial}', error, stackTrace);
       if (mounted && !_disposing) {
-        _output.appendLine(ShellOutputType.error, '发送输入失败: $error');
+        _output.appendLine(
+          ShellOutputType.error,
+          context.l10n.shellSendInputFailed('$error'),
+        );
       }
       _finishCommand();
     }
@@ -242,7 +255,10 @@ class _ShellPageState extends State<ShellPage> {
         _running = false;
         _activeCommand = null;
       });
-      _output.appendLine(ShellOutputType.hint, '^C (已中止)');
+      _output.appendLine(
+        ShellOutputType.hint,
+        context.l10n.shellCommandAborted,
+      );
     }
   }
 
@@ -295,6 +311,7 @@ class _ShellPageState extends State<ShellPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final l10n = context.l10n;
 
     return Column(
       children: <Widget>[
@@ -311,14 +328,14 @@ class _ShellPageState extends State<ShellPage> {
               Text('Shell', style: theme.textTheme.titleMedium),
               const Spacer(),
               Tooltip(
-                message: '清空输出',
+                message: l10n.shellClearOutput,
                 child: IconButton(
                   icon: const Icon(Icons.clear_all),
                   onPressed: _clearOutput,
                 ),
               ),
               Tooltip(
-                message: 'Shell 输出设置',
+                message: l10n.shellOutputSettings,
                 child: IconButton(
                   icon: const Icon(Icons.settings_outlined),
                   onPressed: _showOutputSettings,
@@ -326,7 +343,7 @@ class _ShellPageState extends State<ShellPage> {
               ),
               if (_running)
                 Tooltip(
-                  message: '中止当前命令',
+                  message: l10n.shellAbortCurrentCommand,
                   child: IconButton(
                     icon: const Icon(Icons.stop, color: Colors.red),
                     onPressed: _abortCommand,
@@ -334,7 +351,7 @@ class _ShellPageState extends State<ShellPage> {
                 )
               else
                 Tooltip(
-                  message: '发送 Ctrl+C',
+                  message: l10n.shellSendCtrlC,
                   child: IconButton(
                     icon: const Icon(Icons.stop_circle),
                     onPressed: _sendCtrlC,
@@ -349,11 +366,7 @@ class _ShellPageState extends State<ShellPage> {
             color: scheme.surfaceContainerHighest.withValues(alpha: 0.3),
             child: ShellOutputView(
               output: _output,
-              emptyPrompt:
-                  '输入命令并按回车执行\n'
-                  '↑/↓ 浏览历史\n'
-                  '运行中可输入内容并回车发送；点击停止按钮中止\n'
-                  '常用: ls, ps, logcat, dumpsys, top, df',
+              emptyPrompt: l10n.shellEmptyPrompt,
             ),
           ),
         ),
@@ -375,8 +388,8 @@ class _ShellPageState extends State<ShellPage> {
               ),
               decoration: InputDecoration(
                 hintText: _running
-                    ? '向当前 Shell 输入内容并回车发送'
-                    : '输入命令 (如: ls -la /sdcard)',
+                    ? l10n.shellRunningHint
+                    : l10n.shellCommandHint,
                 hintStyle: TextStyle(fontFamily: 'monospace'),
                 border: InputBorder.none,
                 isDense: true,
@@ -392,8 +405,8 @@ class _ShellPageState extends State<ShellPage> {
             padding: const EdgeInsets.only(left: 8),
             child: Text(
               _isInteractiveShellCommand(_activeCommand)
-                  ? '交互式 Shell · 输入 exit 结束'
-                  : '会话运行中 · 输入发送给当前进程',
+                  ? l10n.shellInteractiveHint
+                  : l10n.shellRunningSessionHint,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: scheme.secondary,
               ),

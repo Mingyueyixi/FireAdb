@@ -1,0 +1,157 @@
+{
+  "@@locale": "zh",
+  "settingsLanguage": "语言",
+  "settingsChinese": "中文",
+  "settingsEnglish": "英文",
+  "settingsLanguageSaveFailed": "保存语言设置失败：{error}",
+  "@settingsLanguageSaveFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "homeConnectionSucceeded": "连接成功",
+  "homeConnectedDevice": "已连接：{serial}",
+  "@homeConnectedDevice": {
+    "placeholders": {
+      "serial": {}
+    }
+  },
+  "homeConnectionFailed": "连接失败",
+  "homeInvalidInput": "输入无效",
+  "homeInvalidHostPort": "请输入有效的主机地址与端口（1-65535）",
+  "homeDeviceUnavailable": "设备不可用",
+  "homeAdbDeviceMissing": "该设备当前未出现在 ADB 设备列表中，请先连接设备并刷新列表。",
+  "homeDeviceDisconnected": "设备已断开",
+  "homeDisconnectSucceeded": "已断开连接",
+  "homeDisconnectFailed": "断开失败",
+  "homeManualConnection": "手动连接",
+  "homeHostAddress": "主机地址",
+  "homeHostAddressExample": "例如 192.168.1.100",
+  "homePort": "端口",
+  "homeConnecting": "连接中…",
+  "commonConnect": "连接",
+  "homeDeviceDiscovery": "设备发现（mDNS）",
+  "homeScanning": "扫描中…",
+  "homeScan": "扫描",
+  "homeWifiDebugInfo": "仅适用于开启「无线调试」的 Android 11+ 设备",
+  "homeMdnsHelp": "✅ 能发现：\n• 设置 → 开发者选项 → 无线调试 → 已开启\n• 手机与电脑在同一 Wi-Fi（无 AP 隔离）\n\n❌ 无法发现：\n• 仅开启 USB 调试、未开无线调试\n• 通过 `adb connect IP:PORT` 手动连接的设备\n• Android 11 以下或未实现 mDNS 广播的 ROM\n\n💡 如扫描无结果，请使用上方「手动连接」输入 IP:端口直连",
+  "homeScanFailed": "扫描失败：{error}",
+  "@homeScanFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "homeNoDevicesFound": "未扫描到设备。请确认上述条件，或改用「手动连接」。",
+  "homeServiceAdbTransport": "ADB 传输",
+  "homeServiceTlsConnection": "TLS 连接",
+  "homeServicePairing": "配对服务",
+  "homeDeviceCount": "设备（{count}）",
+  "@homeDeviceCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homeRefreshAdbDevices": "刷新 ADB 设备列表",
+  "homeAdbDevicesReadError": "无法读取 ADB 设备列表：{error}",
+  "@homeAdbDevicesReadError": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "homeNoAdbDevices": "ADB Server 当前没有发现设备。",
+  "homeFireAdbConnected": "FireAdb 已连接",
+  "commonDisconnect": "断开",
+  "homeUsbConnectionUnavailable": "USB 连接暂不可用",
+  "homeDeviceOnline": "在线",
+  "homeDeviceOffline": "离线",
+  "homeDeviceUnauthorized": "未授权",
+  "homeDeviceBootloader": "引导加载程序",
+  "homeDeviceRecovery": "恢复模式",
+  "homeDeviceSideload": "侧载模式",
+  "homeDeviceUnknownState": "未知状态",
+  "homeHistoryConnections": "历史连接",
+  "homeNoHistory": "暂无历史记录",
+  "homeRemoveHistory": "移除历史",
+  "workspaceBackToHome": "返回主页",
+  "workspaceFeatures": "功能",
+  "workspaceDeviceDisconnectedTitle": "设备已断开连接",
+  "workspaceSwitchToOtherDevice": "切换到其他设备",
+  "workspaceBackToConnections": "返回连接页",
+  "workspaceOverviewTitle": "设备总览",
+  "workspaceOverviewDescription": "设备型号、品牌、系统版本等基本信息",
+  "workspaceAppsTitle": "设备应用",
+  "workspaceAppsDescription": "查看已安装应用、卸载应用、安装 APK",
+  "workspaceTransferTitle": "文件传输",
+  "workspaceTransferDescription": "推送文件到设备 / 从设备拉取文件",
+  "workspaceFilesTitle": "文件管理",
+  "workspaceFilesDescription": "浏览设备存储，下载、删除、分享文件",
+  "workspaceScreenshotTitle": "截图",
+  "workspaceScreenshotDescription": "调用 screencap -p 截取屏幕并保存 PNG",
+  "workspaceScreenrecordTitle": "录屏",
+  "workspaceScreenrecordDescription": "调用 screenrecord 录制设备屏幕",
+  "workspaceShellTitle": "命令面板",
+  "workspaceShellDescription": "执行 adb shell 命令并查看输出",
+  "workspacePlanned": "规划中",
+  "workspaceFeaturePlannedDescription": "该功能正在规划中，将在后续版本开放。",
+  "deviceOverviewModel": "设备型号",
+  "deviceOverviewManufacturer": "制造商",
+  "deviceOverviewBrand": "品牌",
+  "deviceOverviewAndroidVersion": "Android 版本",
+  "deviceOverviewApiLevel": "API 级别",
+  "deviceOverviewNotConnected": "设备未连接",
+  "deviceOverviewNetworkConnection": "网络连接 · {host}:{port}",
+  "@deviceOverviewNetworkConnection": {
+    "placeholders": {
+      "host": {},
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "deviceOverviewConnected": "已连接",
+  "deviceOverviewInfoReadFailed": "读取设备信息失败：{error}",
+  "@deviceOverviewInfoReadFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "deviceOverviewBasicInformation": "基本信息",
+  "shellOutputSettings": "Shell 输出设置",
+  "shellDeviceNotConnected": "设备未连接",
+  "shellMaxRetainedOutput": "最大保留输出：{limit} MiB",
+  "@shellMaxRetainedOutput": {
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "shellOutputLimitNote": "不限制行数；达到容量后仅移除较早的输出。",
+  "commonCancel": "取消",
+  "commonSave": "保存",
+  "commonSettingsSaveFailed": "保存设置失败",
+  "shellClearOutput": "清空输出",
+  "shellAbortCurrentCommand": "中止当前命令",
+  "shellSendCtrlC": "发送 Ctrl+C",
+  "shellEmptyPrompt": "输入命令并按回车执行\n↑/↓ 浏览历史\n运行中可输入内容并回车发送；点击停止按钮中止\n常用: ls, ps, logcat, dumpsys, top, df",
+  "shellRunningHint": "向当前 Shell 输入内容并回车发送",
+  "shellCommandHint": "输入命令 (如: ls -la /sdcard)",
+  "shellInteractiveHint": "交互式 Shell · 输入 exit 结束",
+  "shellRunningSessionHint": "会话运行中 · 输入发送给当前进程",
+  "shellCommandAborted": "^C (已中止)",
+  "shellCommandError": "错误: {error}",
+  "@shellCommandError": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "shellSendInputFailed": "发送输入失败: {error}",
+  "@shellSendInputFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "shellEarlierOutputOmitted": "…较早的输出已省略…"
+}
