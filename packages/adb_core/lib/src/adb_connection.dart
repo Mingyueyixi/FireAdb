@@ -172,6 +172,7 @@ class AdbConnection {
     this.banner = 'dart-adb',
     this.authTimeout = const Duration(seconds: 30),
     this.writeTimeout,
+    this.onStateChanged,
   }) : _transport = transport {
     _reader = AdbSizedReader(transport.stream);
   }
@@ -181,6 +182,9 @@ class AdbConnection {
   final String banner;
   final Duration authTimeout;
   final Duration? writeTimeout;
+
+  /// 握手状态变化。本机 ADB Server 用它把设备标成 `unauthorized` 或 `device`。
+  final void Function(AdbConnectionState state)? onStateChanged;
 
   late final AdbSizedReader _reader;
   final Map<int, AdbStream> _streams = {};
@@ -255,7 +259,7 @@ class AdbConnection {
           await _dispatch(msg);
         }
       } catch (e, st) {
-        _state = AdbConnectionState.offline;
+        _setState(AdbConnectionState.offline);
         if (!_connectCompleter.isCompleted) {
           _connectCompleter.complete();
           _connectError = e;
@@ -298,8 +302,8 @@ class AdbConnection {
     }
     if (!_connected) {
       _connected = true;
-      _state = AdbConnectionState.device;
       _awaitingUserAuth = false;
+      _setState(AdbConnectionState.device);
       if (!_connectCompleter.isCompleted) _connectCompleter.complete();
     }
   }
@@ -323,8 +327,15 @@ class AdbConnection {
             Uint8List.fromList([...utf8.encode(key.base64PublicKey()), 0]);
         await _sendMessage(cmd.commandAuth, cmd.authRsaPublicKey, 0, pub);
         _awaitingUserAuth = true;
+        _setState(AdbConnectionState.unauthorized);
       }
     }
+  }
+
+  void _setState(AdbConnectionState value) {
+    if (_state == value) return;
+    _state = value;
+    onStateChanged?.call(value);
   }
 
   void _onOkay(AdbMessage msg) {

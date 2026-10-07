@@ -1,4 +1,5 @@
 import 'package:adb_core/adb_core.dart';
+import 'package:adb_usb/adb_usb.dart';
 import 'package:fire_adb/app_feedback.dart';
 import 'package:fire_adb/app_locale_controller.dart';
 import 'package:fire_adb/connection/connection_manager.dart';
@@ -23,7 +24,12 @@ void main() {
       ),
       AdbDeviceInfo('127.0.0.1:5557', 'device', model: 'Network_Device'),
     ]);
-    Get.put<HomeController>(HomeController(hostClient: hostClient));
+    Get.put<HomeController>(
+      HomeController(
+        hostClient: hostClient,
+        listUsbDevices: () async => const <UsbAdbDevice>[],
+      ),
+    );
     await tester.pumpWidget(const FireAdbApp());
     await tester.pump();
 
@@ -81,6 +87,7 @@ void main() {
     Get.put<AppLocaleController>(localeController, permanent: true);
     final homeController = HomeController(
       hostClient: _FakeAdbHostClient(const <AdbDeviceInfo>[]),
+      listUsbDevices: () async => const <UsbAdbDevice>[],
     );
     Get.put<HomeController>(homeController);
     try {

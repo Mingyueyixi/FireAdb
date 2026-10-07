@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
+import '../storage/public_storage.dart';
+
 /// 把设备上的一个文件拉到本地，并用 `md5sum` 与本地文件比对。
 ///
 /// 应用导出和其他文件导出都走这里。调用方提供 [shell] 与 [pullTo]，
@@ -16,6 +18,7 @@ Future<ExportedRemoteFile> exportRemoteFile({
   Exception Function()? cancelledException,
 }) async {
   _ensureActive(isCancelled, cancelledException);
+  await ensurePublicSaveAccess();
   await localFile.parent.create(recursive: true);
   final sink = localFile.openWrite();
   var received = 0;

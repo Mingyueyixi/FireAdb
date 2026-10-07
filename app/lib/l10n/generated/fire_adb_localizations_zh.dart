@@ -120,7 +120,20 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   }
 
   @override
+  String homeUsbDevicesReadError(Object error) {
+    return '无法读取 USB 设备：$error';
+  }
+
+  @override
   String get homeNoAdbDevices => 'ADB Server 当前没有发现设备。';
+
+  @override
+  String get homeAdbServerUnavailable =>
+      'Android 上没有本机 ADB Server，不会连接 127.0.0.1:5037。请使用手动连接或扫描。';
+
+  @override
+  String get homeAdbServerNotRunning =>
+      '本机没有 ADB Server（127.0.0.1:5037）。USB 设备会直接列出，网络设备请手动连接或扫描。';
 
   @override
   String get homeFireAdbConnected => 'FireAdb 已连接';

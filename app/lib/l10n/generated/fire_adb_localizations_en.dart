@@ -124,7 +124,20 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   }
 
   @override
+  String homeUsbDevicesReadError(Object error) {
+    return 'Could not read USB devices: $error';
+  }
+
+  @override
   String get homeNoAdbDevices => 'The ADB server did not find any devices.';
+
+  @override
+  String get homeAdbServerUnavailable =>
+      'Android has no local ADB server, so FireAdb does not connect to 127.0.0.1:5037. Use a manual connection or scan.';
+
+  @override
+  String get homeAdbServerNotRunning =>
+      'No ADB server is listening on 127.0.0.1:5037. USB devices are listed directly. Connect network devices manually or scan for them.';
 
   @override
   String get homeFireAdbConnected => 'Connected in FireAdb';

@@ -7,26 +7,45 @@ import 'package:fire_adb/capture/data/local_opener.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('应用目录优先使用 HOME，否则使用 USERPROFILE', () {
+  test('导出和截图放在下载目录，Android 使用公共下载目录', () {
     expect(
       captureDirectoryPath(const <String, String>{
         'HOME': '/home/mi',
         'USERPROFILE': r'C:\Users\Mi',
-      }, separator: '/'),
-      '/home/mi/.config/fire_adb/captures',
+      }, separator: '/', android: false),
+      '/home/mi/Downloads/FireAdb/captures',
     );
     expect(
-      captureDirectoryPath(const <String, String>{
+      exportDirectoryPath(const <String, String>{
         'USERPROFILE': r'C:\Users\Mi',
-      }, separator: r'\'),
-      r'C:\Users\Mi\.config\fire_adb\captures',
+      }, separator: r'\', android: false),
+      r'C:\Users\Mi\Downloads\FireAdb',
     );
-    expect(captureDirectoryPath(const <String, String>{}), isNull);
+    expect(
+      captureDirectoryPath(const <String, String>{}, android: false),
+      isNull,
+    );
     expect(
       captureDirectoryPath(const <String, String>{
         'HOME': '/home/mi/',
-      }, separator: '/'),
-      '/home/mi/.config/fire_adb/captures',
+      }, separator: '/', android: false),
+      '/home/mi/Downloads/FireAdb/captures',
+    );
+    expect(
+      exportDirectoryPath(
+        const <String, String>{},
+        android: true,
+        directoryExists: (path) => path == '/sdcard/Downloads',
+      ),
+      '/sdcard/Downloads/FireAdb',
+    );
+    expect(
+      captureDirectoryPath(
+        const <String, String>{},
+        android: true,
+        directoryExists: (_) => false,
+      ),
+      '/sdcard/Download/FireAdb/captures',
     );
   });
 

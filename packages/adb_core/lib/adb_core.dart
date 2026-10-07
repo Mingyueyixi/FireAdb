@@ -12,6 +12,7 @@ export 'src/adb_exceptions.dart';
 export 'src/adb_filesync.dart';
 export 'src/adb_host_client.dart';
 export 'src/adb_message.dart';
+export 'src/adb_server.dart';
 export 'src/adb_smart_socket.dart';
 export 'src/adb_stream_reader.dart';
 export 'src/adb_tcp_transport.dart';

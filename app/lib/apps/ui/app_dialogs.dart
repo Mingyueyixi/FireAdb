@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../capture/data/capture_paths.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../data/bean/app_freeze.dart';
 import '../data/bean/installed_app.dart';
@@ -236,8 +237,5 @@ ButtonStyle _dangerButtonStyle(ColorScheme scheme) {
 }
 
 String _defaultExportDirectory() {
-  final home =
-      Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'] ?? '';
-  if (home.isEmpty) return Directory.systemTemp.path;
-  return '$home${Platform.pathSeparator}Downloads';
+  return exportDirectoryPath(Platform.environment) ?? Directory.systemTemp.path;
 }

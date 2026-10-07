@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:adb_core/adb_core.dart';
+import 'package:adb_usb/adb_usb.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,6 +24,13 @@ class ConnectionManager extends GetxService {
   SharedPreferences? _prefs;
   bool _signerResolved = false;
   bool _historyLoaded = false;
+  AdbServer? _localServer;
+  UsbAdbTracker? _usbTracker;
+  String? _loggedLocalUsbError;
+
+  /// 本进程自己监听着 127.0.0.1:5037。USB 设备由它登记，列表走 host:devices。
+  final RxBool ownsLocalAdbServer = false.obs;
+  final RxnString localUsbError = RxnString();
 
   List<ConnectedDevice> get devices => _devices.values.toList();
 
@@ -56,14 +66,62 @@ class ConnectionManager extends GetxService {
     if (!_historyLoaded) _loadHistory();
   }
 
+  /// 没有官方 adb server 时，自己监听 5037，并把 USB 设备登记进去。
+  Future<void> ensureLocalAdbServer() async {
+    if (Platform.isAndroid || _localServer != null) return;
+    _resolveSigners();
+    final server = await AdbServer.tryStart(signers: _signers);
+    if (server == null) {
+      developer.log(
+        '127.0.0.1:5037 已有 ADB Server，直接使用它列出的设备',
+        name: 'fire_adb',
+      );
+      return;
+    }
+    server.onKilled = _onLocalServerKilled;
+    _localServer = server;
+    ownsLocalAdbServer.value = true;
+    final tracker = UsbAdbTracker(
+      server: server,
+      signers: _signers,
+      onError: _onLocalUsbError,
+    );
+    _usbTracker = tracker;
+    tracker.start();
+    developer.log('已启动本机 ADB Server 127.0.0.1:5037', name: 'fire_adb');
+  }
+
+  void _onLocalUsbError(Object? error, StackTrace? stackTrace) {
+    if (error == null) {
+      localUsbError.value = null;
+      _loggedLocalUsbError = null;
+      return;
+    }
+    final message = '$error';
+    localUsbError.value = message;
+    if (message == _loggedLocalUsbError) return;
+    _loggedLocalUsbError = message;
+    logAppError('读取 USB 设备失败', error, stackTrace ?? StackTrace.current);
+  }
+
+  void _onLocalServerKilled() {
+    ownsLocalAdbServer.value = false;
+    _localServer = null;
+    final tracker = _usbTracker;
+    _usbTracker = null;
+    if (tracker != null) unawaited(tracker.close());
+  }
+
   void _resolveSigners() {
     if (_signerResolved) return;
     _signerResolved = true;
     try {
       final home = Platform.environment['HOME'];
-      if (home == null || home.isEmpty) return;
+      final profile = Platform.environment['USERPROFILE'];
+      final root = (home != null && home.isNotEmpty) ? home : profile;
+      if (root == null || root.isEmpty) return;
       final dir =
-          '$home${Platform.pathSeparator}.config'
+          '$root${Platform.pathSeparator}.config'
           '${Platform.pathSeparator}fire_adb';
       Directory(dir).createSync(recursive: true);
       _signers = <AdbRsaKeyPair>[
@@ -126,6 +184,29 @@ class ConnectionManager extends GetxService {
       adbSerial: info.serial,
     );
     await _registerConnection(profile, device);
+    return device;
+  }
+
+  /// 直接打开 USB 上的 ADB 接口，不经过本机 adb server。
+  Future<AdbDevice> connectUsb(UsbAdbDevice usb) async {
+    await init();
+    _resolveSigners();
+    final transport = await openUsbAdbDevice(usb);
+    final connection = AdbConnection(transport, signers: _signers);
+    try {
+      await connection.connect();
+    } catch (_) {
+      await transport.close();
+      rethrow;
+    }
+    final device = AdbDevice(connection);
+    final profile = DeviceProfile(
+      serial: device.serial,
+      label: usb.productName ?? usb.address,
+      adbSerial: device.serial,
+      usbAddress: usb.address,
+    );
+    await _registerConnection(profile, ConnectedDevice.direct(device));
     return device;
   }
 
@@ -192,12 +273,15 @@ class ConnectionManager extends GetxService {
         if (port != null && port is! int) return null;
         if (label != null && label is! String) return null;
         if (adbSerial != null && adbSerial is! String) return null;
+        final usbAddress = json['usbAddress'];
+        if (usbAddress != null && usbAddress is! String) return null;
         return DeviceProfile(
           serial: serial,
           host: host as String?,
           port: port as int?,
           label: label as String? ?? '',
           adbSerial: adbSerial as String?,
+          usbAddress: usbAddress as String?,
         );
       } on FormatException {
         return null;
@@ -213,12 +297,7 @@ class ConnectionManager extends GetxService {
       host = host.substring(1, host.length - 1);
     }
     if (host.isEmpty) return null;
-    return DeviceProfile(
-      serial: entry,
-      host: host,
-      port: port,
-      label: host,
-    );
+    return DeviceProfile(serial: entry, host: host, port: port, label: host);
   }
 
   Future<void> _saveHistory() async {
@@ -232,6 +311,7 @@ class ConnectionManager extends GetxService {
             'port': profile.port,
             'label': profile.label,
             'adbSerial': profile.adbSerial,
+            'usbAddress': profile.usbAddress,
           }),
         )
         .toList();

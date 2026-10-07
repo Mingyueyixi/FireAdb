@@ -13,6 +13,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final manager = ConnectionManager();
   await manager.init();
+  await manager.ensureLocalAdbServer();
   Get.put<ConnectionManager>(manager, permanent: true);
   final localeController = AppLocaleController();
   await localeController.load();

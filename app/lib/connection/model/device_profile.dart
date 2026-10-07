@@ -6,6 +6,7 @@ class DeviceProfile {
     this.port,
     this.label = '',
     this.adbSerial,
+    this.usbAddress,
   });
 
   final String serial;
@@ -13,6 +14,9 @@ class DeviceProfile {
   final int? port;
   final String label;
   final String? adbSerial;
+
+  /// 直接打开的 USB 设备地址，例如 `usb:1-4.2`。
+  final String? usbAddress;
 
   String get displayName => label.isNotEmpty ? label : (host ?? serial);
 

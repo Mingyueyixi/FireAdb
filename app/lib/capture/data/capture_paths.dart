@@ -1,11 +1,20 @@
-import 'dart:io' show Platform;
+import 'dart:io';
 
-/// 截图和录像保存在应用目录 `~/.config/fire_adb/captures`。
+/// 截图、录像和导出文件放在用户的下载目录 `Downloads/FireAdb`。
 ///
-/// Windows 没有 `HOME` 时改用 `USERPROFILE`。文件和 ADB 密钥放在同一个应用目录下，
-/// 但单独使用 `captures`，避免和密钥混在一起。
+/// Windows 没有 `HOME` 时改用 `USERPROFILE`。ADB 密钥仍放在配置目录，不和这些文件混在一起。
+/// Android 使用公共下载目录，而不是应用私有缓存。
 const String kFireAdbConfigName = 'fire_adb';
+const String kFireAdbDataFolder = 'FireAdb';
 const String kCapturesFolderName = 'captures';
+
+/// 公共下载目录。系统实际目录名是 `Download`，有的设备也使用 `Downloads`。
+const List<String> kAndroidDownloadCandidates = <String>[
+  '/sdcard/Download',
+  '/sdcard/Downloads',
+  '/storage/emulated/0/Download',
+  '/storage/emulated/0/Downloads',
+];
 
 /// 和文件管理一样，先在共享存储里建自己的目录。
 const String kDeviceCaptureDir = '/sdcard/FireAdb';
@@ -69,18 +78,55 @@ String? homeDirectory(Map<String, String> environment) {
   return null;
 }
 
+String? exportDirectoryPath(
+  Map<String, String> environment, {
+  String? separator,
+  bool? android,
+  bool Function(String path)? directoryExists,
+}) {
+  if (android ?? Platform.isAndroid) {
+    return '${androidDownloadDirectory(directoryExists)}/$kFireAdbDataFolder';
+  }
+  final root = _trimmedHome(environment);
+  if (root == null) return null;
+  final sep = separator ?? Platform.pathSeparator;
+  return '$root${sep}Downloads$sep$kFireAdbDataFolder';
+}
+
 String? captureDirectoryPath(
   Map<String, String> environment, {
   String? separator,
+  bool? android,
+  bool Function(String path)? directoryExists,
 }) {
+  final export = exportDirectoryPath(
+    environment,
+    separator: separator,
+    android: android,
+    directoryExists: directoryExists,
+  );
+  if (export == null) return null;
+  final sep = (android ?? Platform.isAndroid)
+      ? '/'
+      : (separator ?? Platform.pathSeparator);
+  return '$export$sep$kCapturesFolderName';
+}
+
+String androidDownloadDirectory(bool Function(String path)? directoryExists) {
+  final exists = directoryExists ?? ((String path) => Directory(path).existsSync());
+  for (final candidate in kAndroidDownloadCandidates) {
+    if (exists(candidate)) return candidate;
+  }
+  return kAndroidDownloadCandidates.first;
+}
+
+String? _trimmedHome(Map<String, String> environment) {
   final home = homeDirectory(environment);
   if (home == null) return null;
-  final sep = separator ?? Platform.pathSeparator;
-  var root = home;
-  if (root.length > 1 && (root.endsWith('/') || root.endsWith(r'\'))) {
-    root = root.substring(0, root.length - 1);
+  if (home.length > 1 && (home.endsWith('/') || home.endsWith(r'\'))) {
+    return home.substring(0, home.length - 1);
   }
-  return '$root$sep.config$sep$kFireAdbConfigName$sep$kCapturesFolderName';
+  return home;
 }
 
 String quoteShell(String value) => "'${value.replaceAll("'", r"'\''")}'";

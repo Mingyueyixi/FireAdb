@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import '../../storage/public_storage.dart';
 import 'capture_paths.dart';
 
 class CaptureFile {
@@ -28,7 +29,10 @@ class CaptureStore {
     return CaptureStore(Directory(path));
   }
 
-  Future<void> ensure() => directory.create(recursive: true);
+  Future<void> ensure() async {
+    await ensurePublicSaveAccess();
+    await directory.create(recursive: true);
+  }
 
   Future<File> write(String name, List<int> bytes) async {
     if (!isSafeCaptureName(name)) {

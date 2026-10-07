@@ -1,4 +1,5 @@
 import 'package:adb_core/adb_core.dart';
+import 'package:adb_usb/adb_usb.dart';
 import 'package:fire_adb/app_locale_controller.dart';
 import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:fire_adb/home/home_controller.dart';
@@ -15,7 +16,10 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     Get.put<ConnectionManager>(ConnectionManager(), permanent: true);
     Get.put<AppLocaleController>(AppLocaleController(), permanent: true);
-    final controller = HomeController(hostClient: _FakeAdbHostClient());
+    final controller = HomeController(
+      hostClient: _FakeAdbHostClient(),
+      listUsbDevices: () async => const <UsbAdbDevice>[],
+    );
     Get.put<HomeController>(controller, permanent: true);
     try {
       tester.view.devicePixelRatio = 1;

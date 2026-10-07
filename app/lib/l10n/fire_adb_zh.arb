@@ -55,12 +55,20 @@
   },
   "homeRefreshAdbDevices": "刷新 ADB 设备列表",
   "homeAdbDevicesReadError": "无法读取 ADB 设备列表：{error}",
+  "homeUsbDevicesReadError": "无法读取 USB 设备：{error}",
   "@homeAdbDevicesReadError": {
     "placeholders": {
       "error": {}
     }
   },
+  "@homeUsbDevicesReadError": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "homeNoAdbDevices": "ADB Server 当前没有发现设备。",
+  "homeAdbServerUnavailable": "Android 上没有本机 ADB Server，不会连接 127.0.0.1:5037。请使用手动连接或扫描。",
+  "homeAdbServerNotRunning": "本机没有 ADB Server（127.0.0.1:5037）。USB 设备会直接列出，网络设备请手动连接或扫描。",
   "homeFireAdbConnected": "FireAdb 已连接",
   "commonDisconnect": "断开",
   "homeUsbConnectionUnavailable": "USB 连接暂不可用",
