@@ -86,7 +86,7 @@
   "workspaceTransferTitle": "文件传输",
   "workspaceTransferDescription": "推送文件到设备 / 从设备拉取文件",
   "workspaceFilesTitle": "文件管理",
-  "workspaceFilesDescription": "浏览设备存储，下载、删除、分享文件",
+  "workspaceFilesDescription": "浏览设备文件，支持删除、重命名、复制粘贴、编辑、搜索、改权限，以及导出和从电脑上传",
   "workspaceScreenshotTitle": "截图",
   "workspaceScreenshotDescription": "调用 screencap -p 截取屏幕并保存 PNG",
   "workspaceScreenrecordTitle": "录屏",
@@ -441,6 +441,156 @@
     }
   },
   "appsBatchPartial": "成功 {succeeded} 个，失败 {failed} 个",
+  "filesPath": "设备路径",
+  "filesUp": "上级目录",
+  "filesRefresh": "刷新",
+  "filesUpload": "上传",
+  "filesCreate": "新建",
+  "filesFile": "文件",
+  "filesFolder": "文件夹",
+  "filesLink": "链接",
+  "filesName": "名称",
+  "filesSearch": "搜索",
+  "filesSearchHint": "在当前目录中按名称搜索",
+  "filesClearSearch": "清除搜索",
+  "filesSearching": "正在显示“{keyword}”的搜索结果",
+  "@filesSearching": {
+    "placeholders": {
+      "keyword": {}
+    }
+  },
+  "filesSearchEmpty": "没有匹配的文件",
+  "filesEmpty": "这个目录是空的",
+  "filesSelect": "多选",
+  "filesClearSelection": "取消多选",
+  "filesSelectAll": "全选",
+  "filesOpen": "打开",
+  "filesDelete": "删除",
+  "filesDeleteConfirm": "删除 {name}？此操作不可恢复",
+  "@filesDeleteConfirm": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "filesBatchDeleteConfirm": "删除选中的 {count} 项？此操作不可恢复",
+  "@filesBatchDeleteConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesDeleted": "已删除 {count} 项",
+  "@filesDeleted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesRename": "重命名",
+  "filesRenamed": "已重命名",
+  "filesInvalidName": "名称不能为空，也不能包含 /",
+  "filesCopy": "复制",
+  "filesCut": "剪切",
+  "filesPaste": "粘贴",
+  "filesPasteIntoSelf": "不能把目录粘贴到它自己里面",
+  "filesPasted": "已粘贴 {count} 项",
+  "@filesPasted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesClipboardCopied": "已复制 {count} 项，可粘贴到其他目录",
+  "@filesClipboardCopied": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesClipboardCut": "已剪切 {count} 项，可粘贴到其他目录",
+  "@filesClipboardCut": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesEdit": "编辑",
+  "filesEditTitle": "编辑 {name}",
+  "@filesEditTitle": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "filesEditTooLarge": "文件超过 512 KB，不能在这里编辑",
+  "filesEditBinary": "这不是文本文件",
+  "filesSaved": "已保存",
+  "filesPermission": "权限",
+  "filesPermissionHint": "八进制权限，例如 644",
+  "filesInvalidPermission": "请输入 3 到 4 位八进制权限",
+  "filesPermissionUpdated": "已修改权限",
+  "filesCreated": "已创建 {name}",
+  "@filesCreated": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "filesExport": "导出",
+  "filesExportPrompt": "请输入要将 {name} 导出到的目录",
+  "@filesExportPrompt": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "filesBatchExportPrompt": "请输入要将选中的 {count} 项导出到的目录",
+  "@filesBatchExportPrompt": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesExportSucceeded": "已导出到 {path}",
+  "@filesExportSucceeded": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "filesUploadSucceeded": "已上传 {count} 个文件",
+  "@filesUploadSucceeded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesOverwrite": "目标目录已有同名文件，上传将覆盖：{names}",
+  "@filesOverwrite": {
+    "placeholders": {
+      "names": {}
+    }
+  },
+  "filesLoadFailed": "读取目录失败：{error}",
+  "@filesLoadFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "filesActionFailed": "操作失败",
+  "filesTaskDelete": "正在删除",
+  "filesTaskRename": "正在重命名",
+  "filesTaskCopy": "正在复制",
+  "filesTaskMove": "正在移动",
+  "filesTaskExport": "正在导出",
+  "filesTaskUpload": "正在上传",
+  "filesTaskSave": "正在保存",
+  "filesLocationsStorage": "内部存储",
+  "filesLocationsTemp": "临时目录",
+  "filesLocationsRoot": "根目录",
   "@appsBatchPartial": {
     "placeholders": {
       "succeeded": {

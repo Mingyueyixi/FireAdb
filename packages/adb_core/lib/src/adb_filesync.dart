@@ -228,20 +228,53 @@ class AdbSyncClient {
     int mode = 0x81a4, // 0o100644
     int? mtime,
     AdbTransferProgress? onProgress,
+  }) {
+    final data = Uint8List.fromList(bytes);
+    var sent = false;
+    return pushFrom(
+      () {
+        if (sent) return Future<Uint8List?>.value();
+        sent = true;
+        if (data.isEmpty) return Future<Uint8List?>.value();
+        return Future<Uint8List?>.value(data);
+      },
+      remotePath,
+      mode: mode,
+      mtime: mtime,
+      totalBytes: data.length,
+      onProgress: onProgress,
+    );
+  }
+
+  /// 按块推送，避免把整个文件读进内存。
+  ///
+  /// [readChunk] 返回 `null` 或空块表示结束。块大于 64KB 时会再拆开。
+  Future<void> pushFrom(
+    Future<Uint8List?> Function() readChunk,
+    String remotePath, {
+    int mode = 0x81a4, // 0o100644
+    int? mtime,
+    int? totalBytes,
+    AdbTransferProgress? onProgress,
   }) async {
     final spec = '$remotePath,$mode';
     await _writeFrame(
       kSyncIdSend,
       data: Uint8List.fromList([...utf8.encode(spec), 0]),
     );
-    final data = Uint8List.fromList(bytes);
     var written = 0;
-    while (written < data.length) {
-      final n = _chunkSize(data.length - written);
-      final chunk = Uint8List.sublistView(data, written, written + n);
-      await _writeFrame(kSyncIdData, data: chunk);
-      written += n;
-      onProgress?.call(written, data.length);
+    while (true) {
+      final chunk = await readChunk();
+      if (chunk == null || chunk.isEmpty) break;
+      var offset = 0;
+      while (offset < chunk.length) {
+        final n = _chunkSize(chunk.length - offset);
+        final piece = Uint8List.sublistView(chunk, offset, offset + n);
+        await _writeFrame(kSyncIdData, data: piece);
+        offset += n;
+        written += n;
+        onProgress?.call(written, totalBytes ?? -1);
+      }
     }
     final m = mtime ?? (DateTime.now().millisecondsSinceEpoch ~/ 1000);
     final done = BytesBuilder()..add(_encodeSyncId(kSyncIdDone));

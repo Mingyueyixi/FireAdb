@@ -198,7 +198,8 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get workspaceFilesTitle => '文件管理';
 
   @override
-  String get workspaceFilesDescription => '浏览设备存储，下载、删除、分享文件';
+  String get workspaceFilesDescription =>
+      '浏览设备文件，支持删除、重命名、复制粘贴、编辑、搜索、改权限，以及导出和从电脑上传';
 
   @override
   String get workspaceScreenshotTitle => '截图';
@@ -630,4 +631,217 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String appsBatchPartial(int succeeded, int failed) {
     return '成功 $succeeded 个，失败 $failed 个';
   }
+
+  @override
+  String get filesPath => '设备路径';
+
+  @override
+  String get filesUp => '上级目录';
+
+  @override
+  String get filesRefresh => '刷新';
+
+  @override
+  String get filesUpload => '上传';
+
+  @override
+  String get filesCreate => '新建';
+
+  @override
+  String get filesFile => '文件';
+
+  @override
+  String get filesFolder => '文件夹';
+
+  @override
+  String get filesLink => '链接';
+
+  @override
+  String get filesName => '名称';
+
+  @override
+  String get filesSearch => '搜索';
+
+  @override
+  String get filesSearchHint => '在当前目录中按名称搜索';
+
+  @override
+  String get filesClearSearch => '清除搜索';
+
+  @override
+  String filesSearching(Object keyword) {
+    return '正在显示“$keyword”的搜索结果';
+  }
+
+  @override
+  String get filesSearchEmpty => '没有匹配的文件';
+
+  @override
+  String get filesEmpty => '这个目录是空的';
+
+  @override
+  String get filesSelect => '多选';
+
+  @override
+  String get filesClearSelection => '取消多选';
+
+  @override
+  String get filesSelectAll => '全选';
+
+  @override
+  String get filesOpen => '打开';
+
+  @override
+  String get filesDelete => '删除';
+
+  @override
+  String filesDeleteConfirm(Object name) {
+    return '删除 $name？此操作不可恢复';
+  }
+
+  @override
+  String filesBatchDeleteConfirm(int count) {
+    return '删除选中的 $count 项？此操作不可恢复';
+  }
+
+  @override
+  String filesDeleted(int count) {
+    return '已删除 $count 项';
+  }
+
+  @override
+  String get filesRename => '重命名';
+
+  @override
+  String get filesRenamed => '已重命名';
+
+  @override
+  String get filesInvalidName => '名称不能为空，也不能包含 /';
+
+  @override
+  String get filesCopy => '复制';
+
+  @override
+  String get filesCut => '剪切';
+
+  @override
+  String get filesPaste => '粘贴';
+
+  @override
+  String get filesPasteIntoSelf => '不能把目录粘贴到它自己里面';
+
+  @override
+  String filesPasted(int count) {
+    return '已粘贴 $count 项';
+  }
+
+  @override
+  String filesClipboardCopied(int count) {
+    return '已复制 $count 项，可粘贴到其他目录';
+  }
+
+  @override
+  String filesClipboardCut(int count) {
+    return '已剪切 $count 项，可粘贴到其他目录';
+  }
+
+  @override
+  String get filesEdit => '编辑';
+
+  @override
+  String filesEditTitle(Object name) {
+    return '编辑 $name';
+  }
+
+  @override
+  String get filesEditTooLarge => '文件超过 512 KB，不能在这里编辑';
+
+  @override
+  String get filesEditBinary => '这不是文本文件';
+
+  @override
+  String get filesSaved => '已保存';
+
+  @override
+  String get filesPermission => '权限';
+
+  @override
+  String get filesPermissionHint => '八进制权限，例如 644';
+
+  @override
+  String get filesInvalidPermission => '请输入 3 到 4 位八进制权限';
+
+  @override
+  String get filesPermissionUpdated => '已修改权限';
+
+  @override
+  String filesCreated(Object name) {
+    return '已创建 $name';
+  }
+
+  @override
+  String get filesExport => '导出';
+
+  @override
+  String filesExportPrompt(Object name) {
+    return '请输入要将 $name 导出到的目录';
+  }
+
+  @override
+  String filesBatchExportPrompt(int count) {
+    return '请输入要将选中的 $count 项导出到的目录';
+  }
+
+  @override
+  String filesExportSucceeded(Object path) {
+    return '已导出到 $path';
+  }
+
+  @override
+  String filesUploadSucceeded(int count) {
+    return '已上传 $count 个文件';
+  }
+
+  @override
+  String filesOverwrite(Object names) {
+    return '目标目录已有同名文件，上传将覆盖：$names';
+  }
+
+  @override
+  String filesLoadFailed(Object error) {
+    return '读取目录失败：$error';
+  }
+
+  @override
+  String get filesActionFailed => '操作失败';
+
+  @override
+  String get filesTaskDelete => '正在删除';
+
+  @override
+  String get filesTaskRename => '正在重命名';
+
+  @override
+  String get filesTaskCopy => '正在复制';
+
+  @override
+  String get filesTaskMove => '正在移动';
+
+  @override
+  String get filesTaskExport => '正在导出';
+
+  @override
+  String get filesTaskUpload => '正在上传';
+
+  @override
+  String get filesTaskSave => '正在保存';
+
+  @override
+  String get filesLocationsStorage => '内部存储';
+
+  @override
+  String get filesLocationsTemp => '临时目录';
+
+  @override
+  String get filesLocationsRoot => '根目录';
 }

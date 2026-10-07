@@ -22,7 +22,6 @@ String featureTitle(BuildContext context, FeatureSpec feature) {
   return switch (feature.id) {
     kOverviewFeatureId => l10n.workspaceOverviewTitle,
     'apps' => l10n.workspaceAppsTitle,
-    'transfer' => l10n.workspaceTransferTitle,
     'files' => l10n.workspaceFilesTitle,
     'screenshot' => l10n.workspaceScreenshotTitle,
     'screenrecord' => l10n.workspaceScreenrecordTitle,
@@ -36,7 +35,6 @@ String featureDescription(BuildContext context, FeatureSpec feature) {
   return switch (feature.id) {
     kOverviewFeatureId => l10n.workspaceOverviewDescription,
     'apps' => l10n.workspaceAppsDescription,
-    'transfer' => l10n.workspaceTransferDescription,
     'files' => l10n.workspaceFilesDescription,
     'screenshot' => l10n.workspaceScreenshotDescription,
     'screenrecord' => l10n.workspaceScreenrecordDescription,
@@ -51,30 +49,9 @@ const List<FeatureSpec> kDeviceFeatures = <FeatureSpec>[
     icon: Icons.phonelink_ring,
     implemented: true,
   ),
-  FeatureSpec(
-    id: 'apps',
-    icon: Icons.apps,
-    implemented: true,
-  ),
-  FeatureSpec(
-    id: 'transfer',
-    icon: Icons.swap_horiz,
-  ),
-  FeatureSpec(
-    id: 'files',
-    icon: Icons.folder_open,
-  ),
-  FeatureSpec(
-    id: 'screenshot',
-    icon: Icons.screenshot_monitor,
-  ),
-  FeatureSpec(
-    id: 'screenrecord',
-    icon: Icons.videocam,
-  ),
-  FeatureSpec(
-    id: 'shell',
-    icon: Icons.terminal,
-    implemented: true,
-  ),
+  FeatureSpec(id: 'apps', icon: Icons.apps, implemented: true),
+  FeatureSpec(id: 'files', icon: Icons.folder_open, implemented: true),
+  FeatureSpec(id: 'screenshot', icon: Icons.screenshot_monitor),
+  FeatureSpec(id: 'screenrecord', icon: Icons.videocam),
+  FeatureSpec(id: 'shell', icon: Icons.terminal, implemented: true),
 ];

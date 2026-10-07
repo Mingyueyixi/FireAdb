@@ -206,7 +206,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get workspaceFilesDescription =>
-      'Browse device storage, download, delete, and share files';
+      'Browse device files, edit and search them, change permissions, export them, and upload from this computer';
 
   @override
   String get workspaceScreenshotTitle => 'Screenshot';
@@ -645,4 +645,218 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String appsBatchPartial(int succeeded, int failed) {
     return '$succeeded succeeded, $failed failed';
   }
+
+  @override
+  String get filesPath => 'Device path';
+
+  @override
+  String get filesUp => 'Parent folder';
+
+  @override
+  String get filesRefresh => 'Refresh';
+
+  @override
+  String get filesUpload => 'Upload';
+
+  @override
+  String get filesCreate => 'New';
+
+  @override
+  String get filesFile => 'File';
+
+  @override
+  String get filesFolder => 'Folder';
+
+  @override
+  String get filesLink => 'Link';
+
+  @override
+  String get filesName => 'Name';
+
+  @override
+  String get filesSearch => 'Search';
+
+  @override
+  String get filesSearchHint => 'Search by name in this folder';
+
+  @override
+  String get filesClearSearch => 'Clear search';
+
+  @override
+  String filesSearching(Object keyword) {
+    return 'Search results for \"$keyword\"';
+  }
+
+  @override
+  String get filesSearchEmpty => 'No matching files';
+
+  @override
+  String get filesEmpty => 'This folder is empty';
+
+  @override
+  String get filesSelect => 'Select';
+
+  @override
+  String get filesClearSelection => 'Cancel selection';
+
+  @override
+  String get filesSelectAll => 'Select all';
+
+  @override
+  String get filesOpen => 'Open';
+
+  @override
+  String get filesDelete => 'Delete';
+
+  @override
+  String filesDeleteConfirm(Object name) {
+    return 'Delete $name? This cannot be undone';
+  }
+
+  @override
+  String filesBatchDeleteConfirm(int count) {
+    return 'Delete the $count selected items? This cannot be undone';
+  }
+
+  @override
+  String filesDeleted(int count) {
+    return 'Deleted $count items';
+  }
+
+  @override
+  String get filesRename => 'Rename';
+
+  @override
+  String get filesRenamed => 'Renamed';
+
+  @override
+  String get filesInvalidName => 'The name cannot be empty or contain /';
+
+  @override
+  String get filesCopy => 'Copy';
+
+  @override
+  String get filesCut => 'Cut';
+
+  @override
+  String get filesPaste => 'Paste';
+
+  @override
+  String get filesPasteIntoSelf => 'A folder cannot be pasted into itself';
+
+  @override
+  String filesPasted(int count) {
+    return 'Pasted $count items';
+  }
+
+  @override
+  String filesClipboardCopied(int count) {
+    return 'Copied $count items. Paste them into another folder';
+  }
+
+  @override
+  String filesClipboardCut(int count) {
+    return 'Cut $count items. Paste them into another folder';
+  }
+
+  @override
+  String get filesEdit => 'Edit';
+
+  @override
+  String filesEditTitle(Object name) {
+    return 'Edit $name';
+  }
+
+  @override
+  String get filesEditTooLarge =>
+      'Files larger than 512 KB cannot be edited here';
+
+  @override
+  String get filesEditBinary => 'This is not a text file';
+
+  @override
+  String get filesSaved => 'Saved';
+
+  @override
+  String get filesPermission => 'Permissions';
+
+  @override
+  String get filesPermissionHint => 'Octal mode, for example 644';
+
+  @override
+  String get filesInvalidPermission => 'Enter a 3 or 4 digit octal mode';
+
+  @override
+  String get filesPermissionUpdated => 'Permissions updated';
+
+  @override
+  String filesCreated(Object name) {
+    return 'Created $name';
+  }
+
+  @override
+  String get filesExport => 'Export';
+
+  @override
+  String filesExportPrompt(Object name) {
+    return 'Enter the folder where $name should be exported';
+  }
+
+  @override
+  String filesBatchExportPrompt(int count) {
+    return 'Enter the folder where the $count selected items should be exported';
+  }
+
+  @override
+  String filesExportSucceeded(Object path) {
+    return 'Exported to $path';
+  }
+
+  @override
+  String filesUploadSucceeded(int count) {
+    return 'Uploaded $count files';
+  }
+
+  @override
+  String filesOverwrite(Object names) {
+    return 'Upload will replace existing files: $names';
+  }
+
+  @override
+  String filesLoadFailed(Object error) {
+    return 'Could not read the folder: $error';
+  }
+
+  @override
+  String get filesActionFailed => 'Action failed';
+
+  @override
+  String get filesTaskDelete => 'Deleting';
+
+  @override
+  String get filesTaskRename => 'Renaming';
+
+  @override
+  String get filesTaskCopy => 'Copying';
+
+  @override
+  String get filesTaskMove => 'Moving';
+
+  @override
+  String get filesTaskExport => 'Exporting';
+
+  @override
+  String get filesTaskUpload => 'Uploading';
+
+  @override
+  String get filesTaskSave => 'Saving';
+
+  @override
+  String get filesLocationsStorage => 'Internal storage';
+
+  @override
+  String get filesLocationsTemp => 'Temp';
+
+  @override
+  String get filesLocationsRoot => 'Root';
 }

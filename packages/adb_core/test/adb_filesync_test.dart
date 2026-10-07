@@ -127,6 +127,27 @@ void main() {
     );
   });
 
+  test('pushFrom 按小块推送后内容一致', () async {
+    await setup();
+    final stream = await conn.open('sync:');
+    sync = AdbSyncClient(stream);
+    final content = Uint8List.fromList(utf8.encode('abcdef'));
+    var offset = 0;
+    await sync.pushFrom(
+      () async {
+        if (offset >= content.length) return null;
+        final next = offset + 2 > content.length ? content.length : offset + 2;
+        final chunk = Uint8List.sublistView(content, offset, next);
+        offset = next;
+        return chunk;
+      },
+      '/sdcard/chunked.bin',
+      totalBytes: content.length,
+    );
+    final data = await sync.pull('/sdcard/chunked.bin');
+    expect(data, content);
+  });
+
   test('push 后 stat 与 pull 一致', () async {
     await setup();
     final stream = await conn.open('sync:');

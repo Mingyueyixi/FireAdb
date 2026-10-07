@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 
 import '../apps/ui/apps_page.dart';
 import '../device_overview/device_overview_page.dart';
+import '../files/ui/files_page.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
 import '../shell/shell_page.dart';
 import '../widgets/adaptive.dart' show isWide, isAtLeastTablet;
@@ -68,6 +69,12 @@ class WorkspacePage extends GetView<WorkspaceController> {
       );
       return;
     }
+    if (spec.id == 'files') {
+      Get.to<void>(
+        () => FilesFeaturePage(serial: controller.selectedSerial.value),
+      );
+      return;
+    }
     Get.to<void>(() => PlaceholderFeaturePage(spec: spec));
   }
 
@@ -83,6 +90,12 @@ class WorkspacePage extends GetView<WorkspaceController> {
     }
     if (spec.id == 'apps') {
       return AppsPage(
+        key: ValueKey<String>(controller.selectedSerial.value),
+        serial: controller.selectedSerial.value,
+      );
+    }
+    if (spec.id == 'files') {
+      return FilesPage(
         key: ValueKey<String>(controller.selectedSerial.value),
         serial: controller.selectedSerial.value,
       );

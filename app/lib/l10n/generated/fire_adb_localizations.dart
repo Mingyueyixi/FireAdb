@@ -458,7 +458,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @workspaceFilesDescription.
   ///
   /// In zh, this message translates to:
-  /// **'浏览设备存储，下载、删除、分享文件'**
+  /// **'浏览设备文件，支持删除、重命名、复制粘贴、编辑、搜索、改权限，以及导出和从电脑上传'**
   String get workspaceFilesDescription;
 
   /// No description provided for @workspaceScreenshotTitle.
@@ -1156,6 +1156,372 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'成功 {succeeded} 个，失败 {failed} 个'**
   String appsBatchPartial(int succeeded, int failed);
+
+  /// No description provided for @filesPath.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备路径'**
+  String get filesPath;
+
+  /// No description provided for @filesUp.
+  ///
+  /// In zh, this message translates to:
+  /// **'上级目录'**
+  String get filesUp;
+
+  /// No description provided for @filesRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新'**
+  String get filesRefresh;
+
+  /// No description provided for @filesUpload.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传'**
+  String get filesUpload;
+
+  /// No description provided for @filesCreate.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建'**
+  String get filesCreate;
+
+  /// No description provided for @filesFile.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件'**
+  String get filesFile;
+
+  /// No description provided for @filesFolder.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件夹'**
+  String get filesFolder;
+
+  /// No description provided for @filesLink.
+  ///
+  /// In zh, this message translates to:
+  /// **'链接'**
+  String get filesLink;
+
+  /// No description provided for @filesName.
+  ///
+  /// In zh, this message translates to:
+  /// **'名称'**
+  String get filesName;
+
+  /// No description provided for @filesSearch.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索'**
+  String get filesSearch;
+
+  /// No description provided for @filesSearchHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'在当前目录中按名称搜索'**
+  String get filesSearchHint;
+
+  /// No description provided for @filesClearSearch.
+  ///
+  /// In zh, this message translates to:
+  /// **'清除搜索'**
+  String get filesClearSearch;
+
+  /// No description provided for @filesSearching.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在显示“{keyword}”的搜索结果'**
+  String filesSearching(Object keyword);
+
+  /// No description provided for @filesSearchEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有匹配的文件'**
+  String get filesSearchEmpty;
+
+  /// No description provided for @filesEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个目录是空的'**
+  String get filesEmpty;
+
+  /// No description provided for @filesSelect.
+  ///
+  /// In zh, this message translates to:
+  /// **'多选'**
+  String get filesSelect;
+
+  /// No description provided for @filesClearSelection.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消多选'**
+  String get filesClearSelection;
+
+  /// No description provided for @filesSelectAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全选'**
+  String get filesSelectAll;
+
+  /// No description provided for @filesOpen.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开'**
+  String get filesOpen;
+
+  /// No description provided for @filesDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除'**
+  String get filesDelete;
+
+  /// No description provided for @filesDeleteConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除 {name}？此操作不可恢复'**
+  String filesDeleteConfirm(Object name);
+
+  /// No description provided for @filesBatchDeleteConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除选中的 {count} 项？此操作不可恢复'**
+  String filesBatchDeleteConfirm(int count);
+
+  /// No description provided for @filesDeleted.
+  ///
+  /// In zh, this message translates to:
+  /// **'已删除 {count} 项'**
+  String filesDeleted(int count);
+
+  /// No description provided for @filesRename.
+  ///
+  /// In zh, this message translates to:
+  /// **'重命名'**
+  String get filesRename;
+
+  /// No description provided for @filesRenamed.
+  ///
+  /// In zh, this message translates to:
+  /// **'已重命名'**
+  String get filesRenamed;
+
+  /// No description provided for @filesInvalidName.
+  ///
+  /// In zh, this message translates to:
+  /// **'名称不能为空，也不能包含 /'**
+  String get filesInvalidName;
+
+  /// No description provided for @filesCopy.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制'**
+  String get filesCopy;
+
+  /// No description provided for @filesCut.
+  ///
+  /// In zh, this message translates to:
+  /// **'剪切'**
+  String get filesCut;
+
+  /// No description provided for @filesPaste.
+  ///
+  /// In zh, this message translates to:
+  /// **'粘贴'**
+  String get filesPaste;
+
+  /// No description provided for @filesPasteIntoSelf.
+  ///
+  /// In zh, this message translates to:
+  /// **'不能把目录粘贴到它自己里面'**
+  String get filesPasteIntoSelf;
+
+  /// No description provided for @filesPasted.
+  ///
+  /// In zh, this message translates to:
+  /// **'已粘贴 {count} 项'**
+  String filesPasted(int count);
+
+  /// No description provided for @filesClipboardCopied.
+  ///
+  /// In zh, this message translates to:
+  /// **'已复制 {count} 项，可粘贴到其他目录'**
+  String filesClipboardCopied(int count);
+
+  /// No description provided for @filesClipboardCut.
+  ///
+  /// In zh, this message translates to:
+  /// **'已剪切 {count} 项，可粘贴到其他目录'**
+  String filesClipboardCut(int count);
+
+  /// No description provided for @filesEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑'**
+  String get filesEdit;
+
+  /// No description provided for @filesEditTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'编辑 {name}'**
+  String filesEditTitle(Object name);
+
+  /// No description provided for @filesEditTooLarge.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件超过 512 KB，不能在这里编辑'**
+  String get filesEditTooLarge;
+
+  /// No description provided for @filesEditBinary.
+  ///
+  /// In zh, this message translates to:
+  /// **'这不是文本文件'**
+  String get filesEditBinary;
+
+  /// No description provided for @filesSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存'**
+  String get filesSaved;
+
+  /// No description provided for @filesPermission.
+  ///
+  /// In zh, this message translates to:
+  /// **'权限'**
+  String get filesPermission;
+
+  /// No description provided for @filesPermissionHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'八进制权限，例如 644'**
+  String get filesPermissionHint;
+
+  /// No description provided for @filesInvalidPermission.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 3 到 4 位八进制权限'**
+  String get filesInvalidPermission;
+
+  /// No description provided for @filesPermissionUpdated.
+  ///
+  /// In zh, this message translates to:
+  /// **'已修改权限'**
+  String get filesPermissionUpdated;
+
+  /// No description provided for @filesCreated.
+  ///
+  /// In zh, this message translates to:
+  /// **'已创建 {name}'**
+  String filesCreated(Object name);
+
+  /// No description provided for @filesExport.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出'**
+  String get filesExport;
+
+  /// No description provided for @filesExportPrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入要将 {name} 导出到的目录'**
+  String filesExportPrompt(Object name);
+
+  /// No description provided for @filesBatchExportPrompt.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入要将选中的 {count} 项导出到的目录'**
+  String filesBatchExportPrompt(int count);
+
+  /// No description provided for @filesExportSucceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已导出到 {path}'**
+  String filesExportSucceeded(Object path);
+
+  /// No description provided for @filesUploadSucceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已上传 {count} 个文件'**
+  String filesUploadSucceeded(int count);
+
+  /// No description provided for @filesOverwrite.
+  ///
+  /// In zh, this message translates to:
+  /// **'目标目录已有同名文件，上传将覆盖：{names}'**
+  String filesOverwrite(Object names);
+
+  /// No description provided for @filesLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'读取目录失败：{error}'**
+  String filesLoadFailed(Object error);
+
+  /// No description provided for @filesActionFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'操作失败'**
+  String get filesActionFailed;
+
+  /// No description provided for @filesTaskDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在删除'**
+  String get filesTaskDelete;
+
+  /// No description provided for @filesTaskRename.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在重命名'**
+  String get filesTaskRename;
+
+  /// No description provided for @filesTaskCopy.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在复制'**
+  String get filesTaskCopy;
+
+  /// No description provided for @filesTaskMove.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在移动'**
+  String get filesTaskMove;
+
+  /// No description provided for @filesTaskExport.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在导出'**
+  String get filesTaskExport;
+
+  /// No description provided for @filesTaskUpload.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在上传'**
+  String get filesTaskUpload;
+
+  /// No description provided for @filesTaskSave.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在保存'**
+  String get filesTaskSave;
+
+  /// No description provided for @filesLocationsStorage.
+  ///
+  /// In zh, this message translates to:
+  /// **'内部存储'**
+  String get filesLocationsStorage;
+
+  /// No description provided for @filesLocationsTemp.
+  ///
+  /// In zh, this message translates to:
+  /// **'临时目录'**
+  String get filesLocationsTemp;
+
+  /// No description provided for @filesLocationsRoot.
+  ///
+  /// In zh, this message translates to:
+  /// **'根目录'**
+  String get filesLocationsRoot;
 }
 
 class _FireAdbLocalizationsDelegate

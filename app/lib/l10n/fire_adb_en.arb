@@ -86,7 +86,7 @@
   "workspaceTransferTitle": "File transfer",
   "workspaceTransferDescription": "Push files to a device or pull files from it",
   "workspaceFilesTitle": "File manager",
-  "workspaceFilesDescription": "Browse device storage, download, delete, and share files",
+  "workspaceFilesDescription": "Browse device files, edit and search them, change permissions, export them, and upload from this computer",
   "workspaceScreenshotTitle": "Screenshot",
   "workspaceScreenshotDescription": "Capture the screen with screencap -p and save it as PNG",
   "workspaceScreenrecordTitle": "Screen recording",
@@ -441,6 +441,156 @@
     }
   },
   "appsBatchPartial": "{succeeded} succeeded, {failed} failed",
+  "filesPath": "Device path",
+  "filesUp": "Parent folder",
+  "filesRefresh": "Refresh",
+  "filesUpload": "Upload",
+  "filesCreate": "New",
+  "filesFile": "File",
+  "filesFolder": "Folder",
+  "filesLink": "Link",
+  "filesName": "Name",
+  "filesSearch": "Search",
+  "filesSearchHint": "Search by name in this folder",
+  "filesClearSearch": "Clear search",
+  "filesSearching": "Search results for \"{keyword}\"",
+  "@filesSearching": {
+    "placeholders": {
+      "keyword": {}
+    }
+  },
+  "filesSearchEmpty": "No matching files",
+  "filesEmpty": "This folder is empty",
+  "filesSelect": "Select",
+  "filesClearSelection": "Cancel selection",
+  "filesSelectAll": "Select all",
+  "filesOpen": "Open",
+  "filesDelete": "Delete",
+  "filesDeleteConfirm": "Delete {name}? This cannot be undone",
+  "@filesDeleteConfirm": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "filesBatchDeleteConfirm": "Delete the {count} selected items? This cannot be undone",
+  "@filesBatchDeleteConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesDeleted": "Deleted {count} items",
+  "@filesDeleted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesRename": "Rename",
+  "filesRenamed": "Renamed",
+  "filesInvalidName": "The name cannot be empty or contain /",
+  "filesCopy": "Copy",
+  "filesCut": "Cut",
+  "filesPaste": "Paste",
+  "filesPasteIntoSelf": "A folder cannot be pasted into itself",
+  "filesPasted": "Pasted {count} items",
+  "@filesPasted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesClipboardCopied": "Copied {count} items. Paste them into another folder",
+  "@filesClipboardCopied": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesClipboardCut": "Cut {count} items. Paste them into another folder",
+  "@filesClipboardCut": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesEdit": "Edit",
+  "filesEditTitle": "Edit {name}",
+  "@filesEditTitle": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "filesEditTooLarge": "Files larger than 512 KB cannot be edited here",
+  "filesEditBinary": "This is not a text file",
+  "filesSaved": "Saved",
+  "filesPermission": "Permissions",
+  "filesPermissionHint": "Octal mode, for example 644",
+  "filesInvalidPermission": "Enter a 3 or 4 digit octal mode",
+  "filesPermissionUpdated": "Permissions updated",
+  "filesCreated": "Created {name}",
+  "@filesCreated": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "filesExport": "Export",
+  "filesExportPrompt": "Enter the folder where {name} should be exported",
+  "@filesExportPrompt": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "filesBatchExportPrompt": "Enter the folder where the {count} selected items should be exported",
+  "@filesBatchExportPrompt": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesExportSucceeded": "Exported to {path}",
+  "@filesExportSucceeded": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "filesUploadSucceeded": "Uploaded {count} files",
+  "@filesUploadSucceeded": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesOverwrite": "Upload will replace existing files: {names}",
+  "@filesOverwrite": {
+    "placeholders": {
+      "names": {}
+    }
+  },
+  "filesLoadFailed": "Could not read the folder: {error}",
+  "@filesLoadFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "filesActionFailed": "Action failed",
+  "filesTaskDelete": "Deleting",
+  "filesTaskRename": "Renaming",
+  "filesTaskCopy": "Copying",
+  "filesTaskMove": "Moving",
+  "filesTaskExport": "Exporting",
+  "filesTaskUpload": "Uploading",
+  "filesTaskSave": "Saving",
+  "filesLocationsStorage": "Internal storage",
+  "filesLocationsTemp": "Temp",
+  "filesLocationsRoot": "Root",
   "@appsBatchPartial": {
     "placeholders": {
       "succeeded": {
