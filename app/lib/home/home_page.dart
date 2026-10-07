@@ -94,34 +94,33 @@ class HomePage extends GetView<HomeController> {
       return;
     }
 
-    final adbSerial = profile.adbSerial;
-    if (adbSerial != null) {
-      AdbDeviceInfo? info;
-      for (final device in controller.adbDevices) {
-        if (device.serial == adbSerial) {
-          info = device;
-          break;
-        }
-      }
-      if (info != null && controller.manager.canConnectAdbDevice(info)) {
-        await _connectAdbDevice(context, info);
-        return;
-      }
-      showAppMessage(
-        ScaffoldMessenger.of(context),
-        Theme.of(context),
-        title: l10n.homeDeviceUnavailable,
-        message: l10n.homeAdbDeviceMissing,
-        isError: true,
-      );
-      return;
-    }
-
     final host = profile.host;
     final port = profile.port;
     if (host != null && port != null) {
       await _connect(context, host, port);
+      return;
     }
+
+    final adbSerial = profile.adbSerial;
+    if (adbSerial == null) return;
+    AdbDeviceInfo? info;
+    for (final device in controller.adbDevices) {
+      if (device.serial == adbSerial) {
+        info = device;
+        break;
+      }
+    }
+    if (info != null) {
+      await _connectAdbDevice(context, info);
+      return;
+    }
+    showAppMessage(
+      ScaffoldMessenger.of(context),
+      Theme.of(context),
+      title: l10n.homeDeviceUnavailable,
+      message: l10n.homeAdbDeviceMissing,
+      isError: true,
+    );
   }
 
   Future<void> _disconnect(BuildContext context, String serial) async {
