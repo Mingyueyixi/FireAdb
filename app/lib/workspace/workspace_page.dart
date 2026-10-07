@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../apps/ui/apps_page.dart';
+import '../capture/ui/screenrecord_page.dart';
+import '../capture/ui/screenshot_page.dart';
 import '../device_overview/device_overview_page.dart';
 import '../files/ui/files_page.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
@@ -75,6 +77,18 @@ class WorkspacePage extends GetView<WorkspaceController> {
       );
       return;
     }
+    if (spec.id == 'screenshot') {
+      Get.to<void>(
+        () => ScreenshotFeaturePage(serial: controller.selectedSerial.value),
+      );
+      return;
+    }
+    if (spec.id == 'screenrecord') {
+      Get.to<void>(
+        () => ScreenrecordFeaturePage(serial: controller.selectedSerial.value),
+      );
+      return;
+    }
     Get.to<void>(() => PlaceholderFeaturePage(spec: spec));
   }
 
@@ -97,6 +111,20 @@ class WorkspacePage extends GetView<WorkspaceController> {
     if (spec.id == 'files') {
       return FilesPage(
         key: ValueKey<String>(controller.selectedSerial.value),
+        serial: controller.selectedSerial.value,
+      );
+    }
+    if (spec.id == 'screenshot') {
+      return ScreenshotPage(
+        key: ValueKey<String>('screenshot-${controller.selectedSerial.value}'),
+        serial: controller.selectedSerial.value,
+      );
+    }
+    if (spec.id == 'screenrecord') {
+      return ScreenrecordPage(
+        key: ValueKey<String>(
+          'screenrecord-${controller.selectedSerial.value}',
+        ),
         serial: controller.selectedSerial.value,
       );
     }

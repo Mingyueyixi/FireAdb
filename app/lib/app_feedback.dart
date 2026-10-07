@@ -1,8 +1,10 @@
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 void logAppError(String context, Object error, StackTrace stackTrace) {
+  debugPrint('fire_adb $context\n$error\n$stackTrace');
   developer.log(
     context,
     name: 'fire_adb',
@@ -10,6 +12,11 @@ void logAppError(String context, Object error, StackTrace stackTrace) {
     stackTrace: stackTrace,
     level: 1000,
   );
+}
+
+void logAppLine(String message) {
+  debugPrint('fire_adb $message');
+  developer.log(message, name: 'fire_adb', level: 1000);
 }
 
 void showAppMessage(

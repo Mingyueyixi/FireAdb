@@ -88,9 +88,9 @@
   "workspaceFilesTitle": "File manager",
   "workspaceFilesDescription": "Browse device files, edit and search them, change permissions, export them, and upload from this computer",
   "workspaceScreenshotTitle": "Screenshot",
-  "workspaceScreenshotDescription": "Capture the screen with screencap -p and save it as PNG",
+  "workspaceScreenshotDescription": "Capture the screen with screencap -p and save the PNG in the app directory",
   "workspaceScreenrecordTitle": "Screen recording",
-  "workspaceScreenrecordDescription": "Record the device screen with screenrecord",
+  "workspaceScreenrecordDescription": "Record the screen and save it in the app directory, using the system or built-in recorder",
   "workspaceShellTitle": "Command shell",
   "workspaceShellDescription": "Run adb shell commands and view their output",
   "workspacePlanned": "Planned",
@@ -591,6 +591,92 @@
   "filesLocationsStorage": "Internal storage",
   "filesLocationsTemp": "Temp",
   "filesLocationsRoot": "Root",
+  "captureDirectoryUnavailable": "The app directory is unavailable, so the file cannot be saved",
+  "captureSaved": "Saved to {path}",
+  "@captureSaved": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "captureSaveLocation": "Save location",
+  "captureOpenFolder": "Open app directory",
+  "captureOpenFile": "Open",
+  "captureOpenFailed": "Could not open: {error}",
+  "@captureOpenFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "captureRefresh": "Refresh",
+  "captureDelete": "Delete",
+  "captureDeleteConfirm": "Delete {name} from the app directory?",
+  "@captureDeleteConfirm": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "captureDeleted": "Deleted {name}",
+  "@captureDeleted": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "captureActionFailed": "Action failed",
+  "captureDeviceOutput": "Device output: {output}",
+  "@captureDeviceOutput": {
+    "placeholders": {
+      "output": {}
+    }
+  },
+  "captureFailedWithRemote": "{error}. The temporary file is still on the device at {path}",
+  "@captureFailedWithRemote": {
+    "placeholders": {
+      "error": {},
+      "path": {}
+    }
+  },
+  "captureEmptyScreenshots": "No screenshots in the app directory yet",
+  "captureEmptyRecordings": "No recordings in the app directory yet",
+  "screenshotCapture": "Capture screen",
+  "screenshotCapturing": "Capturing the screen…",
+  "screenshotInvalid": "The device did not return a valid PNG",
+  "screenrecordStart": "Start recording",
+  "screenrecordStop": "Stop and save",
+  "screenrecordSaving": "Saving to the app directory…",
+  "screenrecordRecording": "Recording",
+  "screenrecordTimeLimit": "Time limit",
+  "screenrecordLimit30": "30 seconds",
+  "screenrecordLimit60": "1 minute",
+  "screenrecordLimit180": "3 minutes",
+  "screenrecordLimitNone": "No limit",
+  "screenrecordTimeLimitNote": "Android 13 and earlier reject recordings longer than 3 minutes.",
+  "screenrecordTimeLimitUnlimited": "This device has no maximum length. You can choose no limit.",
+  "screenrecordHint": "When recording stops, the video is saved to the app directory and the temporary video is removed from the device.",
+  "screenrecordMethod": "Recorder",
+  "screenrecordMethodSystem": "System",
+  "screenrecordMethodSystemSubtitle": "Use the screenrecord program that comes with the device",
+  "screenrecordMethodBuiltin": "Built-in",
+  "screenrecordMethodBuiltinSubtitle": "Encode with the helper service. The display goes straight into the encoder.",
+  "screenrecordMethodScrcpy": "Mirroring",
+  "screenrecordMethodScrcpySubtitle": "Coming later. The same connection will also be used for preview and remote control.",
+  "screenrecordShellCopyFailed": "Could not prepare the recorder in the device temp directory",
+  "screenrecordShellUnsafe": "The recorder in the temp directory would still be taken over by system policy, so it was not started. The file was left in place",
+  "screenrecordTimeLimitBuiltin": "The built-in recorder has no maximum length. You can choose no limit.",
+  "screenrecordNoWritableDir": "The shell user cannot create the recording for read and write",
+  "screenrecordMissing": "The device did not produce a video file",
+  "screenrecordInvalid": "The recording is not a valid video and remains on the device at {path}",
+  "@screenrecordInvalid": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "screenrecordTooLarge": "The recording is {size}, which is too large to save here. It remains on the device at {path}",
+  "@screenrecordTooLarge": {
+    "placeholders": {
+      "size": {},
+      "path": {}
+    }
+  },
   "@appsBatchPartial": {
     "placeholders": {
       "succeeded": {

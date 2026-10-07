@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/fire_adb_localizations_ext.dart';
 
-/// 设备页的某个功能入口（总览已实现，其余为规划中的占位）。
+/// 设备页的功能入口。未实现的入口仍显示为规划中。
 class FeatureSpec {
   const FeatureSpec({
     required this.id,
@@ -51,7 +51,11 @@ const List<FeatureSpec> kDeviceFeatures = <FeatureSpec>[
   ),
   FeatureSpec(id: 'apps', icon: Icons.apps, implemented: true),
   FeatureSpec(id: 'files', icon: Icons.folder_open, implemented: true),
-  FeatureSpec(id: 'screenshot', icon: Icons.screenshot_monitor),
-  FeatureSpec(id: 'screenrecord', icon: Icons.videocam),
+  FeatureSpec(
+    id: 'screenshot',
+    icon: Icons.screenshot_monitor,
+    implemented: true,
+  ),
+  FeatureSpec(id: 'screenrecord', icon: Icons.videocam, implemented: true),
   FeatureSpec(id: 'shell', icon: Icons.terminal, implemented: true),
 ];

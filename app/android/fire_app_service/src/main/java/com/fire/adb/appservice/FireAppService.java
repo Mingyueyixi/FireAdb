@@ -18,7 +18,6 @@ import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStreamReader;
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -67,7 +66,7 @@ public final class FireAppService {
         if (Looper.myLooper() == null) {
             Looper.prepareMainLooper();
         }
-        Context context = systemContext();
+        Context context = AndroidContexts.system();
         PackageManager manager = context.getPackageManager();
         Map<String, PackageInfo> byPackage = new HashMap<String, PackageInfo>();
         writeHeader(out, TYPE_READY);
@@ -176,16 +175,6 @@ public final class FireAppService {
         writeHeader(out, TYPE_ERROR);
         writeString(out, message == null ? "" : message);
         out.flush();
-    }
-
-    private static Context systemContext() throws Exception {
-        Class<?> activityThread = Class.forName("android.app.ActivityThread");
-        Method systemMain = activityThread.getDeclaredMethod("systemMain");
-        systemMain.setAccessible(true);
-        Object thread = systemMain.invoke(null);
-        Method getSystemContext = activityThread.getDeclaredMethod("getSystemContext");
-        getSystemContext.setAccessible(true);
-        return (Context) getSystemContext.invoke(thread);
     }
 
     private static String labelOf(PackageManager manager, ApplicationInfo info) {

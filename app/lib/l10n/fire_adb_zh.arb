@@ -88,9 +88,9 @@
   "workspaceFilesTitle": "文件管理",
   "workspaceFilesDescription": "浏览设备文件，支持删除、重命名、复制粘贴、编辑、搜索、改权限，以及导出和从电脑上传",
   "workspaceScreenshotTitle": "截图",
-  "workspaceScreenshotDescription": "调用 screencap -p 截取屏幕并保存 PNG",
+  "workspaceScreenshotDescription": "调用 screencap -p 截取屏幕，并把 PNG 保存到应用目录",
   "workspaceScreenrecordTitle": "录屏",
-  "workspaceScreenrecordDescription": "调用 screenrecord 录制设备屏幕",
+  "workspaceScreenrecordDescription": "录制屏幕并保存到应用目录，可选用系统或内置录屏",
   "workspaceShellTitle": "命令面板",
   "workspaceShellDescription": "执行 adb shell 命令并查看输出",
   "workspacePlanned": "规划中",
@@ -591,6 +591,92 @@
   "filesLocationsStorage": "内部存储",
   "filesLocationsTemp": "临时目录",
   "filesLocationsRoot": "根目录",
+  "captureDirectoryUnavailable": "找不到应用目录，无法保存文件",
+  "captureSaved": "已保存到 {path}",
+  "@captureSaved": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "captureSaveLocation": "保存位置",
+  "captureOpenFolder": "打开应用目录",
+  "captureOpenFile": "打开",
+  "captureOpenFailed": "无法打开：{error}",
+  "@captureOpenFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "captureRefresh": "刷新",
+  "captureDelete": "删除",
+  "captureDeleteConfirm": "从应用目录删除 {name}？",
+  "@captureDeleteConfirm": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "captureDeleted": "已删除 {name}",
+  "@captureDeleted": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "captureActionFailed": "操作失败",
+  "captureDeviceOutput": "设备输出：{output}",
+  "@captureDeviceOutput": {
+    "placeholders": {
+      "output": {}
+    }
+  },
+  "captureFailedWithRemote": "{error}。设备上的临时文件仍在 {path}",
+  "@captureFailedWithRemote": {
+    "placeholders": {
+      "error": {},
+      "path": {}
+    }
+  },
+  "captureEmptyScreenshots": "应用目录里还没有截图",
+  "captureEmptyRecordings": "应用目录里还没有录像",
+  "screenshotCapture": "截取屏幕",
+  "screenshotCapturing": "正在截取屏幕…",
+  "screenshotInvalid": "设备没有返回有效的 PNG",
+  "screenrecordStart": "开始录屏",
+  "screenrecordStop": "停止并保存",
+  "screenrecordSaving": "正在保存到应用目录…",
+  "screenrecordRecording": "正在录制",
+  "screenrecordTimeLimit": "时长上限",
+  "screenrecordLimit30": "30 秒",
+  "screenrecordLimit60": "1 分钟",
+  "screenrecordLimit180": "3 分钟",
+  "screenrecordLimitNone": "不限时",
+  "screenrecordTimeLimitNote": "Android 13 及更早版本最长 3 分钟，超过会被系统拒绝。",
+  "screenrecordTimeLimitUnlimited": "这台设备不限制最长时长，可以选择不限时。",
+  "screenrecordHint": "停止后保存到应用目录，并删除设备上的临时视频。",
+  "screenrecordMethod": "录制方式",
+  "screenrecordMethodSystem": "系统录屏",
+  "screenrecordMethodSystemSubtitle": "调用设备自带的 screenrecord",
+  "screenrecordMethodBuiltin": "内置录屏",
+  "screenrecordMethodBuiltinSubtitle": "用辅助服务编码，画面直接送进编码器。",
+  "screenrecordMethodScrcpy": "投屏录屏",
+  "screenrecordMethodScrcpySubtitle": "即将支持。同一条连接以后用于画面预览和远程操作。",
+  "screenrecordShellCopyFailed": "无法准备临时目录里的录屏程序",
+  "screenrecordShellUnsafe": "临时目录里的录屏程序仍会被系统策略接管，已取消执行，文件仍留在原地",
+  "screenrecordTimeLimitBuiltin": "内置录屏不限制最长时长，可以选择不限时。",
+  "screenrecordNoWritableDir": "shell 无法以读写方式创建录像文件",
+  "screenrecordMissing": "设备上没有生成录像文件",
+  "screenrecordInvalid": "录像文件无效，仍留在设备上：{path}",
+  "@screenrecordInvalid": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "screenrecordTooLarge": "录像有 {size}，超过可保存的大小，仍留在设备上：{path}",
+  "@screenrecordTooLarge": {
+    "placeholders": {
+      "size": {},
+      "path": {}
+    }
+  },
   "@appsBatchPartial": {
     "placeholders": {
       "succeeded": {

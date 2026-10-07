@@ -205,13 +205,14 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get workspaceScreenshotTitle => '截图';
 
   @override
-  String get workspaceScreenshotDescription => '调用 screencap -p 截取屏幕并保存 PNG';
+  String get workspaceScreenshotDescription =>
+      '调用 screencap -p 截取屏幕，并把 PNG 保存到应用目录';
 
   @override
   String get workspaceScreenrecordTitle => '录屏';
 
   @override
-  String get workspaceScreenrecordDescription => '调用 screenrecord 录制设备屏幕';
+  String get workspaceScreenrecordDescription => '录制屏幕并保存到应用目录，可选用系统或内置录屏';
 
   @override
   String get workspaceShellTitle => '命令面板';
@@ -844,4 +845,152 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get filesLocationsRoot => '根目录';
+
+  @override
+  String get captureDirectoryUnavailable => '找不到应用目录，无法保存文件';
+
+  @override
+  String captureSaved(Object path) {
+    return '已保存到 $path';
+  }
+
+  @override
+  String get captureSaveLocation => '保存位置';
+
+  @override
+  String get captureOpenFolder => '打开应用目录';
+
+  @override
+  String get captureOpenFile => '打开';
+
+  @override
+  String captureOpenFailed(Object error) {
+    return '无法打开：$error';
+  }
+
+  @override
+  String get captureRefresh => '刷新';
+
+  @override
+  String get captureDelete => '删除';
+
+  @override
+  String captureDeleteConfirm(Object name) {
+    return '从应用目录删除 $name？';
+  }
+
+  @override
+  String captureDeleted(Object name) {
+    return '已删除 $name';
+  }
+
+  @override
+  String get captureActionFailed => '操作失败';
+
+  @override
+  String captureDeviceOutput(Object output) {
+    return '设备输出：$output';
+  }
+
+  @override
+  String captureFailedWithRemote(Object error, Object path) {
+    return '$error。设备上的临时文件仍在 $path';
+  }
+
+  @override
+  String get captureEmptyScreenshots => '应用目录里还没有截图';
+
+  @override
+  String get captureEmptyRecordings => '应用目录里还没有录像';
+
+  @override
+  String get screenshotCapture => '截取屏幕';
+
+  @override
+  String get screenshotCapturing => '正在截取屏幕…';
+
+  @override
+  String get screenshotInvalid => '设备没有返回有效的 PNG';
+
+  @override
+  String get screenrecordStart => '开始录屏';
+
+  @override
+  String get screenrecordStop => '停止并保存';
+
+  @override
+  String get screenrecordSaving => '正在保存到应用目录…';
+
+  @override
+  String get screenrecordRecording => '正在录制';
+
+  @override
+  String get screenrecordTimeLimit => '时长上限';
+
+  @override
+  String get screenrecordLimit30 => '30 秒';
+
+  @override
+  String get screenrecordLimit60 => '1 分钟';
+
+  @override
+  String get screenrecordLimit180 => '3 分钟';
+
+  @override
+  String get screenrecordLimitNone => '不限时';
+
+  @override
+  String get screenrecordTimeLimitNote => 'Android 13 及更早版本最长 3 分钟，超过会被系统拒绝。';
+
+  @override
+  String get screenrecordTimeLimitUnlimited => '这台设备不限制最长时长，可以选择不限时。';
+
+  @override
+  String get screenrecordHint => '停止后保存到应用目录，并删除设备上的临时视频。';
+
+  @override
+  String get screenrecordMethod => '录制方式';
+
+  @override
+  String get screenrecordMethodSystem => '系统录屏';
+
+  @override
+  String get screenrecordMethodSystemSubtitle => '调用设备自带的 screenrecord';
+
+  @override
+  String get screenrecordMethodBuiltin => '内置录屏';
+
+  @override
+  String get screenrecordMethodBuiltinSubtitle => '用辅助服务编码，画面直接送进编码器。';
+
+  @override
+  String get screenrecordMethodScrcpy => '投屏录屏';
+
+  @override
+  String get screenrecordMethodScrcpySubtitle => '即将支持。同一条连接以后用于画面预览和远程操作。';
+
+  @override
+  String get screenrecordShellCopyFailed => '无法准备临时目录里的录屏程序';
+
+  @override
+  String get screenrecordShellUnsafe => '临时目录里的录屏程序仍会被系统策略接管，已取消执行，文件仍留在原地';
+
+  @override
+  String get screenrecordTimeLimitBuiltin => '内置录屏不限制最长时长，可以选择不限时。';
+
+  @override
+  String get screenrecordNoWritableDir => 'shell 无法以读写方式创建录像文件';
+
+  @override
+  String get screenrecordMissing => '设备上没有生成录像文件';
+
+  @override
+  String screenrecordInvalid(Object path) {
+    return '录像文件无效，仍留在设备上：$path';
+  }
+
+  @override
+  String screenrecordTooLarge(Object size, Object path) {
+    return '录像有 $size，超过可保存的大小，仍留在设备上：$path';
+  }
 }

@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../../connection/model/connected_device.dart';
 
-/// 手机上的 jar 路径。
+/// 手机上的 jar 路径。录屏入口也在这一份 jar 里。
 const String fireAppServiceRemotePath = '/data/local/tmp/fire-app-service.jar';
 
 /// `app_process` 入口。
@@ -208,6 +208,28 @@ class FireAppFrameReader {
       _pending[offset + 3];
 }
 
+/// 把辅助服务 jar 推到设备。大小相同就跳过，避免每次都重传。
+Future<void> ensureFireAppService(ConnectedDevice device) async {
+  final data = await rootBundle.load('assets/fire-app-service.jar');
+  final jar = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+  final sync = await device.openSync();
+  try {
+    final stat = await sync.client.stat(fireAppServiceRemotePath);
+    if (stat.mode != 0 && stat.size == jar.length) {
+      try {
+        await sync.client.quit();
+      } catch (_) {}
+      return;
+    }
+    await sync.client.push(jar, fireAppServiceRemotePath);
+    try {
+      await sync.client.quit();
+    } catch (_) {}
+  } finally {
+    await sync.close();
+  }
+}
+
 /// 一条保持打开的 `exec:`。可见行再要名称、版本和图标。
 class FireAppServiceSession {
   FireAppServiceSession(this._device);
@@ -223,8 +245,7 @@ class FireAppServiceSession {
 
   Future<void> start() {
     return _exclusive(() async {
-      final jar = await _jarBytes();
-      await _pushJar(jar);
+      await ensureFireAppService(_device);
       final shell = await _device.openExec(
         fireAppServiceCommand(fireAppServiceRemotePath),
       );
@@ -291,30 +312,6 @@ class FireAppServiceSession {
     final gate = Completer<void>();
     _chain = gate.future;
     return previous.then((_) => action()).whenComplete(gate.complete);
-  }
-
-  Future<Uint8List> _jarBytes() async {
-    final data = await rootBundle.load('assets/fire-app-service.jar');
-    return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-  }
-
-  Future<void> _pushJar(Uint8List jar) async {
-    final sync = await _device.openSync();
-    try {
-      final stat = await sync.client.stat(fireAppServiceRemotePath);
-      if (stat.mode != 0 && stat.size == jar.length) {
-        try {
-          await sync.client.quit();
-        } catch (_) {}
-        return;
-      }
-      await sync.client.push(jar, fireAppServiceRemotePath);
-      try {
-        await sync.client.quit();
-      } catch (_) {}
-    } finally {
-      await sync.close();
-    }
   }
 
   Future<void> _write(String line) async {

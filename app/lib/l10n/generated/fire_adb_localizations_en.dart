@@ -213,14 +213,14 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get workspaceScreenshotDescription =>
-      'Capture the screen with screencap -p and save it as PNG';
+      'Capture the screen with screencap -p and save the PNG in the app directory';
 
   @override
   String get workspaceScreenrecordTitle => 'Screen recording';
 
   @override
   String get workspaceScreenrecordDescription =>
-      'Record the device screen with screenrecord';
+      'Record the screen and save it in the app directory, using the system or built-in recorder';
 
   @override
   String get workspaceShellTitle => 'Command shell';
@@ -859,4 +859,164 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get filesLocationsRoot => 'Root';
+
+  @override
+  String get captureDirectoryUnavailable =>
+      'The app directory is unavailable, so the file cannot be saved';
+
+  @override
+  String captureSaved(Object path) {
+    return 'Saved to $path';
+  }
+
+  @override
+  String get captureSaveLocation => 'Save location';
+
+  @override
+  String get captureOpenFolder => 'Open app directory';
+
+  @override
+  String get captureOpenFile => 'Open';
+
+  @override
+  String captureOpenFailed(Object error) {
+    return 'Could not open: $error';
+  }
+
+  @override
+  String get captureRefresh => 'Refresh';
+
+  @override
+  String get captureDelete => 'Delete';
+
+  @override
+  String captureDeleteConfirm(Object name) {
+    return 'Delete $name from the app directory?';
+  }
+
+  @override
+  String captureDeleted(Object name) {
+    return 'Deleted $name';
+  }
+
+  @override
+  String get captureActionFailed => 'Action failed';
+
+  @override
+  String captureDeviceOutput(Object output) {
+    return 'Device output: $output';
+  }
+
+  @override
+  String captureFailedWithRemote(Object error, Object path) {
+    return '$error. The temporary file is still on the device at $path';
+  }
+
+  @override
+  String get captureEmptyScreenshots =>
+      'No screenshots in the app directory yet';
+
+  @override
+  String get captureEmptyRecordings => 'No recordings in the app directory yet';
+
+  @override
+  String get screenshotCapture => 'Capture screen';
+
+  @override
+  String get screenshotCapturing => 'Capturing the screen…';
+
+  @override
+  String get screenshotInvalid => 'The device did not return a valid PNG';
+
+  @override
+  String get screenrecordStart => 'Start recording';
+
+  @override
+  String get screenrecordStop => 'Stop and save';
+
+  @override
+  String get screenrecordSaving => 'Saving to the app directory…';
+
+  @override
+  String get screenrecordRecording => 'Recording';
+
+  @override
+  String get screenrecordTimeLimit => 'Time limit';
+
+  @override
+  String get screenrecordLimit30 => '30 seconds';
+
+  @override
+  String get screenrecordLimit60 => '1 minute';
+
+  @override
+  String get screenrecordLimit180 => '3 minutes';
+
+  @override
+  String get screenrecordLimitNone => 'No limit';
+
+  @override
+  String get screenrecordTimeLimitNote =>
+      'Android 13 and earlier reject recordings longer than 3 minutes.';
+
+  @override
+  String get screenrecordTimeLimitUnlimited =>
+      'This device has no maximum length. You can choose no limit.';
+
+  @override
+  String get screenrecordHint =>
+      'When recording stops, the video is saved to the app directory and the temporary video is removed from the device.';
+
+  @override
+  String get screenrecordMethod => 'Recorder';
+
+  @override
+  String get screenrecordMethodSystem => 'System';
+
+  @override
+  String get screenrecordMethodSystemSubtitle =>
+      'Use the screenrecord program that comes with the device';
+
+  @override
+  String get screenrecordMethodBuiltin => 'Built-in';
+
+  @override
+  String get screenrecordMethodBuiltinSubtitle =>
+      'Encode with the helper service. The display goes straight into the encoder.';
+
+  @override
+  String get screenrecordMethodScrcpy => 'Mirroring';
+
+  @override
+  String get screenrecordMethodScrcpySubtitle =>
+      'Coming later. The same connection will also be used for preview and remote control.';
+
+  @override
+  String get screenrecordShellCopyFailed =>
+      'Could not prepare the recorder in the device temp directory';
+
+  @override
+  String get screenrecordShellUnsafe =>
+      'The recorder in the temp directory would still be taken over by system policy, so it was not started. The file was left in place';
+
+  @override
+  String get screenrecordTimeLimitBuiltin =>
+      'The built-in recorder has no maximum length. You can choose no limit.';
+
+  @override
+  String get screenrecordNoWritableDir =>
+      'The shell user cannot create the recording for read and write';
+
+  @override
+  String get screenrecordMissing => 'The device did not produce a video file';
+
+  @override
+  String screenrecordInvalid(Object path) {
+    return 'The recording is not a valid video and remains on the device at $path';
+  }
+
+  @override
+  String screenrecordTooLarge(Object size, Object path) {
+    return 'The recording is $size, which is too large to save here. It remains on the device at $path';
+  }
 }

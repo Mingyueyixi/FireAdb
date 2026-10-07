@@ -470,7 +470,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @workspaceScreenshotDescription.
   ///
   /// In zh, this message translates to:
-  /// **'调用 screencap -p 截取屏幕并保存 PNG'**
+  /// **'调用 screencap -p 截取屏幕，并把 PNG 保存到应用目录'**
   String get workspaceScreenshotDescription;
 
   /// No description provided for @workspaceScreenrecordTitle.
@@ -482,7 +482,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @workspaceScreenrecordDescription.
   ///
   /// In zh, this message translates to:
-  /// **'调用 screenrecord 录制设备屏幕'**
+  /// **'录制屏幕并保存到应用目录，可选用系统或内置录屏'**
   String get workspaceScreenrecordDescription;
 
   /// No description provided for @workspaceShellTitle.
@@ -1522,6 +1522,270 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'根目录'**
   String get filesLocationsRoot;
+
+  /// No description provided for @captureDirectoryUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'找不到应用目录，无法保存文件'**
+  String get captureDirectoryUnavailable;
+
+  /// No description provided for @captureSaved.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存到 {path}'**
+  String captureSaved(Object path);
+
+  /// No description provided for @captureSaveLocation.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存位置'**
+  String get captureSaveLocation;
+
+  /// No description provided for @captureOpenFolder.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开应用目录'**
+  String get captureOpenFolder;
+
+  /// No description provided for @captureOpenFile.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开'**
+  String get captureOpenFile;
+
+  /// No description provided for @captureOpenFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法打开：{error}'**
+  String captureOpenFailed(Object error);
+
+  /// No description provided for @captureRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新'**
+  String get captureRefresh;
+
+  /// No description provided for @captureDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除'**
+  String get captureDelete;
+
+  /// No description provided for @captureDeleteConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'从应用目录删除 {name}？'**
+  String captureDeleteConfirm(Object name);
+
+  /// No description provided for @captureDeleted.
+  ///
+  /// In zh, this message translates to:
+  /// **'已删除 {name}'**
+  String captureDeleted(Object name);
+
+  /// No description provided for @captureActionFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'操作失败'**
+  String get captureActionFailed;
+
+  /// No description provided for @captureDeviceOutput.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备输出：{output}'**
+  String captureDeviceOutput(Object output);
+
+  /// No description provided for @captureFailedWithRemote.
+  ///
+  /// In zh, this message translates to:
+  /// **'{error}。设备上的临时文件仍在 {path}'**
+  String captureFailedWithRemote(Object error, Object path);
+
+  /// No description provided for @captureEmptyScreenshots.
+  ///
+  /// In zh, this message translates to:
+  /// **'应用目录里还没有截图'**
+  String get captureEmptyScreenshots;
+
+  /// No description provided for @captureEmptyRecordings.
+  ///
+  /// In zh, this message translates to:
+  /// **'应用目录里还没有录像'**
+  String get captureEmptyRecordings;
+
+  /// No description provided for @screenshotCapture.
+  ///
+  /// In zh, this message translates to:
+  /// **'截取屏幕'**
+  String get screenshotCapture;
+
+  /// No description provided for @screenshotCapturing.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在截取屏幕…'**
+  String get screenshotCapturing;
+
+  /// No description provided for @screenshotInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备没有返回有效的 PNG'**
+  String get screenshotInvalid;
+
+  /// No description provided for @screenrecordStart.
+  ///
+  /// In zh, this message translates to:
+  /// **'开始录屏'**
+  String get screenrecordStart;
+
+  /// No description provided for @screenrecordStop.
+  ///
+  /// In zh, this message translates to:
+  /// **'停止并保存'**
+  String get screenrecordStop;
+
+  /// No description provided for @screenrecordSaving.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在保存到应用目录…'**
+  String get screenrecordSaving;
+
+  /// No description provided for @screenrecordRecording.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在录制'**
+  String get screenrecordRecording;
+
+  /// No description provided for @screenrecordTimeLimit.
+  ///
+  /// In zh, this message translates to:
+  /// **'时长上限'**
+  String get screenrecordTimeLimit;
+
+  /// No description provided for @screenrecordLimit30.
+  ///
+  /// In zh, this message translates to:
+  /// **'30 秒'**
+  String get screenrecordLimit30;
+
+  /// No description provided for @screenrecordLimit60.
+  ///
+  /// In zh, this message translates to:
+  /// **'1 分钟'**
+  String get screenrecordLimit60;
+
+  /// No description provided for @screenrecordLimit180.
+  ///
+  /// In zh, this message translates to:
+  /// **'3 分钟'**
+  String get screenrecordLimit180;
+
+  /// No description provided for @screenrecordLimitNone.
+  ///
+  /// In zh, this message translates to:
+  /// **'不限时'**
+  String get screenrecordLimitNone;
+
+  /// No description provided for @screenrecordTimeLimitNote.
+  ///
+  /// In zh, this message translates to:
+  /// **'Android 13 及更早版本最长 3 分钟，超过会被系统拒绝。'**
+  String get screenrecordTimeLimitNote;
+
+  /// No description provided for @screenrecordTimeLimitUnlimited.
+  ///
+  /// In zh, this message translates to:
+  /// **'这台设备不限制最长时长，可以选择不限时。'**
+  String get screenrecordTimeLimitUnlimited;
+
+  /// No description provided for @screenrecordHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'停止后保存到应用目录，并删除设备上的临时视频。'**
+  String get screenrecordHint;
+
+  /// No description provided for @screenrecordMethod.
+  ///
+  /// In zh, this message translates to:
+  /// **'录制方式'**
+  String get screenrecordMethod;
+
+  /// No description provided for @screenrecordMethodSystem.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统录屏'**
+  String get screenrecordMethodSystem;
+
+  /// No description provided for @screenrecordMethodSystemSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'调用设备自带的 screenrecord'**
+  String get screenrecordMethodSystemSubtitle;
+
+  /// No description provided for @screenrecordMethodBuiltin.
+  ///
+  /// In zh, this message translates to:
+  /// **'内置录屏'**
+  String get screenrecordMethodBuiltin;
+
+  /// No description provided for @screenrecordMethodBuiltinSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'用辅助服务编码，画面直接送进编码器。'**
+  String get screenrecordMethodBuiltinSubtitle;
+
+  /// No description provided for @screenrecordMethodScrcpy.
+  ///
+  /// In zh, this message translates to:
+  /// **'投屏录屏'**
+  String get screenrecordMethodScrcpy;
+
+  /// No description provided for @screenrecordMethodScrcpySubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'即将支持。同一条连接以后用于画面预览和远程操作。'**
+  String get screenrecordMethodScrcpySubtitle;
+
+  /// No description provided for @screenrecordShellCopyFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法准备临时目录里的录屏程序'**
+  String get screenrecordShellCopyFailed;
+
+  /// No description provided for @screenrecordShellUnsafe.
+  ///
+  /// In zh, this message translates to:
+  /// **'临时目录里的录屏程序仍会被系统策略接管，已取消执行，文件仍留在原地'**
+  String get screenrecordShellUnsafe;
+
+  /// No description provided for @screenrecordTimeLimitBuiltin.
+  ///
+  /// In zh, this message translates to:
+  /// **'内置录屏不限制最长时长，可以选择不限时。'**
+  String get screenrecordTimeLimitBuiltin;
+
+  /// No description provided for @screenrecordNoWritableDir.
+  ///
+  /// In zh, this message translates to:
+  /// **'shell 无法以读写方式创建录像文件'**
+  String get screenrecordNoWritableDir;
+
+  /// No description provided for @screenrecordMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备上没有生成录像文件'**
+  String get screenrecordMissing;
+
+  /// No description provided for @screenrecordInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'录像文件无效，仍留在设备上：{path}'**
+  String screenrecordInvalid(Object path);
+
+  /// No description provided for @screenrecordTooLarge.
+  ///
+  /// In zh, this message translates to:
+  /// **'录像有 {size}，超过可保存的大小，仍留在设备上：{path}'**
+  String screenrecordTooLarge(Object size, Object path);
 }
 
 class _FireAdbLocalizationsDelegate
