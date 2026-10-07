@@ -1,5 +1,7 @@
 # USB 方案
 
+问答整理见 [usb-qa.md](usb-qa.md)。本文与该问答对应同一次实现：`3b10e568767875a08564378cf8facf440b99222d`。后续若改掉读写方式或 5037 的行为，以代码为准。
+
 桌面端用 libusb 直接打开手机上的 ADB 接口。本进程在 `127.0.0.1:5037` 空闲时自己实现 ADB Server，把已经握完手的 USB 设备登记进去。界面上的设备列表来自 `host:devices-l`，连接走 `host:transport`。
 
 不调用 `adb.exe`，也不链接 Android SDK 的 `AdbWinApi.dll` / `AdbWinUsbApi.dll`。
