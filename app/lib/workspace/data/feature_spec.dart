@@ -59,3 +59,10 @@ const List<FeatureSpec> kDeviceFeatures = <FeatureSpec>[
   FeatureSpec(id: 'screenrecord', icon: Icons.videocam, implemented: true),
   FeatureSpec(id: 'shell', icon: Icons.terminal, implemented: true),
 ];
+
+FeatureSpec featureSpecById(String id) {
+  for (final feature in kDeviceFeatures) {
+    if (feature.id == id) return feature;
+  }
+  return FeatureSpec(id: id, icon: Icons.extension);
+}

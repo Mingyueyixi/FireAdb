@@ -235,12 +235,71 @@ class HomePage extends GetView<HomeController> {
   }
 
   Widget _sectionHeader(BuildContext context, IconData icon, String title) {
-    return Row(
-      children: <Widget>[
-        Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 8),
-        Text(title, style: Theme.of(context).textTheme.titleMedium),
-      ],
+    final theme = Theme.of(context);
+    final titleText = Text(
+      title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.titleMedium,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (!constraints.maxWidth.isFinite) {
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, size: 20, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              titleText,
+            ],
+          );
+        }
+        return Row(
+          children: <Widget>[
+            Icon(icon, size: 20, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Flexible(child: titleText),
+          ],
+        );
+      },
+    );
+  }
+
+  /// ListTile 在尾部控件宽于整行时会直接抛异常。窄宽度把操作放到标题下方。
+  Widget _homeListTile({
+    required Widget leading,
+    required Widget title,
+    Widget? subtitle,
+    Widget? trailing,
+    VoidCallback? onTap,
+    bool dense = false,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 行尾按钮大约几十到一百多逻辑像素。280 以下改到标题下方，
+        // 常见手机宽度仍把操作留在行尾。
+        final parkTrailing = trailing != null && constraints.maxWidth < 280;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: dense,
+              leading: leading,
+              title: title,
+              subtitle: subtitle,
+              trailing: parkTrailing ? null : trailing,
+              onTap: onTap,
+            ),
+            if (parkTrailing)
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: trailing,
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -316,11 +375,9 @@ class HomePage extends GetView<HomeController> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                _sectionHeader(context, Icons.radar, l10n.homeDeviceDiscovery),
-                const Spacer(),
-                FilledButton.tonalIcon(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final scanButton = FilledButton.tonalIcon(
                   onPressed: controller.scanning.value ? null : controller.scan,
                   icon: controller.scanning.value
                       ? const SizedBox(
@@ -329,9 +386,37 @@ class HomePage extends GetView<HomeController> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.search),
-                  label: Text(controller.scanning.value ? l10n.homeScanning : l10n.homeScan),
-                ),
-              ],
+                  label: Text(
+                    controller.scanning.value ? l10n.homeScanning : l10n.homeScan,
+                  ),
+                );
+                final header = _sectionHeader(
+                  context,
+                  Icons.radar,
+                  l10n.homeDeviceDiscovery,
+                );
+                // 英文标题加「Scanning…」大约要 380。更窄时按钮换到下一行。
+                if (constraints.maxWidth < 400) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      header,
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: scanButton,
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  children: <Widget>[
+                    Expanded(child: header),
+                    const SizedBox(width: 8),
+                    scanButton,
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 12),
             Container(
@@ -390,8 +475,7 @@ class HomePage extends GetView<HomeController> {
               )
             else
               for (final s in controller.discovered)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
+                _homeListTile(
                   dense: true,
                   leading: Icon(
                     _serviceConnectable(s) ? Icons.router : Icons.vpn_key,
@@ -479,8 +563,7 @@ class HomePage extends GetView<HomeController> {
               for (final device in devices)
                 _buildAdbDeviceTile(context, device),
             for (final profile in additionalConnectedProfiles)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
+              _homeListTile(
                 leading: const Icon(Icons.phone_android),
                 title: Text(profile.displayName),
                 subtitle: Text('${profile.serial} · ${l10n.homeFireAdbConnected}'),
@@ -498,7 +581,6 @@ class HomePage extends GetView<HomeController> {
   }
 
   Widget _buildAdbDeviceTile(BuildContext context, AdbDeviceInfo device) {
-    final theme = Theme.of(context);
     final profile = controller.manager.profileForAdbDevice(device);
     final connectedProfile =
         profile != null && controller.manager.deviceOf(profile.serial) != null
@@ -513,10 +595,12 @@ class HomePage extends GetView<HomeController> {
     subtitle.write(' · ADB $adbState');
     if (connectedProfile != null) {
       subtitle.write(' · ${l10n.homeFireAdbConnected}');
+    } else if (device.isOnline &&
+        !controller.manager.canConnectAdbDevice(device)) {
+      subtitle.write(' · ${l10n.homeUsbConnectionUnavailable}');
     }
 
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
+    return _homeListTile(
       leading: Icon(device.devPath == null ? Icons.phone_android : Icons.usb),
       title: Text(title),
       subtitle: Text(subtitle.toString(), maxLines: 2),
@@ -535,14 +619,7 @@ class HomePage extends GetView<HomeController> {
                 controller.connecting.value ? l10n.homeConnecting : l10n.commonConnect,
               ),
             )
-          : Chip(
-              label: Text(
-                device.isOnline ? l10n.homeUsbConnectionUnavailable : adbState,
-              ),
-              visualDensity: VisualDensity.compact,
-              side: BorderSide.none,
-              backgroundColor: theme.colorScheme.surfaceContainerHighest,
-            ),
+          : null,
       onTap: connectedProfile != null
           ? () => _openWorkspace(connectedProfile.serial)
           : device.isOnline &&
@@ -575,8 +652,7 @@ class HomePage extends GetView<HomeController> {
               )
             else
               for (final h in history)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
+                _homeListTile(
                   dense: true,
                   leading: const Icon(Icons.smartphone),
                   title: Text(h.toHistoryKey()),

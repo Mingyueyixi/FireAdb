@@ -6,7 +6,6 @@ import 'package:get/get.dart';
 
 import '../../app_feedback.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
-import '../../widgets/locale_selector.dart';
 import '../capture_notice.dart';
 import '../data/capture_store.dart';
 import '../data/local_opener.dart';
@@ -177,23 +176,6 @@ class _ScreenshotPageState extends State<ScreenshotPage> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class ScreenshotFeaturePage extends StatelessWidget {
-  const ScreenshotFeaturePage({super.key, required this.serial});
-
-  final String serial;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n.workspaceScreenshotTitle),
-        actions: const <Widget>[LocaleSelector()],
-      ),
-      body: ScreenshotPage(serial: serial),
     );
   }
 }

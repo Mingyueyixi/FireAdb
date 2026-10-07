@@ -148,9 +148,13 @@ class ScreenrecordController extends GetxController {
       await store.ensure();
       final listed = await store.list(extension: 'mp4');
       if (isClosed) return;
-      files.assignAll(listed);
+      final own = <CaptureFile>[
+        for (final file in listed)
+          if (captureFileMatchesDevice(file.name, serial)) file,
+      ];
+      files.assignAll(own);
       final selected = selectedPath.value;
-      if (selected != null && !listed.any((file) => file.path == selected)) {
+      if (selected != null && !own.any((file) => file.path == selected)) {
         selectedPath.value = null;
       }
       loadError.value = null;

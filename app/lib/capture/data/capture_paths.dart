@@ -102,6 +102,13 @@ String captureFileName({
   return '${prefix}_${_stamp(time)}_$safeSerial.$extension';
 }
 
+bool captureFileMatchesDevice(String name, String serial) {
+  final safeSerial = serial.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+  final match = RegExp(r'^(?:screenshot|screenrecord)_\d{8}_\d{6}_(.+)\.[^.]+$')
+      .firstMatch(name);
+  return match != null && match.group(1) == safeSerial;
+}
+
 String _stamp(DateTime time) {
   String two(int value) => value.toString().padLeft(2, '0');
   return '${time.year}${two(time.month)}${two(time.day)}_'

@@ -41,6 +41,24 @@ void main() {
       ),
       'screenshot_20261007_111923_192.168.1.8_5555.png',
     );
+    expect(
+      captureFileMatchesDevice(
+        'screenshot_20261007_111923_192.168.1.8_5555.png',
+        '192.168.1.8:5555',
+      ),
+      isTrue,
+    );
+    expect(
+      captureFileMatchesDevice(
+        'screenshot_20261007_111923_192.168.1.8_5555.png',
+        '192.168.1.80:5555',
+      ),
+      isFalse,
+    );
+    expect(
+      captureFileMatchesDevice('screenshot_20261007_111923_18.png', '8'),
+      isFalse,
+    );
     expect(isSafeCaptureName('screenshot_20261007_111923.png'), isTrue);
     expect(isSafeCaptureName('../a.png'), isFalse);
     expect(isSafeCaptureName(r'..\a.png'), isFalse);

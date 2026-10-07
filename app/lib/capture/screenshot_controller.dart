@@ -41,8 +41,12 @@ class ScreenshotController extends GetxController {
       await store.ensure();
       final listed = await store.list(extension: 'png');
       if (isClosed) return;
-      files.assignAll(listed);
-      _syncSelection(listed, prefer: prefer, selectNewest: prefer == null);
+      final own = <CaptureFile>[
+        for (final file in listed)
+          if (captureFileMatchesDevice(file.name, serial)) file,
+      ];
+      files.assignAll(own);
+      _syncSelection(own, prefer: prefer, selectNewest: prefer == null);
       loadError.value = null;
     } catch (error, stackTrace) {
       logAppError('读取截图列表失败：$serial', error, stackTrace);

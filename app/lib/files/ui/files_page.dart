@@ -6,7 +6,6 @@ import 'package:get/get.dart';
 import '../../app_feedback.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../l10n/generated/fire_adb_localizations.dart';
-import '../../widgets/locale_selector.dart';
 import '../data/bean/remote_file.dart';
 import '../data/source/remote_file_commands.dart';
 import '../files_controller.dart';
@@ -422,21 +421,4 @@ String _localName(String path) {
   final slash = normalized.lastIndexOf('/');
   if (slash < 0 || slash == normalized.length - 1) return path;
   return normalized.substring(slash + 1);
-}
-
-class FilesFeaturePage extends StatelessWidget {
-  const FilesFeaturePage({super.key, required this.serial});
-
-  final String serial;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n.workspaceFilesTitle),
-        actions: const <Widget>[LocaleSelector()],
-      ),
-      body: FilesPage(serial: serial),
-    );
-  }
 }

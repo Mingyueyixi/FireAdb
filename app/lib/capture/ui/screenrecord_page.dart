@@ -7,7 +7,6 @@ import '../../app_feedback.dart';
 import '../../files/data/source/remote_file_commands.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../l10n/generated/fire_adb_localizations.dart';
-import '../../widgets/locale_selector.dart';
 import '../capture_notice.dart';
 import '../data/capture_paths.dart';
 import '../data/capture_store.dart';
@@ -353,23 +352,6 @@ class _ScreenrecordPageState extends State<ScreenrecordPage> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class ScreenrecordFeaturePage extends StatelessWidget {
-  const ScreenrecordFeaturePage({super.key, required this.serial});
-
-  final String serial;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n.workspaceScreenrecordTitle),
-        actions: const <Widget>[LocaleSelector()],
-      ),
-      body: ScreenrecordPage(serial: serial),
     );
   }
 }

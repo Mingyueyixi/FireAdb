@@ -6,7 +6,6 @@ import 'package:get/get.dart';
 import '../../app_feedback.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../l10n/generated/fire_adb_localizations.dart';
-import '../../widgets/locale_selector.dart';
 import '../apps_controller.dart';
 import '../data/bean/installed_app.dart';
 import 'app_dialogs.dart';
@@ -245,24 +244,6 @@ class _AppsPageState extends State<AppsPage> {
           onAction: (action) => _onAction(app, action),
         );
       },
-    );
-  }
-}
-
-/// 移动端全屏应用管理页。
-class AppsFeaturePage extends StatelessWidget {
-  const AppsFeaturePage({super.key, required this.serial});
-
-  final String serial;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(context.l10n.workspaceAppsTitle),
-        actions: const <Widget>[LocaleSelector()],
-      ),
-      body: AppsPage(serial: serial),
     );
   }
 }

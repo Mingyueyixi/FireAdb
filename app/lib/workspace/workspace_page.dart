@@ -2,24 +2,18 @@ import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../apps/ui/apps_page.dart';
-import '../capture/ui/screenrecord_page.dart';
-import '../capture/ui/screenshot_page.dart';
-import '../device_overview/device_overview_page.dart';
-import '../files/ui/files_page.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
-import '../shell/shell_page.dart';
 import '../widgets/adaptive.dart' show isWide, isAtLeastTablet;
 import '../widgets/locale_selector.dart';
 import 'data/feature_spec.dart';
+import 'feature_cache.dart';
 import 'feature_tile.dart';
-import 'placeholder_feature_page.dart';
 import 'workspace_controller.dart';
 
 /// 设备工作区：切换设备 + 选择功能。
 ///
 /// 桌面（宽屏）：左侧设备栏 + 功能栏 + 内容面板（三栏分栏）。
-/// 移动端（窄屏）：顶部下拉切换设备，功能九宫格，点击进入全屏页。
+/// 移动端（窄屏）：顶部下拉切换设备，功能九宫格，点进功能后全屏显示同一份页面。
 class WorkspacePage extends GetView<WorkspaceController> {
   const WorkspacePage({super.key});
 
@@ -36,102 +30,28 @@ class WorkspacePage extends GetView<WorkspaceController> {
     );
   }
 
-  void _openFeature(BuildContext context, FeatureSpec spec) {
-    if (spec.id == kOverviewFeatureId) {
-      Get.to<void>(
-        () => Scaffold(
-          appBar: AppBar(
-            title: Builder(
-              builder: (context) => Text(featureTitle(context, spec)),
-            ),
-            actions: const <Widget>[LocaleSelector()],
-          ),
-          body: DeviceOverviewPage(serial: controller.selectedSerial.value),
-        ),
-      );
-      return;
-    }
-    if (spec.id == 'shell') {
-      Get.to<void>(
-        () => Scaffold(
-          appBar: AppBar(
-            title: Builder(
-              builder: (context) => Text(featureTitle(context, spec)),
-            ),
-            actions: const <Widget>[LocaleSelector()],
-          ),
-          body: ShellPage(serial: controller.selectedSerial.value),
-        ),
-      );
-      return;
-    }
-    if (spec.id == 'apps') {
-      Get.to<void>(
-        () => AppsFeaturePage(serial: controller.selectedSerial.value),
-      );
-      return;
-    }
-    if (spec.id == 'files') {
-      Get.to<void>(
-        () => FilesFeaturePage(serial: controller.selectedSerial.value),
-      );
-      return;
-    }
-    if (spec.id == 'screenshot') {
-      Get.to<void>(
-        () => ScreenshotFeaturePage(serial: controller.selectedSerial.value),
-      );
-      return;
-    }
-    if (spec.id == 'screenrecord') {
-      Get.to<void>(
-        () => ScreenrecordFeaturePage(serial: controller.selectedSerial.value),
-      );
-      return;
-    }
-    Get.to<void>(() => PlaceholderFeaturePage(spec: spec));
-  }
+  void _openFeature(FeatureSpec spec) => controller.openFeature(spec.id);
 
-  Widget _buildFeaturePane(BuildContext context) {
-    final spec = kDeviceFeatures.firstWhere(
-      (f) => f.id == controller.selectedFeature.value,
+  Widget _featureCache(List<String> serials) {
+    return FeatureCache(
+      key: controller.featureCacheKey,
+      serials: serials,
+      serial: controller.selectedSerial.value,
+      featureId: controller.currentFeatureId,
     );
-    if (spec.id == kOverviewFeatureId) {
-      return DeviceOverviewPage(serial: controller.selectedSerial.value);
-    }
-    if (spec.id == 'shell') {
-      return ShellPage(serial: controller.selectedSerial.value);
-    }
-    if (spec.id == 'apps') {
-      return AppsPage(
-        key: ValueKey<String>(controller.selectedSerial.value),
-        serial: controller.selectedSerial.value,
-      );
-    }
-    if (spec.id == 'files') {
-      return FilesPage(
-        key: ValueKey<String>(controller.selectedSerial.value),
-        serial: controller.selectedSerial.value,
-      );
-    }
-    if (spec.id == 'screenshot') {
-      return ScreenshotPage(
-        key: ValueKey<String>('screenshot-${controller.selectedSerial.value}'),
-        serial: controller.selectedSerial.value,
-      );
-    }
-    if (spec.id == 'screenrecord') {
-      return ScreenrecordPage(
-        key: ValueKey<String>(
-          'screenrecord-${controller.selectedSerial.value}',
-        ),
-        serial: controller.selectedSerial.value,
-      );
-    }
-    return PlaceholderFeatureBody(spec: spec);
   }
 
-  Widget _buildWide(BuildContext context, List<String> serials) {
+  Widget _keepCache(Widget foreground, Widget cache) {
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        foreground,
+        Offstage(child: cache),
+      ],
+    );
+  }
+
+  Widget _buildWide(BuildContext context, List<String> serials, Widget cache) {
     final selectedIndex = serials.indexOf(controller.selectedSerial.value);
     return Scaffold(
       appBar: AppBar(
@@ -171,7 +91,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
                   for (final spec in kDeviceFeatures)
                     FeatureListTile(
                       spec: spec,
-                      selected: spec.id == controller.selectedFeature.value,
+                      selected: spec.id == controller.currentFeatureId,
                       onTap: () => controller.selectFeature(spec.id),
                     ),
                 ],
@@ -179,8 +99,26 @@ class WorkspacePage extends GetView<WorkspaceController> {
             ),
           ),
           const VerticalDivider(width: 1),
-          Expanded(child: SafeArea(child: _buildFeaturePane(context))),
+          Expanded(child: SafeArea(child: cache)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildNarrowFeature(BuildContext context, Widget cache) {
+    final spec = featureSpecById(controller.currentFeatureId);
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (!didPop) controller.closeFeature();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: BackButton(onPressed: controller.closeFeature),
+          title: Text(featureTitle(context, spec)),
+          actions: const <Widget>[LocaleSelector()],
+        ),
+        body: cache,
       ),
     );
   }
@@ -213,7 +151,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
           crossAxisSpacing: 12,
           children: <Widget>[
             for (final spec in kDeviceFeatures)
-              FeatureTile(spec: spec, onTap: () => _openFeature(context, spec)),
+              FeatureTile(spec: spec, onTap: () => _openFeature(spec)),
           ],
         ),
       ),
@@ -258,13 +196,17 @@ class WorkspacePage extends GetView<WorkspaceController> {
     final manager = Get.find<ConnectionManager>();
     return Obx(() {
       final serials = manager.profiles.map((p) => p.serial).toList();
+      final cache = _featureCache(serials);
       if (!serials.contains(controller.selectedSerial.value)) {
-        return _buildDisconnected(context, serials);
+        return _keepCache(_buildDisconnected(context, serials), cache);
       }
       if (isWide(context)) {
-        return _buildWide(context, serials);
+        return _buildWide(context, serials, cache);
       }
-      return _buildNarrow(context, serials);
+      if (controller.narrowFeatureOpen.value) {
+        return _buildNarrowFeature(context, cache);
+      }
+      return _keepCache(_buildNarrow(context, serials), cache);
     });
   }
 }
