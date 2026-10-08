@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:adb_usb/adb_usb.dart';
+import 'package:adb_usb/src/adb_usb_session.dart' show usbTransferLayout;
 import 'package:adb_usb/src/libusb_loader.dart' show windowsLibusbCandidates;
 import 'package:test/test.dart';
 
@@ -68,5 +69,13 @@ void main() {
     expect(needsZeroLengthPacket(24, 512), isFalse);
     expect(needsZeroLengthPacket(512, 512), isTrue);
     expect(needsZeroLengthPacket(1024, 512), isTrue);
+  });
+
+  test('异步传输结构与 libusb 1.0 的 64 位布局一致', () {
+    final layout = usbTransferLayout();
+    expect(layout['size'], 64);
+    expect(layout['timeout'], 12);
+    expect(layout['length'], 20);
+    expect(layout['buffer'], 48);
   });
 }

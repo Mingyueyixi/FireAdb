@@ -14,8 +14,12 @@ import 'libusb_loader.dart';
 
 const int _libusbErrorAccess = -3;
 const int _libusbErrorBusy = -6;
+const int _libusbErrorInterrupted = -10;
 const int _writeTimeoutMs = 10000;
 const int _readBufferSize = 16 * 1024;
+const int _bulkTransfer = 2;
+const int _transferRead = 1;
+const int _transferWrite = 2;
 
 /// 枚举带 ADB 接口的 USB 设备。没有 libusb 或当前不是桌面平台时抛出 [AdbUsbException]。
 ///
@@ -74,7 +78,7 @@ Map<String, Object?> _listUsbAdbDeviceRows(String libraryPath) {
   }
 }
 
-/// 打开 [device] 的 ADB 批量接口，读写在后台 isolate 中进行。
+/// 打开 [device] 的 ADB 批量接口。读写在同一个后台 isolate 里，靠 libusb 事件循环完成。
 Future<AdbUsbTransport> openUsbAdbDevice(UsbAdbDevice device) async {
   final libraryPath = resolveLibusbLibraryPath();
   if (libraryPath == null) {
@@ -117,6 +121,12 @@ class AdbUsbTransport implements AdbTransport {
           if (serial is String && serial.trim().isNotEmpty) {
             serialNumber = serial.trim();
           }
+          final contextAddress = message.length > 2 ? message[2] : null;
+          final libraryPath = message.length > 3 ? message[3] : null;
+          if (contextAddress is int && libraryPath is String) {
+            _wakeLib = Libusb(DynamicLibrary.open(libraryPath));
+            _wakeContext = Pointer<libusb_context>.fromAddress(contextAddress);
+          }
           if (!opened.isCompleted) opened.complete(null);
         case 'data':
           final bytes = message[1];
@@ -147,6 +157,8 @@ class AdbUsbTransport implements AdbTransport {
   final Completer<void> _released = Completer<void>();
   StreamSubscription<dynamic>? _subscription;
   bool _closed = false;
+  Libusb? _wakeLib;
+  Pointer<libusb_context>? _wakeContext;
 
   /// USB 字符串描述符里的序列号。`adb devices` 用它，而不是端口路径。
   String? serialNumber;
@@ -159,6 +171,7 @@ class AdbUsbTransport implements AdbTransport {
     if (_closed) throw StateError('传输已关闭，无法写入');
     final reply = ReceivePort();
     _worker.send(<Object?>['write', Uint8List.fromList(data), reply.sendPort]);
+    _interruptWorker();
     final result = await reply.first;
     reply.close();
     if (result is String) throw AdbUsbException(result);
@@ -169,23 +182,33 @@ class AdbUsbTransport implements AdbTransport {
     if (_closed) return;
     _closed = true;
     _worker.send(<Object?>['close']);
+    _interruptWorker();
     try {
       await _released.future.timeout(const Duration(seconds: 2));
     } on TimeoutException {
-      // 关掉句柄后读线程仍没退出时，强制结束 isolate。
+      // 取消传输后事件循环仍没退出时，强制结束 isolate。
     }
     await _subscription?.cancel();
     _events.close();
     if (!_incoming.isClosed) await _incoming.close();
+    _wakeContext = null;
+    _wakeLib = null;
     _isolate.kill();
+  }
+
+  /// 工作 isolate 堵在 `libusb_handle_events` 里时，靠它从别的线程把等待打断。
+  void _interruptWorker() {
+    final libusb = _wakeLib;
+    final context = _wakeContext;
+    if (libusb == null || context == null) return;
+    libusb.libusb_interrupt_event_handler(context);
   }
 }
 
-/// 后台打开 USB，并把读、写分到两个 isolate。
+/// 一台设备一个 isolate：提交批量传输后堵在 `libusb_handle_events`。
 ///
-/// 读 isolate 用超时 0 堵在批量输入上。写 isolate 单独调用批量输出。
-/// 控制 isolate 不进入 `libusb_bulk_transfer`，这样关闭时可以调用
-/// `libusb_close` 打断两边正在进行的传输。
+/// 内核有数据或主 isolate 调用 `libusb_interrupt_event_handler` 时返回。
+/// 回调只把结果放进队列，回到 Dart 事件循环后再提交下一次传输。
 Future<void> usbWorker(SendPort mainPort) async {
   final inbox = _Inbox();
   mainPort.send(inbox.port.sendPort);
@@ -198,199 +221,427 @@ Future<void> usbWorker(SendPort mainPort) async {
   Pointer<libusb_context>? context;
   Pointer<libusb_device_handle>? handle;
   var interfaceNumber = -1;
-  Isolate? reader;
-  Isolate? writer;
-  SendPort? writePort;
-  ReceivePort? children;
   var released = false;
+  _UsbEventLoop? loop;
   try {
     libusb = Libusb(DynamicLibrary.open(libraryPath));
     context = _init(libusb);
     final openedDevice = _openDevice(libusb, context, portPath);
     handle = openedDevice.handle;
     interfaceNumber = openedDevice.match.interfaceNumber;
-    final endpointIn = openedDevice.match.endpointIn;
-    final endpointOut = openedDevice.match.endpointOut;
-    final maxPacketSize = openedDevice.match.maxPacketSize;
     _prepareInterface(libusb, handle, interfaceNumber);
     final serial = _usbSerialNumber(libusb, handle);
-
-    final pipes = ReceivePort();
-    children = pipes;
-    inbox.attach(pipes);
-    final writeBoot = ReceivePort();
-    writer = await Isolate.spawn(usbWriteLoop, writeBoot.sendPort);
-    writePort = await writeBoot.first as SendPort;
-    writeBoot.close();
-    writePort.send(<Object?>[
-      libraryPath,
-      handle.address,
-      endpointOut,
-      maxPacketSize,
-      pipes.sendPort,
-    ]);
-    final readBoot = ReceivePort();
-    reader = await Isolate.spawn(usbReadLoop, readBoot.sendPort);
-    final readPort = await readBoot.first as SendPort;
-    readBoot.close();
-    readPort.send(<Object?>[
-      libraryPath,
-      handle.address,
-      endpointIn,
-      pipes.sendPort,
-    ]);
-    events.send(<Object?>['ready', serial]);
-
-    var closing = false;
-    var readEnded = false;
-    var writeEnded = false;
-    DateTime? deadline;
-    while (true) {
-      final List<Object?> message;
-      if (!closing) {
-        message = await inbox.take();
-      } else {
-        try {
-          message = await inbox.take().timeout(const Duration(seconds: 2));
-        } on TimeoutException {
-          reader.kill();
-          writer.kill();
-          break;
-        }
-      }
-      switch (message.first) {
-        case 'write':
-          if (closing) {
-            (message[2]! as SendPort).send('USB 设备已关闭。');
-          } else {
-            writePort.send(message);
-          }
-        case 'close':
-          closing = true;
-          deadline ??= DateTime.now().add(const Duration(seconds: 2));
-          writePort.send(<Object?>['stop']);
-          released = _releaseUsb(libusb, handle, interfaceNumber, released);
-        case 'data':
-          if (!closing) events.send(message);
-        case 'read-end':
-          readEnded = true;
-          final error = message.length > 1 ? message[1] : null;
-          if (!closing && error is String) {
-            events.send(<Object?>['error', error]);
-            closing = true;
-            deadline ??= DateTime.now().add(const Duration(seconds: 2));
-            writePort.send(<Object?>['stop']);
-            released = _releaseUsb(libusb, handle, interfaceNumber, released);
-          }
-        case 'write-end':
-          writeEnded = true;
-          if (!closing) {
-            events.send(<Object?>['error', 'USB 写入已停止。']);
-            closing = true;
-            deadline ??= DateTime.now().add(const Duration(seconds: 2));
-            released = _releaseUsb(libusb, handle, interfaceNumber, released);
-          }
-      }
-      if (closing && readEnded && writeEnded) break;
-      if (deadline != null && DateTime.now().isAfter(deadline)) {
-        reader.kill();
-        writer.kill();
-        break;
-      }
-    }
+    loop = _UsbEventLoop(
+      libusb: libusb,
+      context: context,
+      handle: handle,
+      endpointIn: openedDevice.match.endpointIn,
+      endpointOut: openedDevice.match.endpointOut,
+      maxPacketSize: openedDevice.match.maxPacketSize,
+    );
+    events.send(<Object?>['ready', serial, context.address, libraryPath]);
+    await loop.run(inbox, events);
   } catch (error) {
     events.send(<Object?>['error', '$error']);
   } finally {
+    loop?.dispose();
     released = _releaseUsb(libusb, handle, interfaceNumber, released);
-    reader?.kill();
-    writer?.kill();
-    children?.close();
     if (libusb != null && context != null) libusb.libusb_exit(context);
     events.send(<Object?>['closed']);
     inbox.close();
   }
 }
 
-/// 阻塞读批量输入，直到有数据或句柄被关掉。
-Future<void> usbReadLoop(SendPort parent) async {
-  final inbox = _Inbox();
-  parent.send(inbox.port.sendPort);
-  final open = await inbox.take();
-  inbox.close();
-  final libraryPath = open[0]! as String;
-  final handle = Pointer<libusb_device_handle>.fromAddress(open[1]! as int);
-  final endpoint = open[2]! as int;
-  final events = open[3]! as SendPort;
-  final libusb = Libusb(DynamicLibrary.open(libraryPath));
-  final buffer = calloc<UnsignedChar>(_readBufferSize);
-  final transferred = calloc<Int>();
-  String? error;
+/// 和 libusb 1.0 的 `struct libusb_transfer` 对齐。末尾的弹性数组不计入大小。
+final class _LibusbTransfer extends Struct {
+  external Pointer<libusb_device_handle> devHandle;
+
+  @Uint8()
+  external int flags;
+
+  @Uint8()
+  external int endpoint;
+
+  @Uint8()
+  external int type;
+
+  @Uint32()
+  external int timeout;
+
+  @Int32()
+  external int status;
+
+  @Int32()
+  external int length;
+
+  @Int32()
+  external int actualLength;
+
+  external Pointer<NativeFunction<Void Function(Pointer<_LibusbTransfer>)>>
+  callback;
+
+  external Pointer<Void> userData;
+
+  external Pointer<UnsignedChar> buffer;
+
+  @Int32()
+  external int numIsoPackets;
+}
+
+/// 供测试核对 64 位 ABI 上的字段偏移。
+Map<String, int> usbTransferLayout() {
+  final transfer = calloc<_LibusbTransfer>();
   try {
-    while (true) {
-      final code = libusb.libusb_bulk_transfer(
-        handle,
-        endpoint,
-        buffer,
-        _readBufferSize,
-        transferred,
-        0,
-      );
-      if (code != 0) {
-        error = _claimMessage(libusb, code);
-        break;
-      }
-      final length = transferred.value;
-      if (length <= 0) continue;
-      events.send(<Object?>[
-        'data',
-        Uint8List.fromList(buffer.cast<Uint8>().asTypedList(length)),
-      ]);
-    }
-  } catch (caught) {
-    error = '$caught';
+    transfer.ref.timeout = 0x11223344;
+    transfer.ref.length = 0x55667788;
+    transfer.ref.buffer = Pointer<UnsignedChar>.fromAddress(0x0102030405060708);
+    final bytes = transfer.cast<Uint8>().asTypedList(sizeOf<_LibusbTransfer>());
+    return <String, int>{
+      'size': bytes.length,
+      'timeout': _findUint32(bytes, 0x11223344),
+      'length': _findUint32(bytes, 0x55667788),
+      'buffer': _findUint64(bytes, 0x0102030405060708),
+    };
   } finally {
-    calloc.free(buffer);
-    calloc.free(transferred);
-    events.send(<Object?>['read-end', error]);
+    calloc.free(transfer);
   }
 }
 
-/// 阻塞写批量输出。控制 isolate 发来 `stop` 后退出。
-Future<void> usbWriteLoop(SendPort parent) async {
-  final inbox = _Inbox();
-  parent.send(inbox.port.sendPort);
-  final open = await inbox.take();
-  final libraryPath = open[0]! as String;
-  final handle = Pointer<libusb_device_handle>.fromAddress(open[1]! as int);
-  final endpoint = open[2]! as int;
-  final maxPacketSize = open[3]! as int;
-  final events = open[4]! as SendPort;
-  final libusb = Libusb(DynamicLibrary.open(libraryPath));
-  final transferred = calloc<Int>();
-  try {
+int _findUint32(List<int> bytes, int value) {
+  for (var offset = 0; offset + 4 <= bytes.length; offset++) {
+    final found =
+        bytes[offset] |
+        (bytes[offset + 1] << 8) |
+        (bytes[offset + 2] << 16) |
+        (bytes[offset + 3] << 24);
+    if (found == value) return offset;
+  }
+  return -1;
+}
+
+int _findUint64(List<int> bytes, int value) {
+  for (var offset = 0; offset + 8 <= bytes.length; offset++) {
+    var found = 0;
+    for (var index = 0; index < 8; index++) {
+      found |= bytes[offset + index] << (8 * index);
+    }
+    if (found == value) return offset;
+  }
+  return -1;
+}
+
+class _QueuedWrite {
+  _QueuedWrite(this.data, this.reply);
+
+  final Uint8List data;
+  final SendPort reply;
+  var sendingZeroPacket = false;
+  var replied = false;
+
+  void finish(Object? result) {
+    if (replied) return;
+    replied = true;
+    reply.send(result);
+  }
+}
+
+class _TransferDone {
+  _TransferDone(this.tag, this.status, this.actual, this.bytes);
+
+  final int tag;
+  final int status;
+  final int actual;
+  final Uint8List? bytes;
+}
+
+class _UsbEventLoop {
+  _UsbEventLoop({
+    required this.libusb,
+    required this.context,
+    required this.handle,
+    required this.endpointIn,
+    required this.endpointOut,
+    required this.maxPacketSize,
+  }) {
+    _ping.listen((_) {
+      final waiter = _pingWaiter;
+      _pingWaiter = null;
+      if (waiter != null && !waiter.isCompleted) waiter.complete();
+    });
+    _calls = NativeCallable<Void Function(Pointer<_LibusbTransfer>)>.listener(
+      _onTransfer,
+    );
+    _readTransfer = _allocate();
+    _writeTransfer = _allocate();
+    _readBuffer = calloc<UnsignedChar>(_readBufferSize);
+  }
+
+  final Libusb libusb;
+  final Pointer<libusb_context> context;
+  final Pointer<libusb_device_handle> handle;
+  final int endpointIn;
+  final int endpointOut;
+  final int maxPacketSize;
+
+  final ReceivePort _ping = ReceivePort();
+  final List<_TransferDone> _done = <_TransferDone>[];
+  final List<_QueuedWrite> _writes = <_QueuedWrite>[];
+  Completer<void>? _pingWaiter;
+  late final NativeCallable<Void Function(Pointer<_LibusbTransfer>)> _calls;
+  late final Pointer<_LibusbTransfer> _readTransfer;
+  late final Pointer<_LibusbTransfer> _writeTransfer;
+  late final Pointer<UnsignedChar> _readBuffer;
+  Pointer<UnsignedChar>? _writeBuffer;
+  _QueuedWrite? _currentWrite;
+  var _writeExpect = 0;
+  var _readBusy = false;
+  var _writeBusy = false;
+  var _closing = false;
+  var _cancelRequested = false;
+  var _reported = false;
+  var _disposed = false;
+
+  Future<void> run(_Inbox inbox, SendPort events) async {
+    await _flush();
+    _drain(inbox);
+    _ensureRead(events);
+    _pumpWrite(events);
     while (true) {
-      final message = await inbox.take();
-      if (message.first == 'stop') break;
-      if (message.first != 'write') continue;
-      final reply = message[2]! as SendPort;
-      try {
-        _writeAll(
-          libusb,
-          handle,
-          endpoint,
-          message[1]! as Uint8List,
-          maxPacketSize,
-          transferred,
-        );
-        reply.send(null);
-      } catch (error) {
-        reply.send('$error');
+      if (_closing) _cancelInFlight();
+      if (_closing && !_readBusy && !_writeBusy) return;
+      final code = libusb.libusb_handle_events(context);
+      if (code != 0 && code != _libusbErrorInterrupted && !_closing) {
+        _report(events, libusbErrorText(libusb, code));
+      }
+      await _flush();
+      _harvest(events);
+      _drain(inbox);
+      if (_closing) continue;
+      _ensureRead(events);
+      _pumpWrite(events);
+    }
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    if (!_readBusy) {
+      libusb.libusb_free_transfer(_readTransfer.cast());
+    }
+    if (!_writeBusy) {
+      libusb.libusb_free_transfer(_writeTransfer.cast());
+    }
+    calloc.free(_readBuffer);
+    final writeBuffer = _writeBuffer;
+    if (writeBuffer != null) calloc.free(writeBuffer);
+    _calls.close();
+    _ping.close();
+  }
+
+  Pointer<_LibusbTransfer> _allocate() {
+    final transfer = libusb.libusb_alloc_transfer(0).cast<_LibusbTransfer>();
+    if (transfer.address == 0) {
+      throw AdbUsbException('无法分配 USB 传输。');
+    }
+    return transfer;
+  }
+
+  void _onTransfer(Pointer<_LibusbTransfer> transfer) {
+    final actual = transfer.ref.actualLength;
+    Uint8List? bytes;
+    if (transfer.ref.userData.address == _transferRead &&
+        transfer.ref.status == 0 &&
+        actual > 0) {
+      final length = actual > _readBufferSize ? _readBufferSize : actual;
+      bytes = Uint8List.fromList(
+        transfer.ref.buffer.cast<Uint8>().asTypedList(length),
+      );
+    }
+    _done.add(
+      _TransferDone(
+        transfer.ref.userData.address,
+        transfer.ref.status,
+        actual,
+        bytes,
+      ),
+    );
+  }
+
+  Future<void> _flush() {
+    final done = Completer<void>();
+    _pingWaiter = done;
+    _ping.sendPort.send(null);
+    return done.future;
+  }
+
+  void _drain(_Inbox inbox) {
+    for (final message in inbox.drain()) {
+      switch (message.first) {
+        case 'write':
+          final reply = message[2]! as SendPort;
+          if (_closing) {
+            reply.send('USB 设备已关闭。');
+            break;
+          }
+          final data = message[1]! as Uint8List;
+          if (data.isEmpty) {
+            reply.send(null);
+            break;
+          }
+          _writes.add(_QueuedWrite(data, reply));
+        case 'close':
+          _closing = true;
+          for (final queued in _writes) {
+            queued.finish('USB 设备已关闭。');
+          }
+          _writes.clear();
+          _currentWrite?.finish('USB 设备已关闭。');
       }
     }
-  } finally {
-    calloc.free(transferred);
-    events.send(<Object?>['write-end']);
-    inbox.close();
+  }
+
+  void _harvest(SendPort events) {
+    final ready = List<_TransferDone>.of(_done);
+    _done.clear();
+    for (final done in ready) {
+      if (done.tag == _transferRead) {
+        _finishRead(events, done);
+      } else if (done.tag == _transferWrite) {
+        _finishWrite(events, done);
+      }
+    }
+  }
+
+  void _finishRead(SendPort events, _TransferDone done) {
+    _readBusy = false;
+    if (_closing || done.status == 3) return;
+    if (done.status != 0) {
+      _report(events, _transferStatusText(done.status));
+      return;
+    }
+    final bytes = done.bytes;
+    if (bytes != null && bytes.isNotEmpty) {
+      events.send(<Object?>['data', bytes]);
+    }
+  }
+
+  void _finishWrite(SendPort events, _TransferDone done) {
+    _writeBusy = false;
+    final current = _currentWrite;
+    if (current == null) return;
+    if (_closing || done.status == 3) {
+      current.finish('USB 设备已关闭。');
+      _currentWrite = null;
+      return;
+    }
+    if (done.status != 0 || done.actual != _writeExpect) {
+      current.finish(
+        done.status == 0
+            ? 'USB 写入不完整：${done.actual}/$_writeExpect'
+            : 'USB 传输失败（${_transferStatusText(done.status)}）',
+      );
+      _currentWrite = null;
+      if (done.status == 5) _report(events, _transferStatusText(done.status));
+      return;
+    }
+    if (!current.sendingZeroPacket &&
+        needsZeroLengthPacket(current.data.length, maxPacketSize)) {
+      current.sendingZeroPacket = true;
+      _submitWrite(events, 0);
+      return;
+    }
+    current.finish(null);
+    _currentWrite = null;
+  }
+
+  void _ensureRead(SendPort events) {
+    if (_closing || _readBusy) return;
+    final code = _submit(
+      transfer: _readTransfer,
+      endpoint: endpointIn,
+      buffer: _readBuffer,
+      length: _readBufferSize,
+      timeout: 0,
+      tag: _transferRead,
+    );
+    if (code != 0) {
+      _report(events, libusbErrorText(libusb, code));
+      return;
+    }
+    _readBusy = true;
+  }
+
+  void _pumpWrite(SendPort events) {
+    if (_closing || _writeBusy || _currentWrite != null || _writes.isEmpty) {
+      return;
+    }
+    final next = _writes.removeAt(0);
+    _currentWrite = next;
+    final previous = _writeBuffer;
+    if (previous != null) calloc.free(previous);
+    final buffer = calloc<UnsignedChar>(next.data.length);
+    buffer.cast<Uint8>().asTypedList(next.data.length).setAll(0, next.data);
+    _writeBuffer = buffer;
+    _submitWrite(events, next.data.length);
+  }
+
+  void _submitWrite(SendPort events, int length) {
+    final buffer = _writeBuffer;
+    if (buffer == null) return;
+    final code = _submit(
+      transfer: _writeTransfer,
+      endpoint: endpointOut,
+      buffer: buffer,
+      length: length,
+      timeout: _writeTimeoutMs,
+      tag: _transferWrite,
+    );
+    if (code != 0) {
+      _currentWrite?.finish('USB 传输失败（${libusbErrorText(libusb, code)}）');
+      _currentWrite = null;
+      if (code == -4) _report(events, libusbErrorText(libusb, code));
+      return;
+    }
+    _writeExpect = length;
+    _writeBusy = true;
+  }
+
+  int _submit({
+    required Pointer<_LibusbTransfer> transfer,
+    required int endpoint,
+    required Pointer<UnsignedChar> buffer,
+    required int length,
+    required int timeout,
+    required int tag,
+  }) {
+    final fields = transfer.ref;
+    fields.devHandle = handle;
+    fields.flags = 0;
+    fields.endpoint = endpoint;
+    fields.type = _bulkTransfer;
+    fields.timeout = timeout;
+    fields.status = 0;
+    fields.length = length;
+    fields.actualLength = 0;
+    fields.callback = _calls.nativeFunction;
+    fields.userData = Pointer<Void>.fromAddress(tag);
+    fields.buffer = buffer;
+    fields.numIsoPackets = 0;
+    return libusb.libusb_submit_transfer(transfer.cast());
+  }
+
+  void _cancelInFlight() {
+    if (_cancelRequested) return;
+    _cancelRequested = true;
+    if (_readBusy) libusb.libusb_cancel_transfer(_readTransfer.cast());
+    if (_writeBusy) libusb.libusb_cancel_transfer(_writeTransfer.cast());
+  }
+
+  void _report(SendPort events, String message) {
+    _closing = true;
+    if (_reported) return;
+    _reported = true;
+    events.send(<Object?>['error', 'USB 传输失败（$message）']);
   }
 }
 
@@ -456,6 +707,13 @@ class _Inbox {
       final waiter = _waiter;
       if (waiter != null && !waiter.isCompleted) waiter.complete();
     });
+  }
+
+  List<List<Object?>> drain() {
+    if (_pending.isEmpty) return const <List<Object?>>[];
+    final messages = List<List<Object?>>.of(_pending);
+    _pending.clear();
+    return messages;
   }
 
   Future<List<Object?>> take() async {
@@ -659,47 +917,17 @@ void _prepareInterface(
   }
 }
 
-void _writeAll(
-  Libusb libusb,
-  Pointer<libusb_device_handle> handle,
-  int endpoint,
-  Uint8List data,
-  int maxPacketSize,
-  Pointer<Int> transferred,
-) {
-  if (data.isEmpty) return;
-  final buffer = calloc<UnsignedChar>(data.length);
-  try {
-    buffer.cast<Uint8>().asTypedList(data.length).setAll(0, data);
-    final code = libusb.libusb_bulk_transfer(
-      handle,
-      endpoint,
-      buffer,
-      data.length,
-      transferred,
-      _writeTimeoutMs,
-    );
-    if (code != 0 || transferred.value != data.length) {
-      throw AdbUsbException(
-        code == 0
-            ? 'USB 写入不完整：${transferred.value}/${data.length}'
-            : _claimMessage(libusb, code),
-      );
-    }
-    if (needsZeroLengthPacket(data.length, maxPacketSize)) {
-      final zero = libusb.libusb_bulk_transfer(
-        handle,
-        endpoint,
-        buffer,
-        0,
-        transferred,
-        _writeTimeoutMs,
-      );
-      if (zero != 0) throw AdbUsbException(_claimMessage(libusb, zero));
-    }
-  } finally {
-    calloc.free(buffer);
-  }
+String _transferStatusText(int status) {
+  return switch (status) {
+    0 => '完成',
+    1 => '传输失败',
+    2 => '传输超时',
+    3 => '传输已取消',
+    4 => '端点停滞',
+    5 => '设备已断开',
+    6 => '数据溢出',
+    _ => '状态 $status',
+  };
 }
 
 String _claimMessage(Libusb libusb, int code, [int osError = 0]) {

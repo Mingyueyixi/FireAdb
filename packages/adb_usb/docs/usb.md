@@ -30,21 +30,13 @@ Linux、macOS 只按系统库名加载 libusb，仓库没有带上对应动态�
 
 产品名、型号来自连接成功后的 `getprop`（模拟器则来自 CNXN banner 的 `ro.product.*`）。`adb devices` 的短格式是 `序列号<TAB>状态`。长格式在序列号后补齐到 22 列，再写状态、`product:`、`model:`、`device:` 和 `transport_id:`。`devPath` 仍保存在设备对象上，供 `adb -s 1-3` 和 `adb -s usb:1-3` 查找；只有路径里含有 `/`（Linux 的 `/dev/bus/usb/...`）才写进长列表。因此 Windows 上从 `devices -l` 解析回来的设备没有 `devPath`，首页图标按普通手机显示。
 
-## 一台 USB 设备占哪些 isolate
+## 一台 USB 设备占哪个 isolate
 
-界面线程不调用 libusb。打开一台手机时固定三个 isolate：
+界面线程不调用 libusb 的批量传输。打开一台手机时只起一个 isolate：
 
-| isolate | 做什么 |
-|---|---|
-| `usbWorker` | `libusb_open`、声明接口、读取序列号，并转发数据。关闭时由它调用 `libusb_close`，把堵在传输里的调用打断 |
-| 读 | `libusb_bulk_transfer`，超时 0，一直阻塞到手机发来数据或句柄被关掉 |
-| 写 | 平时停在消息端口上，有包才写，写超时 10 秒 |
+它 `libusb_open`、声明接口、读取序列号，然后提交一个没有超时的批量读。接着调用 `libusb_handle_events`，一直停到内核报告这批传输结束，或者主 isolate 要写入、关闭时调用 `libusb_interrupt_event_handler` 把等待打断。完成回调先回到这个 isolate 的事件循环，把数据交给界面，再提交下一次读或写。写出的长度正好是包长整数倍时，再提交一个零长度包。
 
-这和官方 libusb 后端的读线程、写线程是同一结构，差别是这里用 Dart isolate。手机空闲时读 isolate 停在内核的 WinUSB 重叠 I/O 上，写 isolate 停在端口上，都不轮询。每个设备有自己的 `libusb_init` 上下文。读、写 isolate 重新打开同一份 DLL，并用地址重建 `libusb_device_handle`。
-
-关闭是发给 `usbWorker` 的一条消息。它释放接口并 `libusb_close`，最多再等 2 秒，然后才 `Isolate.kill`。
-
-`libusb_bulk_transfer` 是同步包装。异步做法是 `libusb_submit_transfer` 加 `libusb_handle_events`，一台设备可以收成一个等待中的 isolate。当前没有改成那样。
+手机空闲时这个 isolate 停在内核的 WinUSB 重叠 I/O 上，不轮询。每个设备仍有自己的 `libusb_init` 上下文。关闭时先 `libusb_cancel_transfer`，等回调回来再 `libusb_close`。界面最多再等 2 秒，然后 `Isolate.kill`。
 
 ## 接口怎么认
 
@@ -59,7 +51,7 @@ Linux、macOS 只按系统库名加载 libusb，仓库没有带上对应动态�
 
 ## 动态库
 
-Windows 随包文件是官方 libusb **1.0.29** 的 `VS2022/MS64/dll/libusb-1.0.dll`，放在 `packages/adb_usb/vendor/windows/`。许可证是 LGPL-2.1，源码在 [libusb/libusb](https://github.com/libusb/libusb/releases/tag/v1.0.29)。Windows 构建会在该文件存在时把它装到 `fire_adb.exe` 旁边。
+Windows 随包文件是官方 libusb **1.0.29** 的 `VS2022/MS64/dll/libusb-1.0.dll`，放在 `packages/adb_usb/vendor/windows/`。许可证是 LGPL-2.1。对照源码在 `third_party/libusb`，固定为标签 `v1.0.29`（上游 [libusb/libusb](https://github.com/libusb/libusb/releases/tag/v1.0.29)）。Windows 构建会在该文件存在时把它装到 `fire_adb.exe` 旁边。
 
 加载顺序：
 
@@ -84,13 +76,13 @@ Linux 加载 `libusb-1.0.so.0`。macOS 依次尝试 Homebrew 的 `/opt/homebrew/
 
 ## 先前确认过的问题
 
-**调试器里 usbWorker 一直暂停又运行。** 当时读和写挤在同一个 isolate 里，空闲读用 20 毫秒超时让出事件循环，调试器就把原生阻塞显示成暂停。连接本身没有在断开。现在读、写已经拆开，读超时是 0，空闲时停在内核传输上，不再每秒来回几十次。
+**调试器里 usbWorker 一直暂停又运行。** 当时读和写挤在同一个 isolate 里，空闲读用 20 毫秒超时让出事件循环，调试器就把原生阻塞显示成暂停。连接本身没有在断开。后来曾拆成读、写各一个 isolate，超时改为 0。现在收成一个 isolate：`libusb_submit_transfer` 把传输交给内核，`libusb_handle_events` 停在那里，有数据或主 isolate 打断时才返回。
 
-**为什么当时要轮询。** `libusb_bulk_transfer` 返回之前，这个 isolate 上的 Dart 代码都不会跑。读一直堵着，`CNXN`、`OPEN`、`WRTE` 就发不出去。20 毫秒只是写入最多晚多久，协议里没有这个间隔。
+**为什么当时要轮询。** `libusb_bulk_transfer` 返回之前，这个 isolate 上的 Dart 代码都不会跑。读一直堵着，`CNXN`、`OPEN`、`WRTE` 就发不出去。20 毫秒只是写入最多晚多久，协议里没有这个间隔。异步提交没有这个问题：读和写可以同时挂在内核上，事件循环被打断后两边都能继续。
 
-**官方 USB 是不是也这样轮询。** 不是。官方 libusb 后端是一条读线程、一条写线程，两边超时都是 0。写线程平时睡在队列上。源码在 `third_party/aosp-adb/client/usb_libusb.cpp`。我们现在的三个 isolate 就是这个结构：控制、读、写。几台手机各自再占三个 isolate，不会把线程耗尽；多出来的是 isolate 自己的堆，以及跨 isolate 拷一份数据。界面线程只发关闭消息，由 `usbWorker` 调用 `libusb_close` 打断正在进行的传输。
+**官方 USB 是不是也这样轮询。** 不是。官方 libusb 后端是一条读线程、一条写线程，两边都调用同步的 `libusb_bulk_transfer`，超时是 0。源码在 `third_party/aosp-adb/client/usb_libusb.cpp`。我们没有照搬那两条线程。一台手机只有一个 isolate，用 `libusb_submit_transfer` 和 `libusb_handle_events` 等内核事件。几台手机就几个 isolate，不会把线程耗尽。界面线程只发消息，并调用 `libusb_interrupt_event_handler` 把堵在事件循环里的 isolate 叫醒。
 
-**libusb 为什么用线程，不能等内核事件吗。** 真正的等待就是内核事件：Windows 上是 WinUSB 的重叠 I/O，Linux 上是 usbfs 的 poll。`libusb_bulk_transfer` 只是同步包装，调用方要停到这一次传输结束。异步接口是 `libusb_submit_transfer` 加 `libusb_handle_events`。`dart_libusb` 暴露的是同步调用，而一个已经堵在读里的 isolate 收不到下一条写，所以现在仍是读、写各一个 isolate。
+**libusb 为什么用线程，不能等内核事件吗。** 真正的等待就是内核事件：Windows 上是 WinUSB 的重叠 I/O，Linux 上是 usbfs 的 poll。`libusb_bulk_transfer` 只是同步包装，调用方要停到这一次传输结束，所以官方才用两条线程。异步接口是 `libusb_submit_transfer` 加 `libusb_handle_events`。当前代码走的就是这条。
 
 **没有官方 adb server，USB 还能连吗。** 能。`openUsbAdbDevice` 直接声明接口并做 AUTH/CNXN，不经过 5037。本应用自己的 shell、文件、截图走这条直连就够。Server 是为了让首页和官方 `adb` 共用已经打开的接口。一块接口只能有一个程序声明成功，所以本进程占着 5037 时，界面不再对同一台手机做第二次打开。
 
@@ -120,4 +112,3 @@ Linux 加载 `libusb-1.0.so.0`。macOS 依次尝试 Homebrew 的 `/opt/homebrew/
 
 - Android USB Host（`android.hardware.usb`）
 - Linux、macOS 随包提供 libusb，并在真机上验证
-- 把一台设备的读、写收成一个 `libusb_handle_events` 等待循环

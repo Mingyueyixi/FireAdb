@@ -19,6 +19,7 @@ fire-adb/
 │   └── adb_usb/              # USB 传输层（Windows：libusb；Android USB Host 未做）
 └── third_party/              # 参考源码（git submodule，不参与构建）
     ├── aosp-adb/             # AOSP packages/modules/adb（GitHub 镜像）
+    ├── libusb/               # https://github.com/libusb/libusb ，固定在 v1.0.29
     └── python-adb/           # https://github.com/google/python-adb
 ```
 
@@ -30,7 +31,7 @@ git clone --recursive https://gitee.com/mingyueyixi/fire-adb.git
 git submodule update --init --recursive
 ```
 
-`third_party/` 下的两个仓库仅用于对照学习，不参与构建，也不会被 app/packages 引用。
+`third_party/` 下的仓库仅用于对照学习，不参与构建，也不会被 app/packages 引用。Windows 随包的 `libusb-1.0.dll` 对应 `third_party/libusb` 的标签 `v1.0.29`。
 
 ## 开发
 
