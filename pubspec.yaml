@@ -21,3 +21,4 @@ workspace:
   - app
   - packages/adb_core
   - packages/adb_usb
+  - packages/libadb

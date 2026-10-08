@@ -1,11 +1,9 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 
-import 'package:adb_core/adb_core.dart';
-import 'package:adb_usb/adb_usb.dart';
 import 'package:get/get.dart';
+import 'package:libadb/libadb.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_feedback.dart';
@@ -24,8 +22,7 @@ class ConnectionManager extends GetxService {
   SharedPreferences? _prefs;
   bool _signerResolved = false;
   bool _historyLoaded = false;
-  AdbServer? _localServer;
-  UsbAdbTracker? _usbTracker;
+  LocalAdb? _localAdb;
   String? _loggedLocalUsbError;
 
   /// 本进程自己监听着 127.0.0.1:5037。USB 设备由它登记，列表走 host:devices。
@@ -70,35 +67,24 @@ class ConnectionManager extends GetxService {
   ///
   /// USB 枚举只在桌面端做。Android 没有 libusb，设备来自手动 TCP 和本机模拟器端口扫描。
   Future<void> ensureLocalAdbServer() async {
-    if (_localServer != null) return;
+    if (_localAdb != null) return;
     _resolveSigners();
-    final server = await AdbServer.tryStart(signers: _signers);
-    if (server == null) {
+    final local = await LocalAdb.tryStart(
+      signers: _signers,
+      onKilled: _onLocalServerKilled,
+      onUsbError: _onLocalUsbError,
+    );
+    if (local == null) {
       developer.log(
         '127.0.0.1:5037 已有 ADB Server，直接使用它列出的设备',
         name: 'fire_adb',
       );
       return;
     }
-    server.onKilled = _onLocalServerKilled;
-    _localServer = server;
+    _localAdb = local;
     ownsLocalAdbServer.value = true;
-    if (!_desktopUsb) {
-      developer.log('已启动本机 ADB Server 127.0.0.1:5037', name: 'fire_adb');
-      return;
-    }
-    final tracker = UsbAdbTracker(
-      server: server,
-      signers: _signers,
-      onError: _onLocalUsbError,
-    );
-    _usbTracker = tracker;
-    tracker.start();
     developer.log('已启动本机 ADB Server 127.0.0.1:5037', name: 'fire_adb');
   }
-
-  bool get _desktopUsb =>
-      Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
   void _onLocalUsbError(Object? error, StackTrace? stackTrace) {
     if (error == null) {
@@ -115,10 +101,7 @@ class ConnectionManager extends GetxService {
 
   void _onLocalServerKilled() {
     ownsLocalAdbServer.value = false;
-    _localServer = null;
-    final tracker = _usbTracker;
-    _usbTracker = null;
-    if (tracker != null) unawaited(tracker.close());
+    _localAdb = null;
   }
 
   void _resolveSigners() {

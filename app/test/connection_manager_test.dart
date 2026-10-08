@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:adb_core/adb_core.dart';
 import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:libadb/libadb.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

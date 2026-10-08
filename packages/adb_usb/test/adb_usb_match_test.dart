@@ -59,9 +59,24 @@ void main() {
       'adb_usb',
       'vendor',
       'windows',
+      'x64',
       'libusb-1.0.dll',
     ].join(separator);
     expect(windowsLibusbCandidates(executable), contains(library));
+    final armLibrary = [
+      'C:',
+      'repo',
+      'packages',
+      'adb_usb',
+      'vendor',
+      'windows',
+      'arm64',
+      'libusb-1.0.dll',
+    ].join(separator);
+    expect(
+      windowsLibusbCandidates(executable, architecture: 'arm64'),
+      contains(armLibrary),
+    );
   });
 
   test('包长整数倍的写入需要零长度包', () {

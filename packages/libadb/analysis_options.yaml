@@ -1,0 +1,2 @@
+# 继承工作区共享配置（含 lints/recommended）。
+include: ../../analysis_options.yaml

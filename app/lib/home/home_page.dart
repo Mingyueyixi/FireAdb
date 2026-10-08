@@ -1,7 +1,6 @@
-import 'package:adb_core/adb_core.dart';
-import 'package:adb_usb/adb_usb.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:libadb/libadb.dart';
 
 import '../app_feedback.dart';
 import '../connection/model/device_profile.dart';

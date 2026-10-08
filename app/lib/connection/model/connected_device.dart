@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:adb_core/adb_core.dart';
+import 'package:libadb/libadb.dart';
 
 class ConnectedDevice {
   ConnectedDevice.direct(AdbDevice device)

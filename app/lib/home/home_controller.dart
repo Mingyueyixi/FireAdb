@@ -1,10 +1,9 @@
 import 'dart:async';
-import 'dart:io' show Platform, SocketException;
+import 'dart:io' show SocketException;
 
-import 'package:adb_core/adb_core.dart';
-import 'package:adb_usb/adb_usb.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:libadb/libadb.dart';
 
 import '../app_feedback.dart';
 import '../connection/connection_manager.dart';
@@ -21,14 +20,12 @@ class HomeController extends GetxController {
            hostClient ??
            AdbHostClient(connectTimeout: const Duration(milliseconds: 400)),
        _listUsbDevices = listUsbDevices ?? listUsbAdbDevices,
-       usbSupported = usbSupported ?? _desktopUsb;
+       usbSupported = usbSupported ?? libadbUsbSupported;
 
   final AdbHostClient _hostClient;
   final Future<List<UsbAdbDevice>> Function() _listUsbDevices;
   final bool usbSupported;
 
-  static bool get _desktopUsb =>
-      Platform.isWindows || Platform.isLinux || Platform.isMacOS;
   final TextEditingController hostController = TextEditingController();
   final TextEditingController portController = TextEditingController(
     text: '5555',

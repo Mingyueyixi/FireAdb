@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:adb_core/adb_core.dart';
+import 'package:libadb/libadb.dart';
 
 import '../../../connection/model/connected_device.dart';
 import '../../../files/remote_file_export.dart';

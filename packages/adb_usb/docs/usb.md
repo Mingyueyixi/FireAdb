@@ -12,7 +12,7 @@ Windows 上可以枚举 ADB 接口、声明 WinUSB 接口、完成 AUTH/CNXN，�
 
 本机模拟器也会出现在同一份列表里。adb 端口 `5557` 显示为 `emulator-5556`。
 
-Linux、macOS 只按系统库名加载 libusb，仓库没有带上对应动态库，也没有在真机上验证。Android 没有这条 USB 路径。Android 上的设备列表仍然走本机 5037：进程会启动 ADB Server，只是不枚举 USB。
+Linux、macOS 按系统库名加载 libusb。上游没有发布这两套动态库，仓库也没有放进去；构建钩子登记的是 `libusb-1.0.so.0` 和 `libusb-1.0.dylib`。这两端还没有真机验证。Android 没有这条 USB 路径。Android 上的设备列表仍然走本机 5037：进程会启动 ADB Server，只是不枚举 USB。应用通过 `libadb` 做这次组装。
 
 ## 设备从哪来
 
@@ -51,16 +51,28 @@ Linux、macOS 只按系统库名加载 libusb，仓库没有带上对应动态�
 
 ## 动态库
 
-Windows 随包文件是官方 libusb **1.0.29** 的 `VS2022/MS64/dll/libusb-1.0.dll`，放在 `packages/adb_usb/vendor/windows/`。许可证是 LGPL-2.1。对照源码在 `third_party/libusb`，固定为标签 `v1.0.29`（上游 [libusb/libusb](https://github.com/libusb/libusb/releases/tag/v1.0.29)）。Windows 构建会在该文件存在时把它装到 `fire_adb.exe` 旁边。
+Windows 随包文件来自官方 libusb **1.0.29** 的 `libusb-1.0.29.7z`，许可证是 LGPL-2.1。对照源码在 `third_party/libusb`，固定为标签 `v1.0.29`（上游 [libusb/libusb](https://github.com/libusb/libusb/releases/tag/v1.0.29)）。
+
+- x64：`VS2022/MS64/dll/libusb-1.0.dll`，放在 `packages/adb_usb/vendor/windows/x64/`
+- ARM64：`MinGW-llvm-aarch64/dll/libusb-1.0.dll`，放在 `packages/adb_usb/vendor/windows/arm64/`。同一份压缩包的 VS2022 目录没有 ARM64 构建
+
+`hook/build.dart` 按目标系统登记代码资源，资源 id 是 `package:adb_usb/src/libusb.dart`：
+
+| 目标 | 钩子做什么 |
+|---|---|
+| Windows x64 | 拷贝 `vendor/windows/x64/libusb-1.0.dll`，随包。缺这个文件构建失败 |
+| Windows ARM64 | 拷贝 `vendor/windows/arm64/libusb-1.0.dll`，随包。缺这个文件构建失败 |
+| Linux x64 / arm64、macOS x64 / arm64 | `vendor/<系统>/<架构>/` 里有文件就随包。仓库里现在没有，改为登记系统库名 `libusb-1.0.so.0` 或 `libusb-1.0.dylib` |
+| Android | 不登记 |
+
+引用这个包不必再改应用的 CMake。运行时按文件名 `DynamicLibrary.open`。当前 Flutter 使用的 Dart 3.13 还没有 `DynamicLibrary.codeAsset`，随包文件必须保持 `libusb-1.0.dll` 这个名字，构建才会把它放在可执行文件旁边。
 
 加载顺序：
 
 1. 环境变量 `FIRE_ADB_LIBUSB`
-2. 可执行文件旁边的 `libusb-1.0.dll`
-3. 从可执行文件向上最多 10 层，查找 `packages/adb_usb/vendor/windows/libusb-1.0.dll`
-4. 否则按名字 `libusb-1.0.dll` 交给系统搜索
-
-Linux 加载 `libusb-1.0.so.0`。macOS 依次尝试 Homebrew 的 `/opt/homebrew/lib/libusb-1.0.dylib`、`/usr/local/lib/libusb-1.0.dylib`，再退回 `libusb-1.0.dylib`。
+2. Windows：可执行文件旁边的 `libusb-1.0.dll`，再从可执行文件向上最多 10 层找与当前进程架构对应的那份（`vendor/windows/x64/libusb-1.0.dll` 或 `vendor/windows/arm64/libusb-1.0.dll`），最后按名字 `libusb-1.0.dll` 交给系统搜索。一次构建只打一个架构。在 ARM 电脑上用 x64 模拟跑起来的进程仍加载 x64 DLL
+3. Linux：可执行文件旁边的 `libusb-1.0.so.0`，否则系统库名
+4. macOS：Homebrew 的 `/opt/homebrew/lib/libusb-1.0.dylib`、`/usr/local/lib/libusb-1.0.dylib`，再退回 `libusb-1.0.dylib`
 
 这份 DLL 不代替 USB 驱动。libusb 在 Windows 上通过 `winusb.dll` 打开已经绑定 WinUSB 的接口。手机若绑的是别的驱动，需要先换成 WinUSB。系统自带的 MS OS 兼容 ID 也可以完成绑定，这种情况下不必再装 Google USB 驱动。同一接口同时只能有一个程序声明成功。
 
@@ -110,5 +122,4 @@ Linux 加载 `libusb-1.0.so.0`。macOS 依次尝试 Homebrew 的 `/opt/homebrew/
 
 ## 还没做
 
-- Android USB Host（`android.hardware.usb`）
-- Linux、macOS 随包提供 libusb，并在真机上验证
+- Linux、macOS 的真机验证。上游没有这两套预编译库；若以后放进 `vendor/linux/` 或 `vendor/macos/`，现有钩子会改成随包

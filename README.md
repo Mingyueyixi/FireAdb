@@ -5,7 +5,7 @@
 ## 目标平台
 
 - Windows / Linux / macOS（桌面，Flutter + dart_libusb）
-- Android（Flutter；USB Host 走 `android.hardware.usb`）
+- Android（Flutter；设备列表走本机 5037，不枚举 USB）
 
 ## 工程结构
 
@@ -16,7 +16,8 @@ fire-adb/
 ├── app/                      # Flutter 应用（android/windows/linux/macos）
 ├── packages/
 │   ├── adb_core/             # 纯 Dart ADB 引擎（协议 / 传输 / 认证 / 无线配对，零平台依赖）
-│   └── adb_usb/              # USB 传输层（Windows：libusb；Android USB Host 未做）
+│   ├── adb_usb/              # 桌面 USB 传输（libusb；Android 不提供）
+│   └── libadb/               # 薄入口：启动本机 Server，桌面再挂上 USB
 └── third_party/              # 参考源码（git submodule，不参与构建）
     ├── aosp-adb/             # AOSP packages/modules/adb（GitHub 镜像）
     ├── libusb/               # https://github.com/libusb/libusb ，固定在 v1.0.29
@@ -31,7 +32,7 @@ git clone --recursive https://gitee.com/mingyueyixi/fire-adb.git
 git submodule update --init --recursive
 ```
 
-`third_party/` 下的仓库仅用于对照学习，不参与构建，也不会被 app/packages 引用。Windows 随包的 `libusb-1.0.dll` 对应 `third_party/libusb` 的标签 `v1.0.29`。
+`third_party/` 下的仓库仅用于对照学习，不参与构建，也不会被 app/packages 引用。Windows 随包的 x64 和 ARM64 `libusb-1.0.dll` 对应 `third_party/libusb` 的标签 `v1.0.29`。
 
 ## 开发
 
@@ -70,13 +71,14 @@ git submodule update --init --recursive
 - [x] 4. `adb_core`：连接抽象（`AdbConnection` 多流、5037 host 客户端 `host:connect`、`tport:*`/`transport-any`、track-devices）
 - [x] 5. `adb_core`：服务实现（shell / sync push-pull / install / screencap / getprop 等）——已在真实模拟器（emulator-5556, Android 12）全流程验证：AUTH 握手（持久化密钥免授权）、shell/getprop/echo、`exec:screencap -p` 截图 2.2MB、push↔pull、stat、track-devices 全部通过
 - [x] 6. `adb_core`：WiFi 无线调试（mDNS 发现 + Android 11+ TLS 配对，参考 `pairing_connection/`）——mDNS 用纯 Dart `RawDatagramSocket` 自研（PTR/SRV/TXT/A/AAAA 解析含名称压缩指针，回归测试含真实压缩指针报文）；TLS 1.3 + SPAKE2 + Aes128Gcm 配对握手与 AOSP 源码逐字节核对（`pairing_connection.h`、`aes_128_gcm.cpp`），loopback 端到端 4 项测试通过。真机验证：MuMu（Android 12）镜像无无线调试入口，配对路径以字节级测试覆盖；经典 transport（RSA AUTH + CNXN + shell_v2 + filesync + track-devices）已在同一模拟器直连 adbd（5557）全流程复验通过
-- [x] 7. `adb_usb`：Windows 上用 libusb 枚举并打开已绑定 WinUSB 的 ADB 接口，本机 ADB Server 登记后出现在设备列表。Linux / macOS 未随包提供动态库。读写仍是单 isolate 的同步 bulk 传输，见 `packages/adb_usb/docs/usb.md`
-- [ ] 8. Android 端：`android.hardware.usb` 插件化 USB 传输
+- [x] 7. `adb_usb`：Windows 上用 libusb 枚举并打开已绑定 WinUSB 的 ADB 接口，本机 ADB Server 登记后出现在设备列表。构建钩子按目标架构随包拷贝 Windows x64 或 ARM64 DLL；Linux / macOS 登记系统库名。一台手机一个 isolate，用 `libusb_handle_events` 等内核事件。见 `packages/adb_usb/docs/usb.md`
+- [x] 8. `libadb`：应用只依赖这一层。它启动 5037，并只在 Windows / Linux / macOS 挂上 USB。不做 Android USB Host
 - [ ] 9. App UI：设备列表 / shell 终端 / 文件管理 / 安装构建 / 截图录屏
 - [ ] 10. 交叉编译与各平台打包
 
 ## 依赖
 
 - `adb_core`: `pointycastle`（RSA/签名）
-- `adb_usb`: `dart_libusb`（libusb FFI 绑定）、`adb_core`
-- `app`: `adb_core`（workspace 内路径依赖）
+- `adb_usb`: `dart_libusb`（libusb FFI 绑定）、`adb_core`，以及 `hook/build.dart`（`hooks` / `code_assets`）
+- `libadb`: `adb_core`、`adb_usb`
+- `app`: `libadb`（workspace 内路径依赖）

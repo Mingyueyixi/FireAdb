@@ -1,6 +1,6 @@
 /// 桌面端 USB 传输：用 libusb 枚举 ADB 接口，并实现 [AdbTransport]。
 ///
-/// Android 端的 USB Host（`android.hardware.usb`）尚未接入。
+/// Android 不走这条路径。
 library;
 
 export 'src/adb_usb_device.dart';

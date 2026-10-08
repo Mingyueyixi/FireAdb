@@ -40,10 +40,8 @@ dependencies:
   crypto: ^3.0.6
   file_selector: ^1.1.0
   shared_preferences: ^2.3.0
-  adb_core:
-    path: ../packages/adb_core
-  adb_usb:
-    path: ../packages/adb_usb
+  libadb:
+    path: ../packages/libadb
   get: ^4.7.3
   hooks: 2.0.2
 

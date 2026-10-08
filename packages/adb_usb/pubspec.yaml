@@ -1,5 +1,5 @@
 name: adb_usb
-description: adb_core 的 USB 传输层实现（桌面端基于 dart_libusb，Android 端走 android.hardware.usb）。
+description: adb_core 的桌面 USB 传输（Windows / Linux / macOS，通过 libusb）。
 version: 0.1.0
 publish_to: none
 resolution: workspace
@@ -8,13 +8,13 @@ resolution: workspace
 environment:
   sdk: ^3.13.1
 
-# Add regular dependencies here.
 dependencies:
   adb_core:
     path: ../adb_core
+  code_assets: 1.2.1
   dart_libusb: ^1.0.1
   ffi: ^2.1.0
-  # path: ^1.9.0
+  hooks: 2.0.2
 
 dev_dependencies:
   lints: ^6.0.0
