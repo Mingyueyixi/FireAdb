@@ -129,7 +129,12 @@ class FilesController extends GetxController {
   DeviceFileRepository? _repository() {
     final device = _manager.deviceOf(serial);
     if (device == null) return null;
-    return DeviceFileRepository(device);
+    final profile = _manager.profileOf(serial);
+    return DeviceFileRepository(
+      device,
+      host: profile?.host,
+      adbSerial: profile?.adbSerial,
+    );
   }
 
   Future<void> reload() => open(path.value);

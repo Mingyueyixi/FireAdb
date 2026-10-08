@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:get/get.dart';
 
@@ -25,7 +26,7 @@ class RecordingStart {
   final Future<CaptureNotice?>? finished;
 }
 
-/// 录制设备屏幕。停止后把 mp4 拉回应用目录，并删除设备上的临时视频。
+/// 录制设备屏幕。停止后把 mp4 拉回下载目录，并删除设备上的临时视频。
 ///
 /// [method] 决定用系统程序还是辅助服务里的内置录屏。
 /// 系统程序会被策略接管时，改用临时目录里的副本。副本已在就直接用，没有才复制，录完后保留。
@@ -88,7 +89,7 @@ class ScreenrecordController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    unawaited(reload());
+    if (!Platform.isAndroid) unawaited(reload());
     _detectTask = _detectRecordMethodBody();
   }
 

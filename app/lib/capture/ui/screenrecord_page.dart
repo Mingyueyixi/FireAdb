@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../app_feedback.dart';
+import '../../files/android_storage_access.dart';
 import '../../files/data/source/remote_file_commands.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../l10n/generated/fire_adb_localizations.dart';
@@ -33,6 +35,22 @@ class _ScreenrecordPageState extends State<ScreenrecordPage> {
       ScreenrecordController(widget.serial),
       tag: widget.serial,
     );
+    if (Platform.isAndroid) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_prepareDirectory());
+      });
+    }
+  }
+
+  Future<void> _prepareDirectory() async {
+    if (!mounted) return;
+    final granted = await ensureAllFilesAccess(context);
+    if (!mounted) return;
+    if (!granted) {
+      controller.loading.value = false;
+      return;
+    }
+    await controller.reload();
   }
 
   @override
@@ -44,6 +62,10 @@ class _ScreenrecordPageState extends State<ScreenrecordPage> {
   }
 
   Future<void> _start() async {
+    if (Platform.isAndroid) {
+      final granted = await ensureAllFilesAccess(context);
+      if (!granted || !mounted) return;
+    }
     final l10n = context.l10n;
     final result = await controller.start(l10n);
     if (!mounted) return;

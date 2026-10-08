@@ -442,7 +442,7 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String appsExportPrompt(Object name) {
-    return '请输入要将 $name 拉取到的目标目录';
+    return '选择要将 $name 拉取到的目录';
   }
 
   @override
@@ -575,7 +575,7 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String appsBatchExportPrompt(int count) {
-    return '请输入要将选中的 $count 个应用拉取到的目标目录';
+    return '选择要将选中的 $count 个应用拉取到的目录';
   }
 
   @override
@@ -797,12 +797,12 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String filesExportPrompt(Object name) {
-    return '请输入要将 $name 导出到的目录';
+    return '选择要将 $name 导出到的目录';
   }
 
   @override
   String filesBatchExportPrompt(int count) {
-    return '请输入要将选中的 $count 项导出到的目录';
+    return '选择要将选中的 $count 项导出到的目录';
   }
 
   @override
@@ -1005,4 +1005,51 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String screenrecordTooLarge(Object size, Object path) {
     return '录像有 $size，超过可保存的大小，仍留在设备上：$path';
   }
+
+  @override
+  String get storageAccessTitle => '需要文件访问权限';
+
+  @override
+  String get storageAccessMessage => '浏览和保存手机上的目录需要授予「所有文件访问权限」。';
+
+  @override
+  String get storageAccessGrant => '去授权';
+
+  @override
+  String get localPickerChooseFolder => '选择文件夹';
+
+  @override
+  String get localPickerChooseFiles => '选择文件';
+
+  @override
+  String get localPickerUseFolder => '选择此文件夹';
+
+  @override
+  String localPickerUseFiles(int count) {
+    return '选择（$count）';
+  }
+
+  @override
+  String get localPickerStorage => '存储设备';
+
+  @override
+  String get localPickerInternalStorage => '内部存储';
+
+  @override
+  String get localPickerEmpty => '此目录是空的';
+
+  @override
+  String get localPickerUnreadable => '无法读取此目录';
+
+  @override
+  String get localPickerNewFolder => '新建文件夹';
+
+  @override
+  String get localPickerInvalidName => '名称不能包含 / 或 \\';
+
+  @override
+  String get localPickerUp => '上级目录';
+
+  @override
+  String get localPickerGo => '前往';
 }

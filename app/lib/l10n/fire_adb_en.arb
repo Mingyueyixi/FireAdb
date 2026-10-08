@@ -228,7 +228,7 @@
   "appsFreezeMethodAmFreezeDescription": "am freeze: ActivityManager process freeze. Requires Android 15+.",
   "appsExportAction": "Export APK",
   "appsExportTitle": "Export app",
-  "appsExportPrompt": "Enter the folder where {name} should be pulled",
+  "appsExportPrompt": "Choose the folder where {name} should be pulled",
   "@appsExportPrompt": {
     "placeholders": {
       "name": {}
@@ -369,7 +369,7 @@
       "names": {}
     }
   },
-  "appsBatchExportPrompt": "Enter the folder where the {count} selected apps should be pulled",
+  "appsBatchExportPrompt": "Choose the folder where the {count} selected apps should be pulled",
   "@appsBatchExportPrompt": {
     "placeholders": {
       "count": {
@@ -548,13 +548,13 @@
     }
   },
   "filesExport": "Export",
-  "filesExportPrompt": "Enter the folder where {name} should be exported",
+  "filesExportPrompt": "Choose the folder where {name} should be exported",
   "@filesExportPrompt": {
     "placeholders": {
       "name": {}
     }
   },
-  "filesBatchExportPrompt": "Enter the folder where the {count} selected items should be exported",
+  "filesBatchExportPrompt": "Choose the folder where the {count} selected items should be exported",
   "@filesBatchExportPrompt": {
     "placeholders": {
       "count": {
@@ -694,5 +694,27 @@
         "type": "int"
       }
     }
-  }
+  },
+  "storageAccessTitle": "Storage access required",
+  "storageAccessMessage": "Browsing and saving folders on this phone requires all-files access.",
+  "storageAccessGrant": "Grant access",
+  "localPickerChooseFolder": "Choose a folder",
+  "localPickerChooseFiles": "Choose files",
+  "localPickerUseFolder": "Use this folder",
+  "localPickerUseFiles": "Select ({count})",
+  "@localPickerUseFiles": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "localPickerStorage": "Storage",
+  "localPickerInternalStorage": "Internal storage",
+  "localPickerEmpty": "This folder is empty",
+  "localPickerUnreadable": "This folder cannot be read",
+  "localPickerNewFolder": "New folder",
+  "localPickerInvalidName": "The name cannot contain / or \\",
+  "localPickerUp": "Up",
+  "localPickerGo": "Go"
 }

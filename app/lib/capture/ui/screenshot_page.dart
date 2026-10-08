@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../app_feedback.dart';
+import '../../files/android_storage_access.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../capture_notice.dart';
 import '../data/capture_store.dart';
@@ -31,6 +32,22 @@ class _ScreenshotPageState extends State<ScreenshotPage> {
       ScreenshotController(widget.serial),
       tag: widget.serial,
     );
+    if (Platform.isAndroid) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_prepareDirectory());
+      });
+    }
+  }
+
+  Future<void> _prepareDirectory() async {
+    if (!mounted) return;
+    final granted = await ensureAllFilesAccess(context);
+    if (!mounted) return;
+    if (!granted) {
+      controller.loading.value = false;
+      return;
+    }
+    await controller.reload();
   }
 
   @override
@@ -42,6 +59,10 @@ class _ScreenshotPageState extends State<ScreenshotPage> {
   }
 
   Future<void> _capture() async {
+    if (Platform.isAndroid) {
+      final granted = await ensureAllFilesAccess(context);
+      if (!granted || !mounted) return;
+    }
     final l10n = context.l10n;
     final notice = await controller.capture(l10n);
     if (!mounted) return;

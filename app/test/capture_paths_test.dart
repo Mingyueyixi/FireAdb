@@ -7,7 +7,7 @@ import 'package:fire_adb/capture/data/local_opener.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('导出和截图放在下载目录，Android 使用公共下载目录', () {
+  test('导出和截图放在下载目录', () {
     expect(
       captureDirectoryPath(const <String, String>{
         'HOME': '/home/mi',
@@ -32,19 +32,11 @@ void main() {
       '/home/mi/Downloads/FireAdb/captures',
     );
     expect(
-      exportDirectoryPath(
-        const <String, String>{},
-        android: true,
-        directoryExists: (path) => path == '/sdcard/Downloads',
-      ),
-      '/sdcard/Downloads/FireAdb',
+      exportDirectoryPath(const <String, String>{}, android: true),
+      '/sdcard/Download/FireAdb',
     );
     expect(
-      captureDirectoryPath(
-        const <String, String>{},
-        android: true,
-        directoryExists: (_) => false,
-      ),
+      captureDirectoryPath(const <String, String>{}, android: true),
       '/sdcard/Download/FireAdb/captures',
     );
   });

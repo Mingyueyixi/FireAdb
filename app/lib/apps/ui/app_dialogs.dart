@@ -1,8 +1,5 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
-import '../../capture/data/capture_paths.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../data/bean/app_freeze.dart';
 import '../data/bean/installed_app.dart';
@@ -178,48 +175,6 @@ Future<AppFreezeMethod?> confirmBatchFreeze(
   );
 }
 
-Future<String?> askAppExportDirectory(
-  BuildContext context,
-  String prompt,
-) async {
-  final l10n = context.l10n;
-  final controller = TextEditingController(text: _defaultExportDirectory());
-  final directory = await showDialog<String>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(l10n.appsExportTitle),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(prompt),
-          const SizedBox(height: 12),
-          TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              labelText: l10n.appsExportDirectory,
-              border: const OutlineInputBorder(),
-            ),
-          ),
-        ],
-      ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(l10n.commonCancel),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, controller.text.trim()),
-          child: Text(l10n.appsExportAction),
-        ),
-      ],
-    ),
-  );
-  controller.dispose();
-  if (directory == null || directory.isEmpty) return null;
-  return directory;
-}
-
 String joinedAppNames(BuildContext context, Iterable<InstalledApp> apps) {
   final separator = Localizations.localeOf(context).languageCode == 'zh'
       ? '、'
@@ -234,8 +189,4 @@ ButtonStyle _dangerButtonStyle(ColorScheme scheme) {
     backgroundColor: scheme.error,
     foregroundColor: scheme.onError,
   );
-}
-
-String _defaultExportDirectory() {
-  return exportDirectoryPath(Platform.environment) ?? Directory.systemTemp.path;
 }

@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import '../../storage/public_storage.dart';
 import 'capture_paths.dart';
 
 class CaptureFile {
@@ -17,7 +16,7 @@ class CaptureFile {
   final DateTime modified;
 }
 
-/// 应用目录里的截图和录像。
+/// 本机下载目录里的截图和录像。
 class CaptureStore {
   CaptureStore(this.directory);
 
@@ -30,7 +29,6 @@ class CaptureStore {
   }
 
   Future<void> ensure() async {
-    await ensurePublicSaveAccess();
     await directory.create(recursive: true);
   }
 

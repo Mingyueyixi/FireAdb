@@ -456,7 +456,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String appsExportPrompt(Object name) {
-    return 'Enter the folder where $name should be pulled';
+    return 'Choose the folder where $name should be pulled';
   }
 
   @override
@@ -589,7 +589,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String appsBatchExportPrompt(int count) {
-    return 'Enter the folder where the $count selected apps should be pulled';
+    return 'Choose the folder where the $count selected apps should be pulled';
   }
 
   @override
@@ -812,12 +812,12 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String filesExportPrompt(Object name) {
-    return 'Enter the folder where $name should be exported';
+    return 'Choose the folder where $name should be exported';
   }
 
   @override
   String filesBatchExportPrompt(int count) {
-    return 'Enter the folder where the $count selected items should be exported';
+    return 'Choose the folder where the $count selected items should be exported';
   }
 
   @override
@@ -1032,4 +1032,52 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String screenrecordTooLarge(Object size, Object path) {
     return 'The recording is $size, which is too large to save here. It remains on the device at $path';
   }
+
+  @override
+  String get storageAccessTitle => 'Storage access required';
+
+  @override
+  String get storageAccessMessage =>
+      'Browsing and saving folders on this phone requires all-files access.';
+
+  @override
+  String get storageAccessGrant => 'Grant access';
+
+  @override
+  String get localPickerChooseFolder => 'Choose a folder';
+
+  @override
+  String get localPickerChooseFiles => 'Choose files';
+
+  @override
+  String get localPickerUseFolder => 'Use this folder';
+
+  @override
+  String localPickerUseFiles(int count) {
+    return 'Select ($count)';
+  }
+
+  @override
+  String get localPickerStorage => 'Storage';
+
+  @override
+  String get localPickerInternalStorage => 'Internal storage';
+
+  @override
+  String get localPickerEmpty => 'This folder is empty';
+
+  @override
+  String get localPickerUnreadable => 'This folder cannot be read';
+
+  @override
+  String get localPickerNewFolder => 'New folder';
+
+  @override
+  String get localPickerInvalidName => 'The name cannot contain / or \\';
+
+  @override
+  String get localPickerUp => 'Up';
+
+  @override
+  String get localPickerGo => 'Go';
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -5,6 +6,53 @@ import 'package:fire_adb/files/remote_file_export.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('本机复制不经过 ADB，并按字节回报进度', () async {
+    final dir = await Directory.systemTemp.createTemp('local-copy');
+    addTearDown(() => dir.delete(recursive: true));
+    final source = File('${dir.path}${Platform.pathSeparator}source.bin');
+    final destination = File('${dir.path}${Platform.pathSeparator}dest.bin');
+    final bytes = List<int>.generate(1000, (index) => index % 256);
+    await source.writeAsBytes(bytes);
+    final progress = <int>[];
+
+    final copied = await copyLocalFile(
+      source: source,
+      destination: destination,
+      onProgress: (done, total) => progress.add(done),
+    );
+
+    expect(copied.bytes, bytes.length);
+    expect(await destination.readAsBytes(), bytes);
+    expect(progress, isNotEmpty);
+    expect(progress.last, bytes.length);
+  });
+
+  test('复制过程中取消会停掉并删除目标文件', () async {
+    final dir = await Directory.systemTemp.createTemp('local-copy-cancel');
+    addTearDown(() => dir.delete(recursive: true));
+    final source = File('${dir.path}${Platform.pathSeparator}source.bin');
+    final destination = File('${dir.path}${Platform.pathSeparator}dest.bin');
+    await source.writeAsBytes(List<int>.filled(kFileIoBufferSize * 3, 7));
+    var cancel = false;
+    final handle = LocalCopyHandle();
+
+    await expectLater(
+      copyLocalFile(
+        source: source,
+        destination: destination,
+        copyHandle: handle,
+        onProgress: (done, total) {
+          cancel = true;
+          unawaited(handle.close());
+        },
+        isCancelled: () => cancel,
+        cancelledException: () => const RemoteFileExportCancelled(),
+      ),
+      throwsA(isA<RemoteFileExportCancelled>()),
+    );
+    expect(await destination.exists(), isFalse);
+  });
+
   test('parseMd5Sum 接受文本模式和二进制模式', () {
     const digest = 'd41d8cd98f00b204e9800998ecf8427e';
     expect(parseMd5Sum('$digest  /sdcard/a.apk\n'), digest);
@@ -107,5 +155,59 @@ void main() {
       throwsA(isA<RemoteFileExportCancelled>()),
     );
     expect(await local.exists(), isFalse);
+  });
+
+  test('同名文件按 Windows 方式改名，目录只改第一段', () async {
+    final dir = await Directory.systemTemp.createTemp('export-names');
+    addTearDown(() => dir.delete(recursive: true));
+    final sep = Platform.pathSeparator;
+    await File('${dir.path}${sep}app.apk').writeAsBytes(const [1]);
+    await File('${dir.path}${sep}app (2).apk').writeAsBytes(const [2]);
+    await Directory('${dir.path}${sep}Photos').create();
+    final names = ExportDestination(dir.path);
+
+    expect(
+      await names.pathFor('app.apk'),
+      '${dir.path}${sep}app (3).apk',
+    );
+    expect(await names.pathFor('Photos'), '${dir.path}${sep}Photos (2)');
+    expect(
+      await names.pathFor('Photos/a.jpg'),
+      '${dir.path}${sep}Photos (2)${sep}a.jpg',
+    );
+    expect(await names.pathFor('readme'), '${dir.path}${sep}readme');
+    expect(await names.pathFor('readme'), '${dir.path}${sep}readme (2)');
+  });
+
+  test('取消只删除新文件，原来的同名文件还在', () async {
+    final dir = await Directory.systemTemp.createTemp('export-keep');
+    addTearDown(() => dir.delete(recursive: true));
+    final sep = Platform.pathSeparator;
+    final source = File('${dir.path}${sep}source.bin');
+    final original = File('${dir.path}${sep}app.apk');
+    await source.writeAsBytes(List<int>.filled(kFileIoBufferSize * 3, 7));
+    await original.writeAsBytes(const [1, 2, 3, 4]);
+    final destination = File(
+      await ExportDestination(dir.path).pathFor('app.apk'),
+    );
+
+    var cancel = false;
+    final handle = LocalCopyHandle();
+    await expectLater(
+      copyLocalFile(
+        source: source,
+        destination: destination,
+        copyHandle: handle,
+        onProgress: (done, total) {
+          cancel = true;
+          unawaited(handle.close());
+        },
+        isCancelled: () => cancel,
+        cancelledException: () => const RemoteFileExportCancelled(),
+      ),
+      throwsA(isA<RemoteFileExportCancelled>()),
+    );
+    expect(await original.readAsBytes(), const [1, 2, 3, 4]);
+    expect(await destination.exists(), isFalse);
   });
 }

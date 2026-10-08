@@ -228,7 +228,7 @@
   "appsFreezeMethodAmFreezeDescription": "am freeze：由 ActivityManager 冻结进程，需要 Android 15+。",
   "appsExportAction": "导出 APK",
   "appsExportTitle": "导出应用",
-  "appsExportPrompt": "请输入要将 {name} 拉取到的目标目录",
+  "appsExportPrompt": "选择要将 {name} 拉取到的目录",
   "@appsExportPrompt": {
     "placeholders": {
       "name": {}
@@ -369,7 +369,7 @@
       "names": {}
     }
   },
-  "appsBatchExportPrompt": "请输入要将选中的 {count} 个应用拉取到的目标目录",
+  "appsBatchExportPrompt": "选择要将选中的 {count} 个应用拉取到的目录",
   "@appsBatchExportPrompt": {
     "placeholders": {
       "count": {
@@ -548,13 +548,13 @@
     }
   },
   "filesExport": "导出",
-  "filesExportPrompt": "请输入要将 {name} 导出到的目录",
+  "filesExportPrompt": "选择要将 {name} 导出到的目录",
   "@filesExportPrompt": {
     "placeholders": {
       "name": {}
     }
   },
-  "filesBatchExportPrompt": "请输入要将选中的 {count} 项导出到的目录",
+  "filesBatchExportPrompt": "选择要将选中的 {count} 项导出到的目录",
   "@filesBatchExportPrompt": {
     "placeholders": {
       "count": {
@@ -694,5 +694,27 @@
         "type": "int"
       }
     }
-  }
+  },
+  "storageAccessTitle": "需要文件访问权限",
+  "storageAccessMessage": "浏览和保存手机上的目录需要授予「所有文件访问权限」。",
+  "storageAccessGrant": "去授权",
+  "localPickerChooseFolder": "选择文件夹",
+  "localPickerChooseFiles": "选择文件",
+  "localPickerUseFolder": "选择此文件夹",
+  "localPickerUseFiles": "选择（{count}）",
+  "@localPickerUseFiles": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "localPickerStorage": "存储设备",
+  "localPickerInternalStorage": "内部存储",
+  "localPickerEmpty": "此目录是空的",
+  "localPickerUnreadable": "无法读取此目录",
+  "localPickerNewFolder": "新建文件夹",
+  "localPickerInvalidName": "名称不能包含 / 或 \\",
+  "localPickerUp": "上级目录",
+  "localPickerGo": "前往"
 }

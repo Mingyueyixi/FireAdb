@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:get/get.dart';
 
@@ -10,7 +11,7 @@ import 'capture_notice.dart';
 import 'data/capture_paths.dart';
 import 'data/capture_store.dart';
 
-/// 截取设备屏幕，并把 PNG 保存到应用目录。
+/// 截取设备屏幕，并把 PNG 保存到下载目录。
 class ScreenshotController extends GetxController {
   ScreenshotController(this.serial, {CaptureStore? store})
     : _store = store ?? CaptureStore.tryOpen();
@@ -31,6 +32,7 @@ class ScreenshotController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    if (Platform.isAndroid) return;
     unawaited(reload());
   }
 

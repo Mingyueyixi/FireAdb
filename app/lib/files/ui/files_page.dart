@@ -72,7 +72,17 @@ class _FilesPageState extends State<FilesPage> {
     final prompt = files.length == 1
         ? l10n.filesExportPrompt(files.first.name)
         : l10n.filesBatchExportPrompt(files.length);
-    final directory = await askFileExportDirectory(context, prompt);
+    final String? directory;
+    try {
+      directory = await pickExportDirectory(context, prompt);
+    } catch (error, stackTrace) {
+      logAppError('选择导出目录失败', error, stackTrace);
+      if (!mounted) return;
+      _show(
+        FileNotice(title: l10n.filesExport, message: '$error', isError: true),
+      );
+      return;
+    }
     if (directory == null || !mounted) return;
     final future = controller.export(l10n, files, directory);
     await _showWhenDone(future, transferDialog: true);
@@ -82,7 +92,7 @@ class _FilesPageState extends State<FilesPage> {
     final l10n = context.l10n;
     final List<String> paths;
     try {
-      paths = await pickLocalFiles();
+      paths = await pickLocalFiles(context);
     } catch (error, stackTrace) {
       logAppError('选择上传文件失败', error, stackTrace);
       if (!mounted) return;

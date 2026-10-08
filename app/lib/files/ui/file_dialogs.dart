@@ -1,8 +1,5 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
-import '../../capture/data/capture_paths.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 
 Future<bool> confirmDeleteFiles(
@@ -85,26 +82,6 @@ Future<String?> askPermission(BuildContext context, String current) async {
   return mode;
 }
 
-Future<String?> askFileExportDirectory(
-  BuildContext context,
-  String prompt,
-) async {
-  final l10n = context.l10n;
-  final directory = await showDialog<String>(
-    context: context,
-    builder: (context) => _TextPromptDialog(
-      title: l10n.filesExport,
-      action: l10n.filesExport,
-      label: l10n.appsExportDirectory,
-      initialText: _defaultExportDirectory(),
-      message: prompt,
-      autofocus: false,
-    ),
-  );
-  if (directory == null || directory.isEmpty) return null;
-  return directory;
-}
-
 Future<String?> askSearchKeyword(BuildContext context) async {
   final l10n = context.l10n;
   final keyword = await showDialog<String>(
@@ -166,9 +143,7 @@ class _TextPromptDialog extends StatefulWidget {
     required this.title,
     required this.action,
     this.label,
-    this.message,
     this.initialText = '',
-    this.autofocus = true,
     this.minLines = 1,
     this.maxLines = 1,
     this.trim = true,
@@ -178,9 +153,7 @@ class _TextPromptDialog extends StatefulWidget {
   final String title;
   final String action;
   final String? label;
-  final String? message;
   final String initialText;
-  final bool autofocus;
   final int minLines;
   final int maxLines;
   final bool trim;
@@ -215,7 +188,7 @@ class _TextPromptDialogState extends State<_TextPromptDialog> {
     final l10n = context.l10n;
     final field = TextField(
       controller: _controller,
-      autofocus: widget.autofocus,
+      autofocus: true,
       minLines: widget.minLines,
       maxLines: widget.maxLines,
       decoration: InputDecoration(
@@ -231,13 +204,7 @@ class _TextPromptDialogState extends State<_TextPromptDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            if (widget.message != null) ...<Widget>[
-              Text(widget.message!),
-              const SizedBox(height: 12),
-            ],
-            field,
-          ],
+          children: <Widget>[field],
         ),
       ),
       actions: <Widget>[
@@ -323,8 +290,4 @@ class _CreateEntryDialogState extends State<_CreateEntryDialog> {
       ],
     );
   }
-}
-
-String _defaultExportDirectory() {
-  return exportDirectoryPath(Platform.environment) ?? Directory.systemTemp.path;
 }

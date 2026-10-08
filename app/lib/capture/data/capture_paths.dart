@@ -1,20 +1,15 @@
 import 'dart:io';
 
-/// 截图、录像和导出文件放在用户的下载目录 `Downloads/FireAdb`。
+/// 截图、录像和导出文件放在 `Downloads/FireAdb`。
 ///
 /// Windows 没有 `HOME` 时改用 `USERPROFILE`。ADB 密钥仍放在配置目录，不和这些文件混在一起。
-/// Android 使用公共下载目录，而不是应用私有缓存。
+/// Android 的默认目录是共享存储里的「下载」。写入前申请所有文件访问权限。
 const String kFireAdbConfigName = 'fire_adb';
 const String kFireAdbDataFolder = 'FireAdb';
 const String kCapturesFolderName = 'captures';
 
-/// 公共下载目录。系统实际目录名是 `Download`，有的设备也使用 `Downloads`。
-const List<String> kAndroidDownloadCandidates = <String>[
-  '/sdcard/Download',
-  '/sdcard/Downloads',
-  '/storage/emulated/0/Download',
-  '/storage/emulated/0/Downloads',
-];
+/// 系统下载目录。文件夹名是 `Download`，不是桌面上的 `Downloads`。
+const String kAndroidDownloadDir = '/sdcard/Download/$kFireAdbDataFolder';
 
 /// 和文件管理一样，先在共享存储里建自己的目录。
 const String kDeviceCaptureDir = '/sdcard/FireAdb';
@@ -82,11 +77,8 @@ String? exportDirectoryPath(
   Map<String, String> environment, {
   String? separator,
   bool? android,
-  bool Function(String path)? directoryExists,
 }) {
-  if (android ?? Platform.isAndroid) {
-    return '${androidDownloadDirectory(directoryExists)}/$kFireAdbDataFolder';
-  }
+  if (android ?? Platform.isAndroid) return kAndroidDownloadDir;
   final root = _trimmedHome(environment);
   if (root == null) return null;
   final sep = separator ?? Platform.pathSeparator;
@@ -97,27 +89,17 @@ String? captureDirectoryPath(
   Map<String, String> environment, {
   String? separator,
   bool? android,
-  bool Function(String path)? directoryExists,
 }) {
   final export = exportDirectoryPath(
     environment,
     separator: separator,
     android: android,
-    directoryExists: directoryExists,
   );
   if (export == null) return null;
   final sep = (android ?? Platform.isAndroid)
       ? '/'
       : (separator ?? Platform.pathSeparator);
   return '$export$sep$kCapturesFolderName';
-}
-
-String androidDownloadDirectory(bool Function(String path)? directoryExists) {
-  final exists = directoryExists ?? ((String path) => Directory(path).existsSync());
-  for (final candidate in kAndroidDownloadCandidates) {
-    if (exists(candidate)) return candidate;
-  }
-  return kAndroidDownloadCandidates.first;
 }
 
 String? _trimmedHome(Map<String, String> environment) {

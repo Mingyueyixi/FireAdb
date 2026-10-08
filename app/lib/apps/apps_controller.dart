@@ -151,7 +151,12 @@ class AppsController extends GetxController {
   DeviceAppRepository? _repository() {
     final device = _manager.deviceOf(serial);
     if (device == null) return null;
-    return DeviceAppRepository(device);
+    final profile = _manager.profileOf(serial);
+    return DeviceAppRepository(
+      device,
+      host: profile?.host,
+      adbSerial: profile?.adbSerial,
+    );
   }
 
   Future<void> reload() async {

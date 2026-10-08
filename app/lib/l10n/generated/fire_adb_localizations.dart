@@ -878,7 +878,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @appsExportPrompt.
   ///
   /// In zh, this message translates to:
-  /// **'请输入要将 {name} 拉取到的目标目录'**
+  /// **'选择要将 {name} 拉取到的目录'**
   String appsExportPrompt(Object name);
 
   /// No description provided for @appsExportDirectory.
@@ -1076,7 +1076,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @appsBatchExportPrompt.
   ///
   /// In zh, this message translates to:
-  /// **'请输入要将选中的 {count} 个应用拉取到的目标目录'**
+  /// **'选择要将选中的 {count} 个应用拉取到的目录'**
   String appsBatchExportPrompt(int count);
 
   /// No description provided for @appsBatchUninstallSucceeded.
@@ -1442,13 +1442,13 @@ abstract class FireAdbLocalizations {
   /// No description provided for @filesExportPrompt.
   ///
   /// In zh, this message translates to:
-  /// **'请输入要将 {name} 导出到的目录'**
+  /// **'选择要将 {name} 导出到的目录'**
   String filesExportPrompt(Object name);
 
   /// No description provided for @filesBatchExportPrompt.
   ///
   /// In zh, this message translates to:
-  /// **'请输入要将选中的 {count} 项导出到的目录'**
+  /// **'选择要将选中的 {count} 项导出到的目录'**
   String filesBatchExportPrompt(int count);
 
   /// No description provided for @filesExportSucceeded.
@@ -1804,6 +1804,96 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'录像有 {size}，超过可保存的大小，仍留在设备上：{path}'**
   String screenrecordTooLarge(Object size, Object path);
+
+  /// No description provided for @storageAccessTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'需要文件访问权限'**
+  String get storageAccessTitle;
+
+  /// No description provided for @storageAccessMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'浏览和保存手机上的目录需要授予「所有文件访问权限」。'**
+  String get storageAccessMessage;
+
+  /// No description provided for @storageAccessGrant.
+  ///
+  /// In zh, this message translates to:
+  /// **'去授权'**
+  String get storageAccessGrant;
+
+  /// No description provided for @localPickerChooseFolder.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择文件夹'**
+  String get localPickerChooseFolder;
+
+  /// No description provided for @localPickerChooseFiles.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择文件'**
+  String get localPickerChooseFiles;
+
+  /// No description provided for @localPickerUseFolder.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择此文件夹'**
+  String get localPickerUseFolder;
+
+  /// No description provided for @localPickerUseFiles.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择（{count}）'**
+  String localPickerUseFiles(int count);
+
+  /// No description provided for @localPickerStorage.
+  ///
+  /// In zh, this message translates to:
+  /// **'存储设备'**
+  String get localPickerStorage;
+
+  /// No description provided for @localPickerInternalStorage.
+  ///
+  /// In zh, this message translates to:
+  /// **'内部存储'**
+  String get localPickerInternalStorage;
+
+  /// No description provided for @localPickerEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'此目录是空的'**
+  String get localPickerEmpty;
+
+  /// No description provided for @localPickerUnreadable.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法读取此目录'**
+  String get localPickerUnreadable;
+
+  /// No description provided for @localPickerNewFolder.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建文件夹'**
+  String get localPickerNewFolder;
+
+  /// No description provided for @localPickerInvalidName.
+  ///
+  /// In zh, this message translates to:
+  /// **'名称不能包含 / 或 \\'**
+  String get localPickerInvalidName;
+
+  /// No description provided for @localPickerUp.
+  ///
+  /// In zh, this message translates to:
+  /// **'上级目录'**
+  String get localPickerUp;
+
+  /// No description provided for @localPickerGo.
+  ///
+  /// In zh, this message translates to:
+  /// **'前往'**
+  String get localPickerGo;
 }
 
 class _FireAdbLocalizationsDelegate

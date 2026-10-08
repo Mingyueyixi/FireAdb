@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:libadb/libadb.dart';
 
+import '../../../connection/local_adb_target.dart';
 import '../../../connection/model/connected_device.dart';
 import '../../../files/remote_file_export.dart';
 import '../bean/remote_file.dart';
@@ -18,11 +19,14 @@ class FileOperationCancelled implements Exception {
 
 /// 通过 ADB sync 浏览设备文件，通过 shell 做删除、改名和权限修改。
 class DeviceFileRepository {
-  DeviceFileRepository(this._device);
+  DeviceFileRepository(this._device, {this.host, this.adbSerial});
 
   final ConnectedDevice _device;
+  final String? host;
+  final String? adbSerial;
   ConnectedShell? _shellSession;
   ConnectedSync? _syncSession;
+  final LocalCopyHandle _localCopy = LocalCopyHandle();
   var _cancelled = false;
 
   static const _shellTimeout = Duration(seconds: 30);
@@ -34,6 +38,9 @@ class DeviceFileRepository {
     final sync = _syncSession;
     _shellSession = null;
     _syncSession = null;
+    try {
+      await _localCopy.close();
+    } catch (_) {}
     try {
       await shell?.close();
     } catch (_) {}
@@ -239,18 +246,43 @@ class DeviceFileRepository {
       0,
       (sum, piece) => sum + (piece.directory ? 0 : piece.size),
     );
-    final destDir = Directory(directory);
-    await destDir.create(recursive: true);
+    await Directory(directory).create(recursive: true);
+    final names = ExportDestination(directory);
+    final copyLocally = shouldCopyLocally(
+      runningOnAndroid: Platform.isAndroid,
+      host: host,
+      serial: _device.serial,
+      adbSerial: adbSerial,
+    );
     var sent = 0;
     for (final piece in pieces) {
       _ensureActive(isCancelled);
-      final localPath =
-          '${destDir.path}${Platform.pathSeparator}${_localRelative(piece.relativePath)}';
+      final localPath = await names.pathFor(piece.relativePath);
       if (piece.directory) {
         await Directory(localPath).create(recursive: true);
         continue;
       }
       final local = File(localPath);
+      if (copyLocally) {
+        final copied = await copyLocalFile(
+          source: File(piece.remotePath),
+          destination: local,
+          onProgress: (done, _) {
+            final current = sent + done;
+            onProgress?.call(
+              current > bytesTotal ? bytesTotal : current,
+              bytesTotal,
+            );
+          },
+          isCancelled: () => _cancelled || (isCancelled?.call() ?? false),
+          cancelledException: () => const FileOperationCancelled(),
+          copyHandle: _localCopy,
+        );
+        sent += piece.size > 0 ? piece.size : copied.bytes;
+        if (sent > bytesTotal) sent = bytesTotal;
+        onProgress?.call(sent, bytesTotal);
+        continue;
+      }
       await exportRemoteFile(
         remotePath: piece.remotePath,
         localFile: local,
@@ -398,11 +430,4 @@ class DeviceFileRepository {
     }
   }
 
-  String _localRelative(String relative) {
-    final parts = relative.split('/');
-    if (parts.isEmpty || parts.any((part) => !isSafeRemoteName(part))) {
-      throw StateError('非法导出路径：$relative');
-    }
-    return parts.join(Platform.pathSeparator);
-  }
 }

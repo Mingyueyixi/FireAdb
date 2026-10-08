@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../app_feedback.dart';
+import '../../files/local_file_picker.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../l10n/generated/fire_adb_localizations.dart';
 import '../apps_controller.dart';
@@ -115,7 +116,21 @@ class _AppsPageState extends State<AppsPage> {
     bool singlePath = false,
   }) async {
     if (targets.isEmpty || !mounted) return;
-    final directory = await askAppExportDirectory(context, prompt);
+    final String? directory;
+    try {
+      directory = await pickExportDirectory(context, prompt);
+    } catch (error, stackTrace) {
+      logAppError('选择导出目录失败', error, stackTrace);
+      if (!mounted) return;
+      _show(
+        AppNotice(
+          title: context.l10n.appsExportTitle,
+          message: '$error',
+          isError: true,
+        ),
+      );
+      return;
+    }
     if (directory == null || !mounted) return;
     final future = controller.export(
       context.l10n,

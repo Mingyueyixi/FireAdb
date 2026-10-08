@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:libadb/libadb.dart';
 
+import '../../../connection/local_adb_target.dart';
 import '../../../connection/model/connected_device.dart';
 import '../../../files/remote_file_export.dart';
 import '../bean/app_freeze.dart';
@@ -12,12 +13,15 @@ import '../source/app_inventory.dart';
 
 /// 通过 ADB shell / sync 读取并管理设备应用。
 class DeviceAppRepository {
-  DeviceAppRepository(this._device);
+  DeviceAppRepository(this._device, {this.host, this.adbSerial});
 
   final ConnectedDevice _device;
+  final String? host;
+  final String? adbSerial;
   var _cancelled = false;
   ConnectedShell? _shellSession;
   ConnectedSync? _syncSession;
+  final LocalCopyHandle _localCopy = LocalCopyHandle();
   static const _shellTimeout = Duration(seconds: 20);
   static const _slowShellTimeout = Duration(seconds: 60);
 
@@ -133,13 +137,16 @@ class DeviceAppRepository {
     }
   }
 
-  /// 关掉当前这条 shell 或 sync 连接，读取会马上结束。
+  /// 关掉当前这条 shell、sync 或本地文件，读取会马上结束。
   Future<void> abort() async {
     _cancelled = true;
     final shell = _shellSession;
     final sync = _syncSession;
     _shellSession = null;
     _syncSession = null;
+    try {
+      await _localCopy.close();
+    } catch (_) {}
     try {
       await shell?.close();
     } catch (_) {}
@@ -287,27 +294,52 @@ class DeviceAppRepository {
         files ?? await listExportFiles(app, isCancelled: isCancelled);
     final bytesTotal = planned.fold<int>(0, (sum, file) => sum + file.size);
     if (isCancelled?.call() == true) throw const AppOperationCancelled();
-    final destDir = Directory(directory);
-    await destDir.create(recursive: true);
     final written = <File>[];
     final useSubdir = planned.length > 1;
+    final names = ExportDestination(directory);
     final packageDir = useSubdir
-        ? Directory(
-            '${destDir.path}${Platform.pathSeparator}${app.packageName}',
+        ? [directory, await names.availableName(app.packageName)].join(
+            Platform.pathSeparator,
           )
-        : destDir;
-    if (useSubdir) await packageDir.create(recursive: true);
+        : directory;
+    if (useSubdir) await Directory(packageDir).create(recursive: true);
+    final fileNames = useSubdir ? ExportDestination(packageDir) : names;
+    final copyLocally = shouldCopyLocally(
+      runningOnAndroid: Platform.isAndroid,
+      host: host,
+      serial: _device.serial,
+      adbSerial: adbSerial,
+    );
     var sent = 0;
     for (final file in planned) {
       if (_cancelled || isCancelled?.call() == true) {
         throw const AppOperationCancelled();
       }
-      final name = file.remote.split('/').last;
-      final local = File(
-        useSubdir
-            ? '${packageDir.path}${Platform.pathSeparator}$name'
-            : '${destDir.path}${Platform.pathSeparator}${app.packageName}.apk',
-      );
+      final name = useSubdir
+          ? file.remote.split('/').last
+          : '${app.packageName}.apk';
+      final local = File(await fileNames.pathFor(name));
+      if (copyLocally) {
+        final copied = await copyLocalFile(
+          source: File(file.remote),
+          destination: local,
+          onProgress: (done, _) {
+            final current = sent + done;
+            onProgress?.call(
+              current > bytesTotal ? bytesTotal : current,
+              bytesTotal,
+            );
+          },
+          isCancelled: () => _cancelled || (isCancelled?.call() ?? false),
+          cancelledException: () => const AppOperationCancelled(),
+          copyHandle: _localCopy,
+        );
+        sent += file.size > 0 ? file.size : copied.bytes;
+        if (sent > bytesTotal) sent = bytesTotal;
+        onProgress?.call(sent, bytesTotal);
+        written.add(local);
+        continue;
+      }
       final exported = await exportRemoteFile(
         remotePath: file.remote,
         localFile: local,
