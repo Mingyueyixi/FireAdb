@@ -43,7 +43,9 @@ class HomeController extends GetxController {
   final RxnString scanError = RxnString();
   final RxnString adbDevicesError = RxnString();
   final RxnString usbDevicesError = RxnString();
-  final RxBool adbServerSupported = (!Platform.isAndroid).obs;
+
+  /// 各平台都有本机 ADB Server。Android 没有 USB 传输，列表里不会出现插线设备。
+  final RxBool adbServerSupported = true.obs;
 
   /// 本机 5037 没有 adb server。这是正常情况，不按异常记录。
   final RxBool adbServerAbsent = false.obs;

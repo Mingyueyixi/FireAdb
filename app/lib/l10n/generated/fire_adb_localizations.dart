@@ -314,7 +314,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @homeAdbServerUnavailable.
   ///
   /// In zh, this message translates to:
-  /// **'Android 上没有本机 ADB Server，不会连接 127.0.0.1:5037。请使用手动连接或扫描。'**
+  /// **'本机 ADB Server 不可用，设备列表无法刷新。'**
   String get homeAdbServerUnavailable;
 
   /// No description provided for @homeAdbServerNotRunning.

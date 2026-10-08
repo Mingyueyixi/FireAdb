@@ -133,7 +133,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get homeAdbServerUnavailable =>
-      'Android has no local ADB server, so FireAdb does not connect to 127.0.0.1:5037. Use a manual connection or scan.';
+      'The local ADB server is unavailable, so the device list cannot refresh.';
 
   @override
   String get homeAdbServerNotRunning =>

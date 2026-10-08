@@ -67,7 +67,7 @@
     }
   },
   "homeNoAdbDevices": "The ADB server did not find any devices.",
-  "homeAdbServerUnavailable": "Android has no local ADB server, so FireAdb does not connect to 127.0.0.1:5037. Use a manual connection or scan.",
+  "homeAdbServerUnavailable": "The local ADB server is unavailable, so the device list cannot refresh.",
   "homeAdbServerNotRunning": "No ADB server is listening on 127.0.0.1:5037. USB devices are listed directly. Connect network devices manually or scan for them.",
   "homeFireAdbConnected": "Connected in FireAdb",
   "commonDisconnect": "Disconnect",

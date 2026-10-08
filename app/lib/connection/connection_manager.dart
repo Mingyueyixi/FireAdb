@@ -66,9 +66,11 @@ class ConnectionManager extends GetxService {
     if (!_historyLoaded) _loadHistory();
   }
 
-  /// 没有官方 adb server 时，自己监听 5037，并把 USB 设备登记进去。
+  /// 没有官方 adb server 时，自己监听 5037。
+  ///
+  /// USB 枚举只在桌面端做。Android 没有 libusb，设备来自手动 TCP 和本机模拟器端口扫描。
   Future<void> ensureLocalAdbServer() async {
-    if (Platform.isAndroid || _localServer != null) return;
+    if (_localServer != null) return;
     _resolveSigners();
     final server = await AdbServer.tryStart(signers: _signers);
     if (server == null) {
@@ -81,6 +83,10 @@ class ConnectionManager extends GetxService {
     server.onKilled = _onLocalServerKilled;
     _localServer = server;
     ownsLocalAdbServer.value = true;
+    if (!_desktopUsb) {
+      developer.log('已启动本机 ADB Server 127.0.0.1:5037', name: 'fire_adb');
+      return;
+    }
     final tracker = UsbAdbTracker(
       server: server,
       signers: _signers,
@@ -90,6 +96,9 @@ class ConnectionManager extends GetxService {
     tracker.start();
     developer.log('已启动本机 ADB Server 127.0.0.1:5037', name: 'fire_adb');
   }
+
+  bool get _desktopUsb =>
+      Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
   void _onLocalUsbError(Object? error, StackTrace? stackTrace) {
     if (error == null) {

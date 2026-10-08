@@ -128,8 +128,7 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get homeNoAdbDevices => 'ADB Server 当前没有发现设备。';
 
   @override
-  String get homeAdbServerUnavailable =>
-      'Android 上没有本机 ADB Server，不会连接 127.0.0.1:5037。请使用手动连接或扫描。';
+  String get homeAdbServerUnavailable => '本机 ADB Server 不可用，设备列表无法刷新。';
 
   @override
   String get homeAdbServerNotRunning =>

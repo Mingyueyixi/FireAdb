@@ -12,7 +12,7 @@ Windows 上可以枚举 ADB 接口、声明 WinUSB 接口、完成 AUTH/CNXN，�
 
 本机模拟器也会出现在同一份列表里。adb 端口 `5557` 显示为 `emulator-5556`。
 
-Linux、macOS 只按系统库名加载 libusb，仓库没有带上对应动态库，也没有在真机上验证。Android 的 USB Host（`android.hardware.usb`）还没做，Android 上也不会去连 `127.0.0.1:5037`。
+Linux、macOS 只按系统库名加载 libusb，仓库没有带上对应动态库，也没有在真机上验证。Android 没有这条 USB 路径。Android 上的设备列表仍然走本机 5037：进程会启动 ADB Server，只是不枚举 USB。
 
 ## 设备从哪来
 
