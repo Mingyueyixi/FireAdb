@@ -4,16 +4,18 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.drawable.AdaptiveIconDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Looper;
+import android.util.Log;
+
+import com.fire.adb.appservice.util.AndroidContexts;
+import com.fire.adb.appservice.util.BitmapUtils;
 
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
@@ -38,6 +40,8 @@ import java.util.Map;
  */
 public final class FireAppService {
     private static final int ICON_SIZE = 128;
+    private static final int ICON_DENSITY = 640;
+    private static final String ICON_LOG_TAG = "FireAdb";
     private static final int TYPE_READY = 1;
     private static final int TYPE_ERROR = 5;
     private static final int TYPE_SHOW = 6;
@@ -45,6 +49,9 @@ public final class FireAppService {
     private static final int FLAG_DISABLED = 2;
     private static final int FLAG_SUSPENDED = 4;
     private static final int APP_FLAG_SUSPENDED = 1 << 30;
+
+    private static byte[] defaultIconPng = new byte[0];
+    private static boolean defaultIconLoaded;
 
     private FireAppService() {}
 
@@ -166,16 +173,75 @@ public final class FireAppService {
         return info.versionCode;
     }
 
-    private static void writeHeader(DataOutputStream out, int type) throws Exception {
-        out.write(new byte[] {'F', 'A', 'A', 'S'});
-        out.writeByte(1);
-        out.writeByte(type);
+    private static byte[] iconOf(PackageManager manager, ApplicationInfo info) {
+        String packageName = info.packageName == null ? "" : info.packageName;
+        Drawable loaded = loadIcon(manager, info);
+        byte[] png = iconBytes(loaded);
+        if (png.length > 0 && !isDefaultIcon(manager, png)) {
+            logIcon(packageName, "loadIcon", loaded);
+            return png;
+        }
+        if (png.length > 0) {
+            logIcon(packageName, "loadIcon 默认图标", loaded);
+        }
+        Drawable packaged = packageIcon(manager, info);
+        byte[] fromPackage = iconBytes(packaged);
+        if (fromPackage.length > 0) {
+            logIcon(packageName, "安装包", packaged);
+            return fromPackage;
+        }
+        if (png.length == 0) {
+            logIcon(packageName, "loadIcon", loaded);
+        }
+        return new byte[0];
     }
 
-    private static void writeError(DataOutputStream out, String message) throws Exception {
-        writeHeader(out, TYPE_ERROR);
-        writeString(out, message == null ? "" : message);
-        out.flush();
+    private static byte[] iconBytes(Drawable drawable) {
+        return BitmapUtils.compress(
+                drawable,
+                ICON_SIZE,
+                ICON_SIZE,
+                Bitmap.CompressFormat.PNG,
+                100);
+    }
+
+    private static Drawable loadIcon(PackageManager manager, ApplicationInfo info) {
+        try {
+            return info.loadIcon(manager);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** {@code loadIcon} 画出的是系统默认图标或没有像素时，再按资源号读安装包。 */
+    private static Drawable packageIcon(PackageManager manager, ApplicationInfo info) {
+        if (info.icon == 0) {
+            return null;
+        }
+        try {
+            Resources resources = manager.getResourcesForApplication(info);
+            return resources.getDrawableForDensity(info.icon, ICON_DENSITY, null);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static boolean isDefaultIcon(PackageManager manager, byte[] png) {
+        byte[] fallback = defaultIconPng(manager);
+        return png.length > 0 && fallback.length > 0 && java.util.Arrays.equals(png, fallback);
+    }
+
+    private static byte[] defaultIconPng(PackageManager manager) {
+        if (defaultIconLoaded) {
+            return defaultIconPng;
+        }
+        defaultIconLoaded = true;
+        try {
+            defaultIconPng = iconBytes(manager.getDefaultActivityIcon());
+        } catch (Throwable ignored) {
+            defaultIconPng = new byte[0];
+        }
+        return defaultIconPng;
     }
 
     private static String labelOf(PackageManager manager, ApplicationInfo info) {
@@ -195,70 +261,21 @@ public final class FireAppService {
         }
     }
 
-    private static byte[] iconOf(PackageManager manager, ApplicationInfo info) {
-        Bitmap bitmap = null;
-        try {
-            Drawable drawable = info.loadIcon(manager);
-            if (drawable == null) {
-                return new byte[0];
-            }
-            bitmap = Bitmap.createBitmap(ICON_SIZE, ICON_SIZE, Bitmap.Config.ARGB_8888);
-            Canvas canvas = new Canvas(bitmap);
-            drawable.setBounds(0, 0, ICON_SIZE, ICON_SIZE);
-            drawable.draw(canvas);
-            if (!hasPixel(bitmap) && Build.VERSION.SDK_INT >= 26) {
-                bitmap.eraseColor(0);
-                drawAdaptiveLayers(canvas, drawable);
-            }
-            if (!hasPixel(bitmap)) {
-                return new byte[0];
-            }
-            ByteArrayOutputStream png = new ByteArrayOutputStream();
-            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, png)) {
-                return new byte[0];
-            }
-            return png.toByteArray();
-        } catch (Throwable ignored) {
-            return new byte[0];
-        } finally {
-            if (bitmap != null) {
-                bitmap.recycle();
-            }
-        }
+    private static void logIcon(String packageName, String source, Drawable drawable) {
+        String type = drawable == null ? "-" : drawable.getClass().getName();
+        Log.i(ICON_LOG_TAG, "图标 " + packageName + " " + source + " " + type);
     }
 
-    /**
-     * 框架 {@code SimpleIconFactory} 在要跳过系统蒙版时才这么画。
-     * {@code setBounds} 已经给两层设好范围，这里直接画到目标 Bitmap 上。
-     */
-    private static void drawAdaptiveLayers(Canvas canvas, Drawable drawable) {
-        if (!(drawable instanceof AdaptiveIconDrawable)) {
-            return;
-        }
-        AdaptiveIconDrawable adaptive = (AdaptiveIconDrawable) drawable;
-        Drawable background = adaptive.getBackground();
-        if (background != null) {
-            background.draw(canvas);
-        }
-        Drawable foreground = adaptive.getForeground();
-        if (foreground != null) {
-            foreground.draw(canvas);
-        }
+    private static void writeHeader(DataOutputStream out, int type) throws Exception {
+        out.write(new byte[] {'F', 'A', 'A', 'S'});
+        out.writeByte(1);
+        out.writeByte(type);
     }
 
-    private static boolean hasPixel(Bitmap bitmap) {
-        int width = bitmap.getWidth();
-        int height = bitmap.getHeight();
-        int[] row = new int[width];
-        for (int y = 0; y < height; y++) {
-            bitmap.getPixels(row, 0, width, 0, y, width, 1);
-            for (int x = 0; x < width; x++) {
-                if ((row[x] >>> 24) != 0) {
-                    return true;
-                }
-            }
-        }
-        return false;
+    private static void writeError(DataOutputStream out, String message) throws Exception {
+        writeHeader(out, TYPE_ERROR);
+        writeString(out, message == null ? "" : message);
+        out.flush();
     }
 
     private static void writeString(DataOutputStream out, String value) throws Exception {

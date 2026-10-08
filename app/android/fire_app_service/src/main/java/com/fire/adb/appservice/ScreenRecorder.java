@@ -18,6 +18,8 @@ import android.view.Display;
 import android.view.Surface;
 import android.view.WindowManager;
 
+import com.fire.adb.appservice.util.AndroidContexts;
+
 import java.io.File;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
