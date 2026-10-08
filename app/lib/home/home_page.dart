@@ -789,7 +789,8 @@ class HomePage extends GetView<HomeController> {
                 _homeListTile(
                   dense: true,
                   leading: const Icon(Icons.smartphone),
-                  title: Text(h.toHistoryKey()),
+                  title: Text(h.displayName),
+                  subtitle: Text(h.connectionAddress, maxLines: 2),
                   trailing: IconButton(
                     tooltip: l10n.homeRemoveHistory,
                     icon: const Icon(Icons.delete_outline),

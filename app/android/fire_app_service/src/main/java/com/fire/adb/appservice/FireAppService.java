@@ -6,6 +6,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.drawable.AdaptiveIconDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Looper;
@@ -205,6 +206,13 @@ public final class FireAppService {
             Canvas canvas = new Canvas(bitmap);
             drawable.setBounds(0, 0, ICON_SIZE, ICON_SIZE);
             drawable.draw(canvas);
+            if (!hasPixel(bitmap) && Build.VERSION.SDK_INT >= 26) {
+                bitmap.eraseColor(0);
+                drawAdaptiveLayers(canvas, drawable);
+            }
+            if (!hasPixel(bitmap)) {
+                return new byte[0];
+            }
             ByteArrayOutputStream png = new ByteArrayOutputStream();
             if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, png)) {
                 return new byte[0];
@@ -217,6 +225,40 @@ public final class FireAppService {
                 bitmap.recycle();
             }
         }
+    }
+
+    /**
+     * 框架 {@code SimpleIconFactory} 在要跳过系统蒙版时才这么画。
+     * {@code setBounds} 已经给两层设好范围，这里直接画到目标 Bitmap 上。
+     */
+    private static void drawAdaptiveLayers(Canvas canvas, Drawable drawable) {
+        if (!(drawable instanceof AdaptiveIconDrawable)) {
+            return;
+        }
+        AdaptiveIconDrawable adaptive = (AdaptiveIconDrawable) drawable;
+        Drawable background = adaptive.getBackground();
+        if (background != null) {
+            background.draw(canvas);
+        }
+        Drawable foreground = adaptive.getForeground();
+        if (foreground != null) {
+            foreground.draw(canvas);
+        }
+    }
+
+    private static boolean hasPixel(Bitmap bitmap) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        int[] row = new int[width];
+        for (int y = 0; y < height; y++) {
+            bitmap.getPixels(row, 0, width, 0, y, width, 1);
+            for (int x = 0; x < width; x++) {
+                if ((row[x] >>> 24) != 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static void writeString(DataOutputStream out, String value) throws Exception {

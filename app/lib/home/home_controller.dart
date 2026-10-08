@@ -55,6 +55,7 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _restoreManualConnection();
     if (!adbServerSupported.value && !usbSupported) return;
     _adbDeviceRefreshTimer = Timer.periodic(adbDeviceRefreshInterval, (_) {
       _refreshListedDevices();
@@ -67,6 +68,13 @@ class HomeController extends GetxController {
 
   bool get showDirectUsbList =>
       usbSupported && !manager.ownsLocalAdbServer.value;
+
+  void _restoreManualConnection() {
+    final endpoint = manager.manualEndpoint();
+    if (endpoint == null) return;
+    hostController.text = endpoint.$1;
+    portController.text = '${endpoint.$2}';
+  }
 
   void _refreshListedDevices() {
     if (adbServerSupported.value) unawaited(refreshAdbDevices());

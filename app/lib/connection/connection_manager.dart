@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
@@ -13,6 +14,8 @@ import 'model/device_profile.dart';
 /// 管理所有 ADB 连接与连接历史，负责 RSA 密钥加载与历史持久化。
 class ConnectionManager extends GetxService {
   static const String _historyPrefsKey = 'connection_history';
+  static const String _manualHostPrefsKey = 'manual_connection_host';
+  static const String _manualPortPrefsKey = 'manual_connection_port';
 
   final RxMap<String, ConnectedDevice> _devices =
       <String, ConnectedDevice>{}.obs;
@@ -139,14 +142,41 @@ class ConnectionManager extends GetxService {
     await init();
     _resolveSigners();
     final device = await adbConnectTcp(host, port: port, signers: _signers);
+    final connected = ConnectedDevice.direct(device);
     final profile = DeviceProfile(
       serial: device.serial,
       host: host,
       port: port,
-      label: host,
+      label: _savedHostLabel(host, port) ?? host,
     );
-    await _registerConnection(profile, ConnectedDevice.direct(device));
+    await rememberManualEndpoint(host, port);
+    await _registerConnection(profile, connected);
+    unawaited(_refreshHostLabel(profile, connected));
     return device;
+  }
+
+  /// 上次成功的手动连接。首页用它把地址填回输入框。
+  (String, int)? manualEndpoint() {
+    final host = _prefs?.getString(_manualHostPrefsKey);
+    final port = _prefs?.getInt(_manualPortPrefsKey);
+    if (host == null || host.isEmpty) return null;
+    if (port == null || port <= 0 || port > 65535) return null;
+    return (host, port);
+  }
+
+  Future<void> rememberManualEndpoint(String host, int port) async {
+    await init();
+    final preferences = _prefs;
+    if (preferences == null) return;
+    try {
+      final savedHost = await preferences.setString(_manualHostPrefsKey, host);
+      final savedPort = await preferences.setInt(_manualPortPrefsKey, port);
+      if (!savedHost || !savedPort) {
+        throw StateError('SharedPreferences 未能保存手动连接');
+      }
+    } catch (error, stackTrace) {
+      logAppError('保存手动连接失败', error, stackTrace);
+    }
   }
 
   Future<ConnectedDevice> connectAdbDevice(
@@ -229,6 +259,49 @@ class ConnectionManager extends GetxService {
     await _remember(profile);
   }
 
+  String? _savedHostLabel(String host, int port) {
+    final key = 'tcp:$host:$port';
+    for (final entry in _history) {
+      if (entry.historyKey == key &&
+          entry.label.isNotEmpty &&
+          entry.label != host) {
+        return entry.label;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _refreshHostLabel(
+    DeviceProfile profile,
+    ConnectedDevice device,
+  ) async {
+    final model = await _modelName(device);
+    if (model == null || model == profile.label) return;
+    final updated = DeviceProfile(
+      serial: profile.serial,
+      host: profile.host,
+      port: profile.port,
+      label: model,
+      adbSerial: profile.adbSerial,
+      usbAddress: profile.usbAddress,
+    );
+    if (_devices.containsKey(device.serial)) {
+      _profiles[profile.serial] = updated;
+    }
+    await _remember(updated);
+  }
+
+  Future<String?> _modelName(ConnectedDevice device) async {
+    try {
+      final model = (await device.shell('getprop ro.product.model')).trim();
+      if (model.isEmpty) return null;
+      return model;
+    } catch (error, stackTrace) {
+      logAppError('读取设备名称失败', error, stackTrace);
+      return null;
+    }
+  }
+
   Future<void> _remember(DeviceProfile profile) async {
     _history
       ..removeWhere((entry) => entry.historyKey == profile.historyKey)
@@ -254,23 +327,38 @@ class ConnectionManager extends GetxService {
     if (entry.startsWith('{')) {
       try {
         final json = jsonDecode(entry);
-        if (json is! Map<String, dynamic>) return null;
+        if (json is! Map) return null;
         final serial = json['serial'];
         final host = json['host'];
         final port = json['port'];
         final label = json['label'];
         final adbSerial = json['adbSerial'];
-        if (serial is! String || serial.isEmpty) return null;
+        if (serial != null && serial is! String) return null;
         if (host != null && host is! String) return null;
         if (port != null && port is! int) return null;
         if (label != null && label is! String) return null;
         if (adbSerial != null && adbSerial is! String) return null;
         final usbAddress = json['usbAddress'];
         if (usbAddress != null && usbAddress is! String) return null;
+        final hostText = host as String?;
+        final portNumber = port as int?;
+        // 无线直连的 CNXN banner 经常是 device::...，序列号是空的。
+        // 这条历史仍然有效，用主机和端口当作标识。
+        var serialText = serial as String? ?? '';
+        if (serialText.isEmpty) {
+          if (hostText == null ||
+              hostText.isEmpty ||
+              portNumber == null ||
+              portNumber <= 0 ||
+              portNumber > 65535) {
+            return null;
+          }
+          serialText = '$hostText:$portNumber';
+        }
         return DeviceProfile(
-          serial: serial,
-          host: host as String?,
-          port: port as int?,
+          serial: serialText,
+          host: hostText,
+          port: portNumber,
           label: label as String? ?? '',
           adbSerial: adbSerial as String?,
           usbAddress: usbAddress as String?,
@@ -292,13 +380,25 @@ class ConnectionManager extends GetxService {
     return DeviceProfile(serial: entry, host: host, port: port, label: host);
   }
 
+  String _storedSerial(DeviceProfile profile) {
+    if (profile.serial.isNotEmpty) return profile.serial;
+    final host = profile.host;
+    final port = profile.port;
+    if (host != null && host.isNotEmpty && port != null) {
+      return '$host:$port';
+    }
+    final adbSerial = profile.adbSerial;
+    if (adbSerial != null && adbSerial.isNotEmpty) return adbSerial;
+    return profile.serial;
+  }
+
   Future<void> _saveHistory() async {
     final preferences = _prefs;
     if (preferences == null) return;
     final encoded = _history
         .map(
           (profile) => jsonEncode(<String, Object?>{
-            'serial': profile.serial,
+            'serial': _storedSerial(profile),
             'host': profile.host,
             'port': profile.port,
             'label': profile.label,

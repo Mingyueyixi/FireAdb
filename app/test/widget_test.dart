@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:fire_adb/app_feedback.dart';
 import 'package:fire_adb/app_locale_controller.dart';
 import 'package:fire_adb/connection/connection_manager.dart';
@@ -113,6 +115,48 @@ void main() {
       await tester.tap(find.text('Chinese'));
       await tester.pumpAndSettle();
       expect(find.text('手动连接'), findsOneWidget);
+    } finally {
+      homeController.onClose();
+      Get.reset();
+    }
+  });
+
+  testWidgets('历史连接显示设备名和地址，手动连接地址会填回输入框', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'connection_history': <String>[
+        jsonEncode(<String, Object?>{
+          'serial': 'tcp-1',
+          'host': '192.0.2.10',
+          'port': 5555,
+          'label': 'Pixel 8',
+        }),
+        jsonEncode(<String, Object?>{
+          'serial': 'usb-2',
+          'label': 'Pixel 8',
+          'adbSerial': 'USB999',
+        }),
+      ],
+      'manual_connection_host': '192.0.2.10',
+      'manual_connection_port': 6666,
+    });
+    final manager = ConnectionManager();
+    await manager.init();
+    Get.put<ConnectionManager>(manager, permanent: true);
+    Get.put<AppLocaleController>(AppLocaleController(), permanent: true);
+    final homeController = HomeController(
+      hostClient: _FakeAdbHostClient(const <AdbDeviceInfo>[]),
+      listUsbDevices: () async => const <UsbAdbDevice>[],
+    );
+    Get.put<HomeController>(homeController);
+    try {
+      await tester.pumpWidget(const FireAdbApp());
+      await tester.pump();
+
+      expect(find.text('Pixel 8'), findsNWidgets(2));
+      expect(find.text('192.0.2.10:5555'), findsOneWidget);
+      expect(find.text('USB999'), findsOneWidget);
+      expect(homeController.hostController.text, '192.0.2.10');
+      expect(homeController.portController.text, '6666');
     } finally {
       homeController.onClose();
       Get.reset();
