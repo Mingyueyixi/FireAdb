@@ -1,28 +1,50 @@
 # USB 方案
 
-问答整理见 [usb-qa.md](usb-qa.md)。本文与该问答对应同一次实现：`3b10e568767875a08564378cf8facf440b99222d`。后续若改掉读写方式或 5037 的行为，以代码为准。
+桌面端用 libusb 直接打开手机上的 ADB 接口，并在 `127.0.0.1:5037` 空闲时由本进程实现 ADB Server。界面和官方 `adb` 都通过这台 Server 看到设备、执行命令。不调用 `adb.exe`，也不链接 Android SDK 的 `AdbWinApi.dll` / `AdbWinUsbApi.dll`。
 
-桌面端用 libusb 直接打开手机上的 ADB 接口。本进程在 `127.0.0.1:5037` 空闲时自己实现 ADB Server，把已经握完手的 USB 设备登记进去。界面上的设备列表来自 `host:devices-l`，连接走 `host:transport`。
-
-不调用 `adb.exe`，也不链接 Android SDK 的 `AdbWinApi.dll` / `AdbWinUsbApi.dll`。
+先前的疑问和结论见下文。逐条当时的记录在 [usb-qa.md](usb-qa.md)，对应提交 `3b10e568767875a08564378cf8facf440b99222d`。那份记录里的 20 毫秒轮询、以及一次查询后保持连接，都已经改掉。
 
 ## 现在能做什么
 
-Windows 上可以枚举 ADB 接口、声明 WinUSB 接口、完成 AUTH/CNXN，并让这台手机出现在本机设备列表里。真机验证过 OnePlus Ace 5（接口已绑定 WinUSB）。
+Windows 上可以枚举 ADB 接口、声明 WinUSB 接口、完成 AUTH/CNXN，并把手机登记进本机设备列表。真机验证过 OnePlus Ace 5（接口已绑定 WinUSB，序列号 `3B6F42E7NT8RZL34`）。
+
+本进程占着 5037 时，官方 `adb devices`、`adb -s` 和 `adb shell` 可以连到这台 Server。列表第一列是 USB 序列号字符串。长列表按官方 `%-22s` 补齐，Windows 上不打印端口路径。`adb shell` 能拿到设备 banner 里的 `features=`，并在同一条连接上完成 `host:tport:` 和后续的 `shell:`。
+
+本机模拟器也会出现在同一份列表里。adb 端口 `5557` 显示为 `emulator-5556`。
 
 Linux、macOS 只按系统库名加载 libusb，仓库没有带上对应动态库，也没有在真机上验证。Android 的 USB Host（`android.hardware.usb`）还没做，Android 上也不会去连 `127.0.0.1:5037`。
 
-## 组件
+## 设备从哪来
 
-| 位置 | 作用 |
+三条路径都登记到同一个 `AdbServer`，首页只向 `127.0.0.1:5037` 要 `host:devices-l`。
+
+| 来源 | 谁在扫 | 跑在哪 | 列表里的序列号 |
+|---|---|---|---|
+| USB 手机 | `UsbAdbTracker`，每 2 秒 | 定时器在主 isolate；枚举用一次短命 isolate，避免 libusb 挡住界面 | USB 字符串描述符 `iSerialNumber`。没有时才用 banner 里的序列号，再退回 `usb:1-3` 这种地址 |
+| 本机模拟器 | `AdbServer`，启动时一次，之后每 3 秒 | 主 isolate 的定时器。16 个回环端口：`5555`、`5557`……`5585`，连接超时 300 毫秒 | `emulator-<端口-1>`。已连上的端口不再拨 |
+| 手动 TCP | `host:connect:host:port` | 客户端这次命令 | 对端 banner 里的序列号 |
+
+首页自己的 3 秒刷新也是主 isolate 上的 `Timer`。到点只发一次 `host:devices-l`，不枚举 USB，也不扫模拟器端口。两次触发之间定时器挂在事件循环上。
+
+本进程只在 5037 空闲时监听。端口已被占用就沿用外面的 Server，不再自己打开 USB，首页也就不再显示直连 USB 条目。一块接口同时只能有一个程序声明成功。
+
+产品名、型号来自连接成功后的 `getprop`（模拟器则来自 CNXN banner 的 `ro.product.*`）。`adb devices` 的短格式是 `序列号<TAB>状态`。长格式在序列号后补齐到 22 列，再写状态、`product:`、`model:`、`device:` 和 `transport_id:`。`devPath` 仍保存在设备对象上，供 `adb -s 1-3` 和 `adb -s usb:1-3` 查找；只有路径里含有 `/`（Linux 的 `/dev/bus/usb/...`）才写进长列表。因此 Windows 上从 `devices -l` 解析回来的设备没有 `devPath`，首页图标按普通手机显示。
+
+## 一台 USB 设备占哪些 isolate
+
+界面线程不调用 libusb。打开一台手机时固定三个 isolate：
+
+| isolate | 做什么 |
 |---|---|
-| `packages/adb_usb` | 用 `dart_libusb` 枚举、打开接口，实现 `AdbTransport` |
-| `packages/adb_core` 的 `AdbServer` | 协议版本 41 的本机 smart socket，默认端口 5037 |
-| `UsbAdbTracker` | 每 2 秒枚举一次。新的端口路径会打开并握手，然后 `upsert` 到 server |
-| `ConnectionManager.ensureLocalAdbServer` | 应用启动时占用 5037。端口已被占用就沿用外面的 server，不再打开 USB |
-| 首页设备列表 | 本进程占着 5037 时，USB 设备只出现在 `host:devices` 里，避免再打开一次同一个接口 |
+| `usbWorker` | `libusb_open`、声明接口、读取序列号，并转发数据。关闭时由它调用 `libusb_close`，把堵在传输里的调用打断 |
+| 读 | `libusb_bulk_transfer`，超时 0，一直阻塞到手机发来数据或句柄被关掉 |
+| 写 | 平时停在消息端口上，有包才写，写超时 10 秒 |
 
-`devPath` 使用不含冒号的端口路径（例如 `1-3`）。`devices -l` 会把带冒号的字段当成 `key:value`。
+这和官方 libusb 后端的读线程、写线程是同一结构，差别是这里用 Dart isolate。手机空闲时读 isolate 停在内核的 WinUSB 重叠 I/O 上，写 isolate 停在端口上，都不轮询。每个设备有自己的 `libusb_init` 上下文。读、写 isolate 重新打开同一份 DLL，并用地址重建 `libusb_device_handle`。
+
+关闭是发给 `usbWorker` 的一条消息。它释放接口并 `libusb_close`，最多再等 2 秒，然后才 `Isolate.kill`。
+
+`libusb_bulk_transfer` 是同步包装。异步做法是 `libusb_submit_transfer` 加 `libusb_handle_events`，一台设备可以收成一个等待中的 isolate。当前没有改成那样。
 
 ## 接口怎么认
 
@@ -50,19 +72,52 @@ Linux 加载 `libusb-1.0.so.0`。macOS 依次尝试 Homebrew 的 `/opt/homebrew/
 
 这份 DLL 不代替 USB 驱动。libusb 在 Windows 上通过 `winusb.dll` 打开已经绑定 WinUSB 的接口。手机若绑的是别的驱动，需要先换成 WinUSB。系统自带的 MS OS 兼容 ID 也可以完成绑定，这种情况下不必再装 Google USB 驱动。同一接口同时只能有一个程序声明成功。
 
-## 读写为什么是短超时
+官方 Windows 客户端默认不走 libusb，除非设置 `ADB_LIBUSB=1`。它通过 `AdbWinApi.dll` 按 GUID `{F72FE0D4-CBCB-407d-8814-9ED673D0DD6B}` 枚举。SDK 里现成的那份 DLL 是 32 位的，64 位 Dart 进程加载不了。本方案不移植这套 DLL。
 
-官方 libusb 后端是两条操作系统线程：读线程和写线程都调用 `libusb_bulk_transfer`，超时为 0，一直阻塞到本次传输结束。读停住时，写线程仍能把包发出去。
+## 本机 5037
 
-当前实现把读写放在同一个 Dart isolate 里，用的是同步的 `libusb_bulk_transfer`。这次调用返回之前，isolate 上的端口回调不会执行。手机没有数据时如果一直堵在读上，待发的 `CNXN`、`OPEN`、`WRTE` 就送不出去。
+协议版本是 41（`host:version` 返回 `0029`）。版本不一致时，官方客户端会发 `host:kill` 再拉起自己的 `adb.exe`。
 
-所以空闲读的超时是 20 毫秒。超时后用 `Future.delayed(Duration.zero)` 把事件循环让出来，收进写入队列，下一轮再写，然后继续读。20 毫秒是单 isolate 同步调用下的写入延迟上限，不是协议间隔。调试器里这个 isolate 会表现为反复暂停和运行：停在原生读里，超时后又回到 Dart。USB 连接本身在这个循环里保持打开。
+一次查询写完结果后关闭 TCP 连接，官方 `adb` 要读到对端关闭才会结束命令。属于这一类的有 `host:version`、`host:devices`、`host:devices-l`、`host:connect`、`host:disconnect`，以及 `get-serialno`、`get-state`、`get-devpath`、`features`。
 
-后续若要改成和官方一样的阻塞读写，需要把读、写拆开（两条线程，或 libusb 异步传输加 `libusb_handle_events`）。同一个 `libusb` 设备句柄不能直接丢给另一个 Dart isolate 当作共享对象使用。
+`host:features` 返回这台设备 CNXN banner 里的 `features=`，不是主机自己的功能列表。`adb shell` 靠它决定用 `shell,v2` 还是旧的 `shell:`。接着在同一条连接上发送 `host:tport:`，读完 4 字节小端 transport id 后再发 shell 服务。这条连接保持到 shell 结束。`host:track-devices` 也保持连接。`host-serial:<序列号>:<方法>` 用最后一个冒号切分，这样 `usb:1-3` 和 `192.168.1.5:5555` 都能当序列号。
+
+## 先前确认过的问题
+
+**调试器里 usbWorker 一直暂停又运行。** 当时读和写挤在同一个 isolate 里，空闲读用 20 毫秒超时让出事件循环，调试器就把原生阻塞显示成暂停。连接本身没有在断开。现在读、写已经拆开，读超时是 0，空闲时停在内核传输上，不再每秒来回几十次。
+
+**为什么当时要轮询。** `libusb_bulk_transfer` 返回之前，这个 isolate 上的 Dart 代码都不会跑。读一直堵着，`CNXN`、`OPEN`、`WRTE` 就发不出去。20 毫秒只是写入最多晚多久，协议里没有这个间隔。
+
+**官方 USB 是不是也这样轮询。** 不是。官方 libusb 后端是一条读线程、一条写线程，两边超时都是 0。写线程平时睡在队列上。源码在 `third_party/aosp-adb/client/usb_libusb.cpp`。我们现在的三个 isolate 就是这个结构：控制、读、写。几台手机各自再占三个 isolate，不会把线程耗尽；多出来的是 isolate 自己的堆，以及跨 isolate 拷一份数据。界面线程只发关闭消息，由 `usbWorker` 调用 `libusb_close` 打断正在进行的传输。
+
+**libusb 为什么用线程，不能等内核事件吗。** 真正的等待就是内核事件：Windows 上是 WinUSB 的重叠 I/O，Linux 上是 usbfs 的 poll。`libusb_bulk_transfer` 只是同步包装，调用方要停到这一次传输结束。异步接口是 `libusb_submit_transfer` 加 `libusb_handle_events`。`dart_libusb` 暴露的是同步调用，而一个已经堵在读里的 isolate 收不到下一条写，所以现在仍是读、写各一个 isolate。
+
+**没有官方 adb server，USB 还能连吗。** 能。`openUsbAdbDevice` 直接声明接口并做 AUTH/CNXN，不经过 5037。本应用自己的 shell、文件、截图走这条直连就够。Server 是为了让首页和官方 `adb` 共用已经打开的接口。一块接口只能有一个程序声明成功，所以本进程占着 5037 时，界面不再对同一台手机做第二次打开。
+
+**官方 `adb devices` 连上我们的 5037 却停住。** 客户端不检查对面是不是 Google 的进程。它每次先发 `host:version`，读完 4 位十六进制版本号，然后一直读到对端关掉 TCP。当时我们回了 `OKAY` 却留着连接，命令就不会结束。版本不是 41 时，官方客户端还会 `host:kill` 再拉起自己的 `adb.exe`。现在一次查询写完就关连接，版本保持 41。`adb shell` 还要 `host:features`（设备 banner 里的功能）和同一条连接上的 `host:tport:`，这两处也已经接上。
+
+**`adb devices -l` 和官方差在哪。** 官方 Windows 把 devpath 留空，序列号按 `%-22s` 补齐。我们曾经把端口路径 `1-3` 打进长列表，并且只隔了一个空格。现在补齐方式与官方相同，含 `/` 的路径才打印。`adb -s` 仍接受序列号、`1-3` 和 `usb:1-3`。
+
+**官方能看到两台，我们只有手机。** 第二台是本机模拟器 `emulator-5556`，adb 端口是 5557。官方启动时会扫 `5555` 起的偶数间隔端口。我们之前只登记 USB 和手动 `host:connect`。现在按同一范围扫描。
+
+**每 3 秒扫这些端口会不会有问题。** 只有 16 个回环端口。没人听的端口会立刻被拒绝，已经连上的不再拨。首页那次 3 秒刷新是另一个主 isolate 定时器，只发 `host:devices-l`，不参加这次扫描。
+
+**要不要改成 AdbWinApi.dll。** 不改。它只覆盖 Windows，SDK 里那份是 32 位的，64 位 Dart 加载不了，枚举、打开和读写都要重写。libusb 三个桌面系统可以共用，这台已经绑上 WinUSB 的手机不用再装 Google 驱动。
+
+**随包的 libusb DLL 是不是就不用 Google USB 驱动了。** DLL 不代替驱动。它通过 `winusb.dll` 打开已经绑定 WinUSB 的接口。OnePlus Ace 5 是系统按 MS OS 兼容 ID 自动绑上的，没有另装 Google 的 INF。官方 `AdbWinApi` 还要求接口注册了 Android GUID；GUID 没有注册时它会找不到设备。libusb 按接口类 `0xFF/0x42/0x01` 过滤，WinUSB 绑上了就能打开。
+
+## Google 为什么自己写 Windows USB API
+
+`client/usb_windows.cpp` 的版权是 2007 年。注释写明接口 GUID 由当时的内核驱动 `androidusb.sys` 分配，用户态结构体走的是 `AdbWinApi.dll`：一个接口句柄，外加分开的读管道和写管道。关掉读管道就能把堵在读里的线程拉出来。
+
+那时候 Windows 没有 Linux usbfs 这种让普通程序直接声明一个厂商类接口的接口。ADB 接口是厂商类 `0xFF`，系统没有现成的类驱动会去认它。libusb 1.0 的 WinUSB 后端也还不是能依赖的默认方案；当时 Windows 上的 libusb 还要配自己的内核驱动，打不开绑在 `androidusb.sys` 上的设备。Google 的做法是自己带内核驱动，再写一套只暴露 adb 需要的用户态 API：按 GUID 枚举、打开接口、分开读写管道、同步传输、零长度包、读序列号。platform-tools 因此不必依赖 LGPL 的 libusb。
+
+后来内核改成系统自带的 `winusb.sys`，用户态仍调用同一套 `AdbWinApi.dll` / `AdbWinUsbApi.dll`，GUID 也没换，所以 Windows 上的默认后端一直是它。手机 gadget 的 MS OS 描述符里仍然公布这个 GUID，源码在 `daemon/usb_ffs.cpp`。官方客户端里的 libusb 是后加的：Linux、macOS 默认使用；Windows 上 `is_libusb_enabled()` 默认关闭，要设 `ADB_LIBUSB=1` 才走 libusb。
+
+这套 API 留到现在，不完全是历史包袱。它只看见注册了 Android GUID 的接口，读管道和写管道天然分开，platform-tools 里已经带了 Apache 2.0 的 DLL。换成 libusb 会改变「找设备」的规则，还要在 Windows 上多带一份库。FireAdb 要覆盖三个桌面系统，所以选 libusb，而不是把这套只服务 Windows 的 API 搬过来。
 
 ## 还没做
 
-- Android USB Host
-- Linux、macOS 动态库打包和真机验证
-- 用双线程或异步传输去掉 20 毫秒轮询
-- 移植 `AdbWinUsbApi.dll`
+- Android USB Host（`android.hardware.usb`）
+- Linux、macOS 随包提供 libusb，并在真机上验证
+- 把一台设备的读、写收成一个 `libusb_handle_events` 等待循环

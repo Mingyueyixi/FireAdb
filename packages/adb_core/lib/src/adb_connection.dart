@@ -70,9 +70,14 @@ class AdbStream {
         final ack = Completer<int>();
         _pendingAcks.add(ack);
         await _connection._sendMessage(
-            cmd.commandWrite, localId, _remoteId ?? 0, chunk);
-        await ack.future
-            .timeout(_connection.writeTimeout ?? const Duration(seconds: 10));
+          cmd.commandWrite,
+          localId,
+          _remoteId ?? 0,
+          chunk,
+        );
+        await ack.future.timeout(
+          _connection.writeTimeout ?? const Duration(seconds: 10),
+        );
         completer.complete(chunk.length);
       } catch (e, st) {
         completer.completeError(e, st);
@@ -97,7 +102,11 @@ class AdbStream {
       _incoming.add(data);
     }
     await _connection._sendMessage(
-        cmd.commandOkay, localId, _remoteId ?? 0, const []);
+      cmd.commandOkay,
+      localId,
+      _remoteId ?? 0,
+      const [],
+    );
   }
 
   void _onAck() {
@@ -141,12 +150,14 @@ class AdbStream {
 
   Stream<String> readUtf8Lines() {
     return _incoming.stream
-        .transform(StreamTransformer<Uint8List, String>.fromHandlers(
-      handleData: (data, sink) {
-        // LineSplitter 按 \n 切分；这里只负责把字节流转为字符串块。
-        sink.add(utf8.decode(data, allowMalformed: true));
-      },
-    ))
+        .transform(
+          StreamTransformer<Uint8List, String>.fromHandlers(
+            handleData: (data, sink) {
+              // LineSplitter 按 \n 切分；这里只负责把字节流转为字符串块。
+              sink.add(utf8.decode(data, allowMalformed: true));
+            },
+          ),
+        )
         .transform(const LineSplitter());
   }
 
@@ -155,7 +166,11 @@ class AdbStream {
     if (_localClosed) return;
     _localClosed = true;
     await _connection._sendMessage(
-        cmd.commandClose, localId, _remoteId ?? 0, const []);
+      cmd.commandClose,
+      localId,
+      _remoteId ?? 0,
+      const [],
+    );
     if (!_incoming.isClosed) _incoming.close();
     if (!_closed.isCompleted) _closed.complete();
   }
@@ -194,6 +209,7 @@ class AdbConnection {
   bool _connected = false;
   String _deviceBanner = '';
   String _deviceSerial = '';
+  String _features = '';
 
   // AUTH 状态机。
   int _authSignaturesSent = 0;
@@ -203,6 +219,9 @@ class AdbConnection {
 
   AdbConnectionState get state => _state;
   String get deviceBanner => _deviceBanner;
+
+  /// CNXN banner 里的 `features=`。官方 `adb shell` 会先查 `host:features`。
+  String get features => _features;
   String get deviceSerial => _deviceSerial;
   bool get isConnected => _connected;
 
@@ -214,8 +233,7 @@ class AdbConnection {
   /// 读循环的流 ACK 与主线程帧写入必须排队。
   Future<void> _writeQueue = Future.value();
 
-  Future<void> _sendMessage(int command, int arg0, int arg1,
-      List<int> data) {
+  Future<void> _sendMessage(int command, int arg0, int arg1, List<int> data) {
     final msg = AdbMessage(command, arg0, arg1, data);
     final bytes = msg.pack();
     final prev = _writeQueue;
@@ -233,18 +251,24 @@ class AdbConnection {
 
   /// 建立连接：发送 CNXN 并驱动握手，成功返回设备 banner。
   Future<String> connect() async {
-    await _sendMessage(cmd.commandCnxn, cmd.version, cmd.maxAdbData,
-        encodeConnectPayload(type: 'host', serial: '', banner: banner));
+    await _sendMessage(
+      cmd.commandCnxn,
+      cmd.version,
+      cmd.maxAdbData,
+      encodeConnectPayload(type: 'host', serial: '', banner: banner),
+    );
     _readLoop();
-    await _connectCompleter.future.timeout(authTimeout, onTimeout: () {
-      if (!_connectCompleter.isCompleted) {
-        _connectCompleter.complete();
-        _connectError ??= _awaitingUserAuth
-            ? AdbDeviceAuthError(
-                '等待设备确认公钥授权超时（${authTimeout.inSeconds}s）')
-            : AdbInvalidResponseError('连接超时');
-      }
-    });
+    await _connectCompleter.future.timeout(
+      authTimeout,
+      onTimeout: () {
+        if (!_connectCompleter.isCompleted) {
+          _connectCompleter.complete();
+          _connectError ??= _awaitingUserAuth
+              ? AdbDeviceAuthError('等待设备确认公钥授权超时（${authTimeout.inSeconds}s）')
+              : AdbInvalidResponseError('连接超时');
+        }
+      },
+    );
     if (_connectError != null) {
       throw _connectError!;
     }
@@ -289,8 +313,10 @@ class AdbConnection {
   void _onCnxn(AdbMessage msg) {
     // 记录设备版本/序列号/banner。
     final payload = msg.data;
-    final text = utf8.decode(payload.takeWhile((b) => b != 0).toList(),
-        allowMalformed: true);
+    final text = utf8.decode(
+      payload.takeWhile((b) => b != 0).toList(),
+      allowMalformed: true,
+    );
     final parts = text.split(':');
     if (parts.length >= 2) {
       _deviceSerial = parts[1];
@@ -303,9 +329,18 @@ class AdbConnection {
     if (!_connected) {
       _connected = true;
       _awaitingUserAuth = false;
+      _features = _bannerFeatures(_deviceBanner);
       _setState(AdbConnectionState.device);
       if (!_connectCompleter.isCompleted) _connectCompleter.complete();
     }
+  }
+
+  String _bannerFeatures(String banner) {
+    for (final prop in banner.split(';')) {
+      if (!prop.startsWith('features=')) continue;
+      return prop.substring('features='.length);
+    }
+    return '';
   }
 
   Future<void> _onAuth(AdbMessage msg) async {
@@ -318,13 +353,14 @@ class AdbConnection {
       if (idx < signers.length) {
         _authSignaturesSent++;
         final sig = signers[idx].signToken(msg.data);
-        await _sendMessage(
-            cmd.commandAuth, cmd.authSignature, 0, sig);
+        await _sendMessage(cmd.commandAuth, cmd.authSignature, 0, sig);
       } else {
         // 所有密钥都被拒绝，发送公钥等待用户授权。
         final key = signers.first;
-        final pub =
-            Uint8List.fromList([...utf8.encode(key.base64PublicKey()), 0]);
+        final pub = Uint8List.fromList([
+          ...utf8.encode(key.base64PublicKey()),
+          0,
+        ]);
         await _sendMessage(cmd.commandAuth, cmd.authRsaPublicKey, 0, pub);
         _awaitingUserAuth = true;
         _setState(AdbConnectionState.unauthorized);
@@ -350,7 +386,8 @@ class AdbConnection {
         waiter.complete(stream);
       } else {
         waiter.completeError(
-            AdbInvalidResponseError('OPEN 批复丢失流: local=$localId'));
+          AdbInvalidResponseError('OPEN 批复丢失流: local=$localId'),
+        );
       }
       return;
     }
@@ -380,8 +417,11 @@ class AdbConnection {
         stream._completeOpen(msg.arg0);
         stream._onPeerClose();
       }
-      waiter.completeError(AdbInvalidResponseError(
-          '设备拒绝服务 OPEN(local=$localId)（remoteId=${msg.arg0}）'));
+      waiter.completeError(
+        AdbInvalidResponseError(
+          '设备拒绝服务 OPEN(local=$localId)（remoteId=${msg.arg0}）',
+        ),
+      );
       return;
     }
     if (stream != null) {
@@ -399,8 +439,10 @@ class AdbConnection {
     _streams[localId] = stream;
     final waiter = Completer<AdbStream>();
     _openWaiters[localId] = waiter;
-    await _sendMessage(cmd.commandOpen, localId, 0,
-        [...utf8.encode(destination), 0]);
+    await _sendMessage(cmd.commandOpen, localId, 0, [
+      ...utf8.encode(destination),
+      0,
+    ]);
     return waiter.future;
   }
 

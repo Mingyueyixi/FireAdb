@@ -11,7 +11,7 @@ void main() {
     final pair = _MemoryPair.create();
     unawaited(_accept(pair.device));
     final server = AdbServer();
-    await server.start(port: 0);
+    await server.start(port: 0, scanEmulators: false);
     final tracker = UsbAdbTracker(
       server: server,
       signers: const <AdbRsaKeyPair>[],
@@ -47,7 +47,7 @@ void main() {
     }
     expect(listed?.serial, 'USB123');
     expect(listed?.state, 'device');
-    expect(listed?.devPath, '1-1');
+    expect(listed?.devPath, isNull);
 
     final shell = await client.openShell('USB123', 'echo');
     expect(await shell.readStream.transform(utf8.decoder).join(), 'pong');

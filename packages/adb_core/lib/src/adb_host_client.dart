@@ -39,8 +39,9 @@ enum AdbTransportType {
 /// 一条设备记录（来自 `host:devices[ -l]`）。
 ///
 /// 短格式（`host:devices`）：`<serial>\t<state>`；
-/// 长格式（`host:devices-l`）：`%-22s <state> [devpath] product:<p> model:<m> device:<d> transport_id:<id>`
-/// （AOSP `transport.cpp:append_transport`，`%22s` 左对齐填充空格，非空时才带编制）。
+/// 长格式（`host:devices-l`）：`%-22s <state> [devpath] product:<p> model:<m> device:<d> transport_id:<id>`。
+/// Windows 官方 USB 的 devpath 为空，所以长列表里没有 `1-3` 这种端口路径。
+/// Linux 的 `/dev/bus/usb/...` 仍会打印。
 class AdbDeviceInfo {
   const AdbDeviceInfo(
     this.serial,

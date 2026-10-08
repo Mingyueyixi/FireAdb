@@ -113,9 +113,7 @@ class UsbAdbTracker {
       AdbServerDevice(
         connection: connection,
         serial: serial,
-        state: state == AdbConnectionState.device
-            ? 'device'
-            : 'unauthorized',
+        state: state == AdbConnectionState.device ? 'device' : 'unauthorized',
         devPath: link.device.portPath,
         usb: true,
         product: link.product,
@@ -152,10 +150,21 @@ class UsbAdbTracker {
   }
 
   String _serial(_UsbLink link, AdbConnection connection) {
+    final usbSerial = _usbSerial(link);
+    if (usbSerial != null) return usbSerial;
     if (connection.deviceSerial.isNotEmpty) return connection.deviceSerial;
-    final usbSerial = link.device.serialNumber?.trim();
-    if (usbSerial != null && usbSerial.isNotEmpty) return usbSerial;
     return link.device.address;
+  }
+
+  String? _usbSerial(_UsbLink link) {
+    final listed = link.device.serialNumber?.trim();
+    if (listed != null && listed.isNotEmpty) return listed;
+    final transport = link.transport;
+    if (transport is AdbUsbTransport) {
+      final opened = transport.serialNumber?.trim();
+      if (opened != null && opened.isNotEmpty) return opened;
+    }
+    return null;
   }
 
   Future<void> _closeLink(String portPath) async {

@@ -15,11 +15,27 @@ import 'adb_connection.dart';
 import 'adb_device.dart';
 import 'adb_smart_socket.dart';
 import 'adb_stream_reader.dart';
+import 'adb_tcp_transport.dart';
+import 'adb_transport.dart';
 
 /// 官方 `ADB_SERVER_VERSION`（`adb.h`）。`host:version` 以四位十六进制返回。
 const int adbServerVersion = 41;
 
 const int adbServerPort = 5037;
+
+/// 官方 `DEFAULT_ADB_LOCAL_TRANSPORT_PORT`。模拟器 adb 端口从这里起，每次加 2。
+const int adbEmulatorPortStart = 5555;
+
+/// 官方扫描 16 个模拟器槽位，对应控制台端口 5554、5556……
+const int adbEmulatorSlotCount = 16;
+
+/// 本地模拟器的 adb 端口：5555、5557……5585。序列号是 `emulator-<端口-1>`。
+List<int> adbEmulatorPorts() {
+  final max = adbEmulatorPortStart + adbEmulatorSlotCount * 2 - 1;
+  return <int>[
+    for (var port = adbEmulatorPortStart; port <= max; port += 2) port,
+  ];
+}
 
 enum _ClientNext { stay, finish, bridged }
 
@@ -51,9 +67,11 @@ class AdbServerDevice {
 
   String line({required bool long}) {
     if (!long) return '$serial\t$state';
-    final buffer = StringBuffer('$serial $state');
+    final shown = serial.isEmpty ? '(no serial number)' : serial;
+    // AOSP `append_transport`：`%-22s %s`。Windows 官方不填 devpath。
+    final buffer = StringBuffer('${shown.padRight(22)} $state');
     final path = devPath;
-    if (path != null && path.isNotEmpty) buffer.write(' $path');
+    if (path != null && path.contains('/')) buffer.write(' $path');
     final productName = product;
     if (productName != null && productName.isNotEmpty) {
       buffer.write(' product:$productName');
@@ -81,6 +99,11 @@ class AdbServer {
   final Map<String, AdbServerDevice> _devices = {};
   final Map<Socket, Future<void>> _writes = {};
   final List<void Function()> _trackers = [];
+  Timer? _emulatorTimer;
+  var _emulatorScanRunning = false;
+  final Set<int> _emulatorBusy = <int>{};
+  Iterable<int> _emulatorPorts = adbEmulatorPorts();
+  Future<AdbTransport> Function(int port) _openEmulator = _openLocalEmulator;
 
   /// `host:kill` 时通知外面放开 USB。Server 自己会关掉监听。
   void Function()? onKilled;
@@ -95,12 +118,22 @@ class AdbServer {
   Future<void> start({
     InternetAddress? address,
     int port = adbServerPort,
+    bool scanEmulators = true,
+    Iterable<int>? emulatorPorts,
+    Future<AdbTransport> Function(int port)? openEmulator,
   }) async {
+    if (emulatorPorts != null) _emulatorPorts = emulatorPorts;
+    if (openEmulator != null) _openEmulator = openEmulator;
     _socket = await ServerSocket.bind(
       address ?? InternetAddress.loopbackIPv4,
       port,
     );
     _socket!.listen(_onClient);
+    if (!scanEmulators) return;
+    _emulatorTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      unawaited(_scanEmulators());
+    });
+    unawaited(_scanEmulators());
   }
 
   /// 端口空闲时启动，已被占用时返回 null（外面已有官方 adb server）。
@@ -108,10 +141,15 @@ class AdbServer {
     InternetAddress? address,
     int port = adbServerPort,
     List<AdbRsaKeyPair> signers = const <AdbRsaKeyPair>[],
+    bool scanEmulators = true,
   }) async {
     final server = AdbServer(signers: signers);
     try {
-      await server.start(address: address, port: port);
+      await server.start(
+        address: address,
+        port: port,
+        scanEmulators: scanEmulators,
+      );
       return server;
     } on SocketException {
       return null;
@@ -150,6 +188,14 @@ class AdbServer {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    _emulatorTimer?.cancel();
+    _emulatorTimer = null;
+    final emulators = _devices.values
+        .where((device) => device.serial.startsWith('emulator-'))
+        .toList();
+    for (final device in emulators) {
+      unawaited(device.connection.close());
+    }
     final trackers = _trackers.toList();
     _trackers.clear();
     for (final tracker in trackers) {
@@ -158,6 +204,83 @@ class AdbServer {
     final socket = _socket;
     _socket = null;
     await socket?.close();
+  }
+
+  Future<void> _scanEmulators() async {
+    if (_closed || _emulatorScanRunning) return;
+    _emulatorScanRunning = true;
+    try {
+      await Future.wait(_emulatorPorts.map(_tryEmulatorPort));
+    } finally {
+      _emulatorScanRunning = false;
+    }
+  }
+
+  Future<void> _tryEmulatorPort(int adbPort) async {
+    if (_closed || _emulatorBusy.contains(adbPort)) return;
+    final serial = 'emulator-${adbPort - 1}';
+    if (_devices.containsKey(serial)) return;
+    _emulatorBusy.add(adbPort);
+    AdbTransport transport;
+    try {
+      transport = await _openEmulator(adbPort);
+    } catch (_) {
+      _emulatorBusy.remove(adbPort);
+      return;
+    }
+    if (_closed) {
+      _emulatorBusy.remove(adbPort);
+      await transport.close();
+      return;
+    }
+    var published = false;
+    late final AdbConnection connection;
+    connection = AdbConnection(
+      transport,
+      signers: signers,
+      authTimeout: const Duration(minutes: 30),
+      onStateChanged: (state) {
+        if (_closed) return;
+        if (state == AdbConnectionState.offline) {
+          remove(serial);
+          return;
+        }
+        published = true;
+        _publishEmulator(serial, connection, state);
+      },
+    );
+    unawaited(() async {
+      try {
+        await connection.connect();
+      } catch (_) {
+        if (!published) await transport.close();
+      } finally {
+        _emulatorBusy.remove(adbPort);
+      }
+    }());
+  }
+
+  void _publishEmulator(
+    String serial,
+    AdbConnection connection,
+    AdbConnectionState state,
+  ) {
+    final existing = _devices[serial];
+    final banner = connection.deviceBanner;
+    upsert(
+      AdbServerDevice(
+        connection: connection,
+        serial: serial,
+        state: state == AdbConnectionState.device ? 'device' : 'unauthorized',
+        transportId: existing?.transportId ?? 0,
+        product: _bannerValue(banner, 'ro.product.name') ?? existing?.product,
+        model:
+            _bannerValue(banner, 'ro.product.model', alphanumeric: true) ??
+            existing?.model,
+        deviceName:
+            _bannerValue(banner, 'ro.product.device') ?? existing?.deviceName,
+      ),
+    );
   }
 
   Future<void> _onClient(Socket socket) async {
@@ -190,7 +313,7 @@ class AdbServer {
     if (service == 'host:version') {
       final version = adbServerVersion.toRadixString(16).padLeft(4, '0');
       await _okayPayload(socket, version);
-      return _ClientNext.stay;
+      return _ClientNext.finish;
     }
     if (service == 'host:kill') {
       await _okay(socket);
@@ -202,7 +325,7 @@ class AdbServer {
     }
     if (service == 'host:devices' || service == 'host:devices-l') {
       await _okayPayload(socket, _devicesText(long: service.endsWith('-l')));
-      return _ClientNext.stay;
+      return _ClientNext.finish;
     }
     if (service == 'host:track-devices' || service == 'host:track-devices-l') {
       await _okay(socket);
@@ -211,15 +334,18 @@ class AdbServer {
     }
     if (service.startsWith('host:connect:')) {
       await _connect(socket, service.substring('host:connect:'.length));
-      return _ClientNext.stay;
+      return _ClientNext.finish;
     }
     if (service.startsWith('host:disconnect')) {
       await _disconnect(socket, service);
-      return _ClientNext.stay;
+      return _ClientNext.finish;
     }
     if (service.startsWith('host:tport:')) {
-      await _bindTransportId(socket, service.substring('host:tport:'.length));
-      return _ClientNext.finish;
+      return _switchTransportId(
+        socket,
+        reader,
+        service.substring('host:tport:'.length),
+      );
     }
     if (service == 'host:transport-any' ||
         service == 'host:transport-usb' ||
@@ -230,7 +356,7 @@ class AdbServer {
         service.startsWith('host-usb:') ||
         service.startsWith('host:')) {
       await _queryDevice(socket, service);
-      return _ClientNext.stay;
+      return _ClientNext.finish;
     }
     await _fail(socket, "unknown host service '$service'");
     return _ClientNext.finish;
@@ -255,7 +381,7 @@ class AdbServer {
       }
     } else {
       final serial = service.substring('host:transport:'.length);
-      device = _devices[serial];
+      device = _find(serial);
       if (device == null) {
         await _fail(socket, "device '$serial' not found");
         return _ClientNext.finish;
@@ -266,6 +392,46 @@ class AdbServer {
       return _ClientNext.finish;
     }
     await _okay(socket);
+    return _bridgeNext(socket, reader, device);
+  }
+
+  /// 官方客户端先发 `host:tport:`，读完 transport id 后在同一条连接上发送
+  /// `shell:` / `exec:`。这条连接不能在回完 id 后关掉。
+  Future<_ClientNext> _switchTransportId(
+    Socket socket,
+    AdbSizedReader reader,
+    String selector,
+  ) async {
+    final picked = _select(selector);
+    if (picked.many) {
+      await _fail(socket, 'more than one device/emulator');
+      return _ClientNext.finish;
+    }
+    final device = picked.device;
+    if (device == null) {
+      await _fail(socket, 'no devices/emulators found');
+      return _ClientNext.finish;
+    }
+    if (!device.isOnline) {
+      await _fail(socket, "device '${device.serial}' ${device.state}");
+      return _ClientNext.finish;
+    }
+    await _okay(socket);
+    final id = device.transportId;
+    await _write(socket, <int>[
+      id & 0xff,
+      (id >> 8) & 0xff,
+      (id >> 16) & 0xff,
+      (id >> 24) & 0xff,
+    ]);
+    return _bridgeNext(socket, reader, device);
+  }
+
+  Future<_ClientNext> _bridgeNext(
+    Socket socket,
+    AdbSizedReader reader,
+    AdbServerDevice device,
+  ) async {
     final String nextService;
     try {
       nextService = await _readService(reader);
@@ -340,31 +506,20 @@ class AdbServer {
     return (device: online.single, many: false);
   }
 
-  Future<void> _bindTransportId(Socket socket, String selector) async {
-    final picked = _select(selector);
-    if (picked.many) {
-      await _fail(socket, 'more than one device/emulator');
-      return;
+  AdbServerDevice? _find(String key) {
+    final direct = _devices[key];
+    if (direct != null) return direct;
+    for (final device in _devices.values) {
+      if (device.devPath == key) return device;
+      final path = device.devPath;
+      if (path != null && key == 'usb:$path') return device;
     }
-    final device = picked.device;
-    if (device == null) {
-      await _fail(socket, 'no devices/emulators found');
-      return;
-    }
-    await _okay(socket);
-    final id = device.transportId;
-    await _write(socket, <int>[
-      id & 0xff,
-      (id >> 8) & 0xff,
-      (id >> 16) & 0xff,
-      (id >> 24) & 0xff,
-    ]);
+    return null;
   }
 
   ({AdbServerDevice? device, bool many}) _select(String selector) {
     if (selector.startsWith('serial:')) {
-      final device = _devices[selector.substring('serial:'.length)];
-      return (device: device, many: false);
+      return (device: _find(selector.substring('serial:'.length)), many: false);
     }
     if (selector == 'local') {
       final locals = _devices.values.where((device) => !device.usb).toList();
@@ -377,7 +532,12 @@ class AdbServer {
   }
 
   Future<void> _queryDevice(Socket socket, String service) async {
-    const methods = <String>{'get-serialno', 'get-state', 'get-devpath'};
+    const methods = <String>{
+      'get-serialno',
+      'get-state',
+      'get-devpath',
+      'features',
+    };
     String? serial;
     String method;
     bool? usb;
@@ -402,7 +562,7 @@ class AdbServer {
     }
     final AdbServerDevice? device;
     if (serial != null) {
-      device = _devices[serial];
+      device = _find(serial);
     } else {
       final picked = _online(usb: usb);
       if (picked.many) {
@@ -423,6 +583,7 @@ class AdbServer {
     final value = switch (method) {
       'get-serialno' => device.serial,
       'get-state' => device.state,
+      'features' => device.connection.features,
       _ => device.devPath ?? '',
     };
     await _okayPayload(socket, value);
@@ -444,11 +605,7 @@ class AdbServer {
       }
     }
     try {
-      final connected = await adbConnectTcp(
-        host,
-        port: port,
-        signers: signers,
-      );
+      final connected = await adbConnectTcp(host, port: port, signers: signers);
       final serial = connected.serial.isEmpty ? endpoint : connected.serial;
       upsert(
         AdbServerDevice(
@@ -505,9 +662,7 @@ class AdbServer {
         return;
       }
       unawaited(
-        _write(socket, _frame(_devicesText(long: long))).catchError((
-          Object _,
-        ) {
+        _write(socket, _frame(_devicesText(long: long))).catchError((Object _) {
           if (!done.isCompleted) done.complete();
         }),
       );
@@ -557,17 +712,11 @@ class AdbServer {
   Future<void> _okay(Socket socket) => _write(socket, ascii.encode('OKAY'));
 
   Future<void> _okayPayload(Socket socket, String payload) {
-    return _write(socket, <int>[
-      ...ascii.encode('OKAY'),
-      ..._frame(payload),
-    ]);
+    return _write(socket, <int>[...ascii.encode('OKAY'), ..._frame(payload)]);
   }
 
   Future<void> _fail(Socket socket, String reason) {
-    return _write(socket, <int>[
-      ...ascii.encode('FAIL'),
-      ..._frame(reason),
-    ]);
+    return _write(socket, <int>[...ascii.encode('FAIL'), ..._frame(reason)]);
   }
 
   Future<void> _write(Socket socket, List<int> bytes) {
@@ -597,4 +746,26 @@ class AdbServer {
   }
   if (host.isEmpty) return null;
   return (host, port);
+}
+
+Future<AdbTransport> _openLocalEmulator(int port) {
+  return AdbTcpTransport.connect(
+    '127.0.0.1',
+    port,
+    connectTimeout: const Duration(milliseconds: 300),
+  );
+}
+
+String? _bannerValue(String banner, String key, {bool alphanumeric = false}) {
+  final prefix = '$key=';
+  for (final prop in banner.split(';')) {
+    if (!prop.startsWith(prefix)) continue;
+    var value = prop.substring(prefix.length).trim();
+    if (value.isEmpty) return null;
+    if (alphanumeric) {
+      value = value.replaceAll(RegExp(r'[^A-Za-z0-9]'), '_');
+    }
+    return value;
+  }
+  return null;
 }

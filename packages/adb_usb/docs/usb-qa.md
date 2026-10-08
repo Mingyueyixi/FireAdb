@@ -1,8 +1,8 @@
 # USB 与本机 ADB Server 问答
 
-整理实现 Windows USB 传输和本机 ADB Server 时确认过的问题。实现现状见 [usb.md](usb.md)。
+整理实现 Windows USB 传输和本机 ADB Server 时确认过的问题。按当前代码归纳后的结论，包括 Google 为何自写 Windows USB API，见 [usb.md](usb.md) 的「先前确认过的问题」和「Google 为什么自己写 Windows USB API」。
 
-本文描述的是提交 `3b10e568767875a08564378cf8facf440b99222d`（`[feat] 实现 Windows USB 传输和本机 ADB Server`）。单 isolate 的 20 毫秒轮询、在 5037 上保持连接，以及 libusb 这套打开方式，后面都可能改掉。改过之后以代码为准，下文不再自动成立。
+本文描述的是提交 `3b10e568767875a08564378cf8facf440b99222d`（`[feat] 实现 Windows USB 传输和本机 ADB Server`）。单 isolate 的 20 毫秒轮询，以及 `host:version` / `host:devices` 回答后保持连接，都是这次提交里的行为，后来已经改掉。下文记录当时为什么会这样。当前实现见 [usb.md](usb.md)。
 
 ## usbWorker 为什么一直在暂停又运行
 
