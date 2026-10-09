@@ -23,7 +23,11 @@ if exist "%APP_HOME%local.properties" (
     if /I "%%A"=="org.gradle.java.home" set "JAVA_HOME=%%B"
   )
 )
+@rem Unescape \\ \: \/, then turn remaining \ into /.
 if defined JAVA_HOME set "JAVA_HOME=%JAVA_HOME:\\=\%"
+if defined JAVA_HOME set "JAVA_HOME=%JAVA_HOME:\:=:%"
+if defined JAVA_HOME set "JAVA_HOME=%JAVA_HOME:\/=/%"
+if defined JAVA_HOME set "JAVA_HOME=%JAVA_HOME:\=/%"
 
 @rem Find java.exe
 if defined JAVA_HOME goto findJavaFromJavaHome

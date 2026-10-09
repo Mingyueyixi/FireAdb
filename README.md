@@ -2,83 +2,41 @@
 
 纯自研跨平台 ADB 工具箱（不调用系统 adb 二进制，协议自实现）。
 
-## 目标平台
+## 平台
 
-- Windows / Linux / macOS（桌面，Flutter + dart_libusb）
-- Android（Flutter；设备列表走本机 5037，不枚举 USB）
+- Windows / Linux / macOS：Flutter，桌面 USB 走 libusb
+- Android：Flutter，设备列表走本机 5037
 
-## 工程结构
+## 源码
 
-```
-fire-adb/
-├── pubspec.yaml              # pub workspace 根：统一依赖解析与单一 pubspec.lock
-├── analysis_options.yaml     # 工作区共享静态分析配置（各成员包 include 继承）
-├── app/                      # Flutter 应用（android/windows/linux/macos）
-├── packages/
-│   ├── adb_core/             # 纯 Dart ADB 引擎（协议 / 传输 / 认证 / 无线配对，零平台依赖）
-│   ├── adb_usb/              # 桌面 USB 传输（libusb；Android 不提供）
-│   └── libadb/               # 薄入口：启动本机 Server，桌面再挂上 USB
-└── third_party/              # 参考源码（git submodule，不参与构建）
-    ├── aosp-adb/             # AOSP packages/modules/adb（GitHub 镜像）
-    ├── libusb/               # https://github.com/libusb/libusb ，固定在 v1.0.29
-    └── python-adb/           # https://github.com/google/python-adb
-```
-
-## 获取源码（含子模块）
-
-```bash
-git clone --recursive https://gitee.com/mingyueyixi/fire-adb.git
-# 若已 clone：
-git submodule update --init --recursive
-```
-
-`third_party/` 下的仓库仅用于对照学习，不参与构建，也不会被 app/packages 引用。Windows 随包的 x64 和 ARM64 `libusb-1.0.dll` 对应 `third_party/libusb` 的标签 `v1.0.29`。
+`third_party/` 是参考源（git submodule），不参与构建。需要对照时再 `git submodule update --init --recursive`。
 
 ## 开发
 
-`app` 与 `packages/*` 通过 Dart 官方 [pub workspace](https://dart.dev/tools/pub/workspaces)
-组织为单仓库（monorepo）：依赖与版本在根统一解析，只产生一个 `pubspec.lock`，
-共享 root 的 `.dart_tool` 缓存与静态分析配置。**常用命令都在仓库根执行**：
+pub workspace，命令在仓库根执行。
 
 | 目的 | 命令 |
 |---|---|
-| 拉取 / 更新全部依赖 | `flutter pub get` |
-| 静态分析（整个工作区） | `dart analyze` |
-| 代码格式化 | `dart format .` |
-| 运行 adb_core 测试 | `dart test packages/adb_core` |
-| 运行应用测试 | `flutter test app` |
-| 运行应用 | `cd app && flutter run` |
+| 拉取依赖 | `flutter pub get` |
+| 静态分析 | `dart analyze` |
+| 格式化 | `dart format .` |
+| adb_core 测试 | `dart test packages/adb_core` |
+| 应用测试 | `flutter test app` |
+| 运行 | `cd app && flutter run` |
 
-提交前请确保 `dart analyze` 无告警。
+## 编译环境
 
-## 参考文档（在 third_party/aosp-adb/docs/dev/ 下）
+- Dart SDK：`^3.13.1`
+- Flutter：3.48
+- JDK：17
+- Android Gradle Plugin：9.1.0
+- Kotlin：2.4.0
+- Gradle：9.4.1
+- NDK：Flutter 默认版本
+- 应用字节码：Java 17
+- `fire_app_service` 字节码：Java 8
+- `app/android/gradlew`、`gradlew.bat` 已修改：启动 Java 前读取 `app/android/local.properties` 的 `org.gradle.java.home`，覆盖 `JAVA_HOME`。
 
-| 主题 | 文件 |
-|---|---|
-| ADB 传输层协议（24 字节消息头 / CNXN/AUTH/OPEN/WRTE/CLSE） | `protocol.md` |
-| 智能 socket / 服务协议（5037 端口） | `services.md` |
-| file_sync（push/pull） | `sync.md` |
-| 整体架构 | `overview.md` |
-| 无线调试（mDNS + TLS 配对） | `adb_wifi.md` |
-| python 参考实现 | `vendor/../python-adb/adb/`（adb_protocol.py、adb_commands.py、sign_*.py） |
-
-## 分步实现路线
-
-- [x] 0. 项目初始化：Flutter 应用 + `adb_core`（纯协议引擎）+ `adb_usb`（USB 传输）
-- [x] 1. `adb_core`：协议基元（4 字节 HEX 长度帧、24 字节消息头、编解码与校验）`protocol.md` + `adb.cpp:calculate_apacket_checksum`
-- [x] 2. `adb_core`：RSA 密钥 + AUTH 握手状态机（TOKEN→SIGNATURE→RSAPUBLICKEY→CNXN）`protocol.md` + `adb_auth.h`
-- [x] 3. `adb_core`：TCP 传输（直连 5555 / 模拟器端口）+ 真实 loopback 端到端测试
-- [x] 4. `adb_core`：连接抽象（`AdbConnection` 多流、5037 host 客户端 `host:connect`、`tport:*`/`transport-any`、track-devices）
-- [x] 5. `adb_core`：服务实现（shell / sync push-pull / install / screencap / getprop 等）——已在真实模拟器（emulator-5556, Android 12）全流程验证：AUTH 握手（持久化密钥免授权）、shell/getprop/echo、`exec:screencap -p` 截图 2.2MB、push↔pull、stat、track-devices 全部通过
-- [x] 6. `adb_core`：WiFi 无线调试（mDNS 发现 + Android 11+ TLS 配对，参考 `pairing_connection/`）——mDNS 用纯 Dart `RawDatagramSocket` 自研（PTR/SRV/TXT/A/AAAA 解析含名称压缩指针，回归测试含真实压缩指针报文）；TLS 1.3 + SPAKE2 + Aes128Gcm 配对握手与 AOSP 源码逐字节核对（`pairing_connection.h`、`aes_128_gcm.cpp`），loopback 端到端 4 项测试通过。真机验证：MuMu（Android 12）镜像无无线调试入口，配对路径以字节级测试覆盖；经典 transport（RSA AUTH + CNXN + shell_v2 + filesync + track-devices）已在同一模拟器直连 adbd（5557）全流程复验通过
-- [x] 7. `adb_usb`：Windows 上用 libusb 枚举并打开已绑定 WinUSB 的 ADB 接口，本机 ADB Server 登记后出现在设备列表。构建钩子按目标架构随包拷贝 Windows x64 或 ARM64 DLL；Linux / macOS 登记系统库名。一台手机一个 isolate，用 `libusb_handle_events` 等内核事件。见 `packages/adb_usb/docs/usb.md`
-- [x] 8. `libadb`：应用只依赖这一层。它启动 5037，并只在 Windows / Linux / macOS 挂上 USB。不做 Android USB Host
-- [ ] 9. App UI：设备列表 / shell 终端 / 文件管理 / 安装构建 / 截图录屏
-- [ ] 10. 交叉编译与各平台打包
-
-## 依赖
-
-- `adb_core`: `pointycastle`（RSA/签名）
-- `adb_usb`: `dart_libusb`（libusb FFI 绑定）、`adb_core`，以及 `hook/build.dart`（`hooks` / `code_assets`）
-- `libadb`: `adb_core`、`adb_usb`
-- `app`: `libadb`（workspace 内路径依赖）
+```properties
+org.gradle.java.home=C:/Program Files/Java/jdk-17
+```
