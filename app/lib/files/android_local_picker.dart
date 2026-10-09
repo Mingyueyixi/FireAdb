@@ -11,23 +11,68 @@ import 'ui/file_dialogs.dart';
 /// 主共享存储。选择器把它当作内部存储的根。
 const String primaryStoragePath = '/storage/emulated/0';
 
-/// 去掉末尾斜杠，并把反斜杠换成 `/`。
+/// 盘符列表。不是真实目录，上一级从 `C:/` 进入这里。
+const String windowsDrivesPath = '::drives';
+
+final _driveRoot = RegExp(r'^[A-Za-z]:$');
+
+/// 去掉末尾斜杠，并把反斜杠换成 `/`。盘符根保留为 `C:/`。
 String normalizeLocalPath(String path) {
   var value = path.trim().replaceAll(r'\', '/');
   if (value.length > 1 && value.endsWith('/')) {
-    value = value.substring(0, value.length - 1);
+    final stripped = value.substring(0, value.length - 1);
+    if (_driveRoot.hasMatch(stripped)) return '$stripped/';
+    value = stripped;
   }
   return value;
 }
 
-/// 上一级目录。只有 `/` 没有上级。
+/// 路径最后一段。盘符根 `C:/` 的名字就是它自己。
+String localEntryName(String path) {
+  final normalized = normalizeLocalPath(path);
+  final index = normalized.lastIndexOf('/');
+  if (index < 0 || index >= normalized.length - 1) return normalized;
+  return normalized.substring(index + 1);
+}
+
+/// 上一级目录。`/` 和盘符列表没有上级。盘符根的上一级是盘符列表。
+/// `C:` 会收成 `C:/`，避免变成当前目录。
 String? parentLocalPath(String path) {
   final current = normalizeLocalPath(path);
-  if (current.isEmpty || current == '/') return null;
+  if (current.isEmpty || current == '/' || current == windowsDrivesPath) {
+    return null;
+  }
+  if (_driveRoot.hasMatch(current)) return windowsDrivesPath;
+  if (current.endsWith('/') &&
+      _driveRoot.hasMatch(current.substring(0, current.length - 1))) {
+    return windowsDrivesPath;
+  }
   final index = current.lastIndexOf('/');
   if (index < 0) return null;
   if (index == 0) return '/';
-  return current.substring(0, index);
+  final parent = current.substring(0, index);
+  if (_driveRoot.hasMatch(parent)) return '$parent/';
+  return parent;
+}
+
+/// 把子项接到正在浏览的目录上，不使用系统返回的联结目标路径。
+String joinLocalChild(String directory, String name) {
+  final parent = normalizeLocalPath(directory);
+  if (parent.endsWith('/')) return '$parent$name';
+  return '$parent/$name';
+}
+
+bool isWindowsDrivesPath(String path) =>
+    normalizeLocalPath(path) == windowsDrivesPath;
+
+/// 从 `fsutil fsinfo drives` 的输出里取出盘符根，例如 `C:/`。
+List<String> parseWindowsDrives(String output) {
+  final found = <String>{};
+  for (final match in RegExp(r'([A-Za-z]):\\').allMatches(output)) {
+    found.add('${match.group(1)!.toUpperCase()}:/');
+  }
+  final drives = found.toList()..sort();
+  return drives;
 }
 
 /// 新建文件夹时拒绝空名、`.`、`..` 和路径分隔符。
@@ -37,15 +82,9 @@ bool isSafeLocalName(String name) {
   return true;
 }
 
+/// 只整理分隔符。目录联结保持用户看到的路径，不跟到目标盘。
 Future<String> canonicalizeLocalPath(String path) async {
-  final normalized = normalizeLocalPath(path);
-  try {
-    return normalizeLocalPath(
-      await Directory(normalized).resolveSymbolicLinks(),
-    );
-  } catch (_) {
-    return normalized;
-  }
+  return normalizeLocalPath(path);
 }
 
 Future<bool> directoryExists(String path) async {
@@ -68,15 +107,36 @@ class LocalNode {
   final bool directory;
 }
 
+Future<List<String>> listWindowsDriveRoots() async {
+  if (!Platform.isWindows) return const <String>[];
+  final result = await Process.run('fsutil', <String>['fsinfo', 'drives']);
+  if (result.exitCode != 0) {
+    throw StateError('${result.stderr}'.trim());
+  }
+  return parseWindowsDrives('${result.stdout}');
+}
+
 Future<List<LocalNode>> listLocalNodes(String path) async {
+  final directory = normalizeLocalPath(path);
   final nodes = <LocalNode>[];
-  await for (final entity in Directory(path).list(followLinks: false)) {
-    final name = entity.path.split('/').last;
+  await for (final entity in Directory(directory).list(followLinks: false)) {
+    final name = localEntryName(entity.path);
     if (name.isEmpty || name.startsWith('.')) continue;
+    final entryPath = joinLocalChild(directory, name);
     if (entity is Directory) {
-      nodes.add(LocalNode(name: name, path: entity.path, directory: true));
+      nodes.add(LocalNode(name: name, path: entryPath, directory: true));
     } else if (entity is File) {
-      nodes.add(LocalNode(name: name, path: entity.path, directory: false));
+      nodes.add(LocalNode(name: name, path: entryPath, directory: false));
+    } else if (entity is Link) {
+      final kind = await FileSystemEntity.type(entryPath, followLinks: true);
+      if (kind == FileSystemEntityType.notFound) continue;
+      nodes.add(
+        LocalNode(
+          name: name,
+          path: entryPath,
+          directory: kind == FileSystemEntityType.directory,
+        ),
+      );
     }
   }
   nodes.sort((a, b) {
@@ -86,6 +146,23 @@ Future<List<LocalNode>> listLocalNodes(String path) async {
   return nodes;
 }
 
+/// 用本机目录列表选择一个文件夹。桌面和 Android 共用这一套，不打开系统选择器。
+Future<String?> showLocalDirectoryPicker(
+  BuildContext context, {
+  String? initialDirectory,
+  String? prompt,
+}) {
+  return showDialog<String>(
+    context: context,
+    builder: (context) => _LocalBrowser(
+      title: prompt ?? context.l10n.localPickerChooseFolder,
+      initialDirectory: initialDirectory,
+      pickFiles: false,
+      onPickDirectory: (path) => Navigator.pop(context, path),
+    ),
+  );
+}
+
 /// 用本机目录列表选择一个文件夹。取消或未授权时返回 null。
 Future<String?> pickAndroidDirectory(
   BuildContext context, {
@@ -93,14 +170,10 @@ Future<String?> pickAndroidDirectory(
   String? prompt,
 }) async {
   if (!await ensureAllFilesAccess(context) || !context.mounted) return null;
-  return showDialog<String>(
-    context: context,
-    builder: (context) => _AndroidBrowser(
-      title: prompt ?? context.l10n.localPickerChooseFolder,
-      initialDirectory: initialDirectory,
-      pickFiles: false,
-      onPickDirectory: (path) => Navigator.pop(context, path),
-    ),
+  return showLocalDirectoryPicker(
+    context,
+    initialDirectory: initialDirectory,
+    prompt: prompt,
   );
 }
 
@@ -111,7 +184,7 @@ Future<List<String>> pickAndroidFiles(BuildContext context) async {
   }
   final picked = await showDialog<List<String>>(
     context: context,
-    builder: (context) => _AndroidBrowser(
+    builder: (context) => _LocalBrowser(
       title: context.l10n.localPickerChooseFiles,
       initialDirectory: '/sdcard',
       pickFiles: true,
@@ -121,8 +194,8 @@ Future<List<String>> pickAndroidFiles(BuildContext context) async {
   return picked ?? const <String>[];
 }
 
-class _AndroidBrowser extends StatefulWidget {
-  const _AndroidBrowser({
+class _LocalBrowser extends StatefulWidget {
+  const _LocalBrowser({
     required this.title,
     required this.pickFiles,
     this.initialDirectory,
@@ -137,10 +210,10 @@ class _AndroidBrowser extends StatefulWidget {
   final ValueChanged<List<String>>? onPickFiles;
 
   @override
-  State<_AndroidBrowser> createState() => _AndroidBrowserState();
+  State<_LocalBrowser> createState() => _LocalBrowserState();
 }
 
-class _AndroidBrowserState extends State<_AndroidBrowser> {
+class _LocalBrowserState extends State<_LocalBrowser> {
   late final TextEditingController _pathController;
   String? _directory;
   List<LocalNode> _entries = const <LocalNode>[];
@@ -178,12 +251,19 @@ class _AndroidBrowserState extends State<_AndroidBrowser> {
     }
   }
 
-  /// 有指定目录就打开它，否则打开 `/sdcard`。
+  /// 有指定目录就打开它。Android 否则打开 `/sdcard`，桌面否则打开用户目录。
   Future<String> _startingDirectory() async {
     final requested = widget.initialDirectory?.trim();
     if (requested != null && requested.isNotEmpty) {
       final path = await canonicalizeLocalPath(requested);
       if (await directoryExists(path)) return path;
+    }
+    if (!Platform.isAndroid) {
+      final home = _desktopHome();
+      if (home != null && await directoryExists(home)) {
+        return canonicalizeLocalPath(home);
+      }
+      return normalizeLocalPath(Directory.current.path);
     }
     if (await directoryExists('/sdcard')) {
       return canonicalizeLocalPath('/sdcard');
@@ -191,7 +271,19 @@ class _AndroidBrowserState extends State<_AndroidBrowser> {
     return primaryStoragePath;
   }
 
+  String? _desktopHome() {
+    for (final key in const <String>['HOME', 'USERPROFILE']) {
+      final value = Platform.environment[key]?.trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return null;
+  }
+
   Future<void> _open(String path) async {
+    if (isWindowsDrivesPath(path)) {
+      await _openDrives();
+      return;
+    }
     final normalized = normalizeLocalPath(path);
     _pathController.value = TextEditingValue(
       text: normalized,
@@ -243,8 +335,49 @@ class _AndroidBrowserState extends State<_AndroidBrowser> {
     unawaited(_open(parent));
   }
 
+  Future<void> _openDrives() async {
+    final label = context.l10n.localPickerStorage;
+    _pathController.value = TextEditingValue(
+      text: label,
+      selection: TextSelection.collapsed(offset: label.length),
+    );
+    setState(() {
+      _loading = true;
+      _unreadable = false;
+      _notice = null;
+      _selected.clear();
+    });
+    try {
+      final roots = await listWindowsDriveRoots();
+      if (!mounted) return;
+      setState(() {
+        _directory = windowsDrivesPath;
+        _entries = <LocalNode>[
+          for (final root in roots)
+            LocalNode(name: root, path: root, directory: true),
+        ];
+        _loading = false;
+        _unreadable = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _directory = windowsDrivesPath;
+        _entries = const <LocalNode>[];
+        _loading = false;
+        _unreadable = true;
+      });
+    }
+  }
+
   Future<void> _jumpToEditedPath() async {
-    final text = normalizeLocalPath(_pathController.text);
+    final raw = _pathController.text.trim();
+    if (raw == context.l10n.localPickerStorage || isWindowsDrivesPath(raw)) {
+      await _open(windowsDrivesPath);
+      return;
+    }
+    var text = normalizeLocalPath(raw);
+    if (_driveRoot.hasMatch(text)) text = '$text/';
     if (text.isEmpty) return;
     if (await directoryExists(text)) {
       await _open(text);
@@ -270,7 +403,9 @@ class _AndroidBrowserState extends State<_AndroidBrowser> {
 
   Future<void> _createFolder() async {
     final directory = _directory;
-    if (directory == null || !mounted) return;
+    if (directory == null || isWindowsDrivesPath(directory) || !mounted) {
+      return;
+    }
     final l10n = context.l10n;
     final name = await askRemoteName(
       context,
@@ -283,7 +418,8 @@ class _AndroidBrowserState extends State<_AndroidBrowser> {
       return;
     }
     try {
-      final created = Directory('$directory/$name');
+      final separator = directory.endsWith('/') ? '' : '/';
+      final created = Directory('$directory$separator$name');
       await created.create();
       await _open(created.path);
     } catch (_) {
@@ -304,7 +440,7 @@ class _AndroidBrowserState extends State<_AndroidBrowser> {
 
   void _confirm() {
     final directory = _directory;
-    if (directory == null) return;
+    if (directory == null || isWindowsDrivesPath(directory)) return;
     if (widget.pickFiles) {
       if (_selected.isEmpty) return;
       widget.onPickFiles?.call(_selected.toList());
@@ -318,11 +454,14 @@ class _AndroidBrowserState extends State<_AndroidBrowser> {
     final l10n = context.l10n;
     final directory = _directory;
     final size = MediaQuery.sizeOf(context);
-    final width = (size.width - 120).clamp(240.0, 440.0).toDouble();
+    final width = (size.width - 120).clamp(240.0, 640.0).toDouble();
     final height = (size.height * 0.45).clamp(220.0, 420.0).toDouble();
+    final browsingDrives =
+        directory != null && isWindowsDrivesPath(directory);
     final canConfirm =
         directory != null &&
         !_loading &&
+        !browsingDrives &&
         (widget.pickFiles ? _selected.isNotEmpty : true);
     return PopScope(
       canPop: _canPop,
@@ -364,7 +503,9 @@ class _AndroidBrowserState extends State<_AndroidBrowser> {
                     onPressed: () => unawaited(_jumpToEditedPath()),
                     icon: const Icon(Icons.arrow_forward),
                   ),
-                  if (!widget.pickFiles && directory != null)
+                  if (!widget.pickFiles &&
+                      directory != null &&
+                      !isWindowsDrivesPath(directory))
                     IconButton(
                       tooltip: l10n.localPickerNewFolder,
                       onPressed: _loading

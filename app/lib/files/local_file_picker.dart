@@ -22,13 +22,13 @@ Future<List<String>> pickLocalFiles(BuildContext context) async {
 
 /// 从本机选择一个目录。取消时返回 null。
 ///
-/// Android 用应用内目录列表。macOS、Linux 用系统目录窗口。
-/// Windows 与选文件同一原因，改用系统的文件夹对话框。
+/// 各平台都用应用内目录列表。电脑上的目录一般可以直接读写，
+/// 不再打开样式不可控的系统文件夹窗口。
 Future<String?> pickLocalDirectory(
   BuildContext context, {
   String? initialDirectory,
   String? prompt,
-}) async {
+}) {
   if (Platform.isAndroid) {
     return pickAndroidDirectory(
       context,
@@ -36,11 +36,11 @@ Future<String?> pickLocalDirectory(
       prompt: prompt,
     );
   }
-  final initial = _existingDirectory(initialDirectory);
-  if (Platform.isWindows) {
-    return _pickWindowsDirectory(initial: initial, prompt: prompt);
-  }
-  return getDirectoryPath(initialDirectory: initial);
+  return showLocalDirectoryPicker(
+    context,
+    initialDirectory: initialDirectory,
+    prompt: prompt,
+  );
 }
 
 /// 打开目录选择，起始位置是导出目录。取消时返回 null。
@@ -56,13 +56,6 @@ Future<String?> pickExportDirectory(BuildContext context, String prompt) async {
   } catch (_) {}
   if (!context.mounted) return null;
   return pickLocalDirectory(context, initialDirectory: initial, prompt: prompt);
-}
-
-String? _existingDirectory(String? path) {
-  final trimmed = path?.trim();
-  if (trimmed == null || trimmed.isEmpty) return null;
-  if (Directory(trimmed).existsSync()) return trimmed;
-  return null;
 }
 
 /// PowerShell 管道有时是 UTF-16。Base64 只有 ASCII，两种编码都要能读。
@@ -128,49 +121,4 @@ foreach ($name in $dialog.FileNames) {
       ? stdout
       : decodeProcessText(stdout as List<int>);
   return decodePickedPaths(text);
-}
-
-Future<String?> _pickWindowsDirectory({String? initial, String? prompt}) async {
-  const script = r'''
-[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
-Add-Type -AssemblyName System.Windows.Forms
-$owner = New-Object System.Windows.Forms.Form
-$owner.TopMost = $true
-$owner.ShowInTaskbar = $false
-$owner.Opacity = 0
-$null = $owner.Show()
-$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$dialog.ShowNewFolderButton = $true
-$dialog.UseDescriptionForTitle = $true
-if ($env:FIRE_ADB_PROMPT) { $dialog.Description = $env:FIRE_ADB_PROMPT }
-if ($env:FIRE_ADB_DIR -and (Test-Path -LiteralPath $env:FIRE_ADB_DIR)) {
-  $dialog.SelectedPath = $env:FIRE_ADB_DIR
-}
-$result = $dialog.ShowDialog($owner)
-$owner.Close()
-if ($result -ne [System.Windows.Forms.DialogResult]::OK) { exit 0 }
-[Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($dialog.SelectedPath))
-''';
-  final result = await Process.run(
-    'powershell.exe',
-    <String>['-NoProfile', '-STA', '-Command', script],
-    stdoutEncoding: null,
-    stderrEncoding: utf8,
-    environment: <String, String>{
-      ...Platform.environment,
-      'FIRE_ADB_DIR': initial ?? '',
-      'FIRE_ADB_PROMPT': prompt ?? '',
-    },
-  );
-  if (result.exitCode != 0) {
-    final detail = '${result.stderr}'.trim();
-    throw StateError(detail.isEmpty ? '无法打开文件夹选择窗口' : detail);
-  }
-  final stdout = result.stdout;
-  final text = stdout is String
-      ? stdout
-      : decodeProcessText(stdout as List<int>);
-  final paths = decodePickedPaths(text);
-  if (paths.isEmpty) return null;
-  return paths.first;
 }
