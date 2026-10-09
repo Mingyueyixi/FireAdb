@@ -8,6 +8,7 @@ import 'package:libadb/libadb.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_feedback.dart';
+import 'adb_key_path.dart';
 import 'model/connected_device.dart';
 import 'model/device_profile.dart';
 import 'sdk_adb.dart';
@@ -29,6 +30,7 @@ class ConnectionManager extends GetxService {
   List<AdbRsaKeyPair> _signers = const <AdbRsaKeyPair>[];
   SharedPreferences? _prefs;
   bool _signerResolved = false;
+  Object? _signerError;
   bool _historyLoaded = false;
   LocalAdb? _localAdb;
   String? _loggedLocalUsbError;
@@ -264,22 +266,19 @@ class ConnectionManager extends GetxService {
 
   void _resolveSigners() {
     if (_signerResolved) return;
-    _signerResolved = true;
     try {
-      final home = Platform.environment['HOME'];
-      final profile = Platform.environment['USERPROFILE'];
-      final root = (home != null && home.isNotEmpty) ? home : profile;
-      if (root == null || root.isEmpty) return;
-      final dir =
-          '$root${Platform.pathSeparator}.config'
-          '${Platform.pathSeparator}fire_adb';
-      Directory(dir).createSync(recursive: true);
-      _signers = <AdbRsaKeyPair>[
-        loadOrCreateAdbKey('$dir${Platform.pathSeparator}adbkey.pem'),
-      ];
+      final path = adbKeyFilePath(
+        android: Platform.isAndroid,
+        environment: Platform.environment,
+        androidDataDir: Directory.systemTemp.parent.path,
+      );
+      _signers = <AdbRsaKeyPair>[loadOrCreateAdbKey(path)];
+      _signerError = null;
+      _signerResolved = true;
     } catch (error, stackTrace) {
       logAppError('加载 ADB RSA 签名密钥失败', error, stackTrace);
       _signers = const <AdbRsaKeyPair>[];
+      _signerError = error;
     }
   }
 
@@ -308,6 +307,66 @@ class ConnectionManager extends GetxService {
     await _registerConnection(profile, connected);
     unawaited(_refreshHostLabel(profile, connected));
     return device;
+  }
+
+  /// 用手机上的配对码完成无线调试配对。成功后，同一把密钥可以连 TLS 端口。
+  Future<void> pairWireless(String host, int port, String code) async {
+    await init();
+    _resolveSigners();
+    if (_signers.isEmpty) {
+      final reason = _signerError;
+      throw AdbKeyUnavailable(
+        reason == null ? '没有 ADB 密钥，无法配对' : '没有 ADB 密钥，无法配对：$reason',
+      );
+    }
+    final password = code.replaceAll(RegExp(r'\s+'), '');
+    if (password.isEmpty) {
+      throw const FormatException('配对码为空');
+    }
+    final key = _signers.first;
+    final socket = await _connectTcp(host, port);
+    try {
+      await runPairing(
+        socket: socket,
+        isClient: true,
+        password: utf8.encode(password),
+        tlsKey: key,
+        tlsCertificate: buildSelfSignedRsaCertificate(key),
+        localPeerInfo: AdbPeerInfo(
+          type: AdbPeerInfo.typeRsaPubKey,
+          data: utf8.encode(key.base64PublicKey()),
+        ),
+      );
+    } finally {
+      try {
+        await socket.close();
+      } catch (_) {}
+    }
+  }
+
+  Future<Socket> _connectTcp(String host, int port) async {
+    final interfaces = await NetworkInterface.list(
+      includeLinkLocal: true,
+      type: InternetAddressType.IPv6,
+    );
+    final targets = linkLocalConnectHosts(host, <({String name, int index})>[
+      for (final iface in interfaces)
+        if (iface.addresses.any((address) => address.isLinkLocal))
+          (name: iface.name, index: iface.index),
+    ]);
+    Object? lastError;
+    for (final target in targets) {
+      try {
+        return await Socket.connect(
+          target,
+          port,
+          timeout: const Duration(seconds: 10),
+        );
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError ?? StateError('无法连接 $host:$port');
   }
 
   /// 上次成功的手动连接。首页用它把地址填回输入框。

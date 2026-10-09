@@ -53,7 +53,11 @@ class Tls13Connection {
         continue;
       }
       final decrypted = openRecord(
-          key: _readKey, iv: _readIv, seqNum: _readSeq, record: record);
+        key: _readKey,
+        iv: _readIv,
+        seqNum: _readSeq,
+        record: record,
+      );
       _readSeq++;
       switch (decrypted.innerType) {
         case 0x15: // alert
@@ -72,7 +76,8 @@ class Tls13Connection {
           return decrypted.payload;
         default:
           throw TlsException(
-              'Unexpected inner record type 0x${decrypted.innerType.toRadixString(16)}');
+            'Unexpected inner record type 0x${decrypted.innerType.toRadixString(16)}',
+          );
       }
     }
   }
@@ -80,13 +85,24 @@ class Tls13Connection {
   /// 发送一个 application-data 记录。
   void writeApplicationData(Uint8List payload) {
     final record = sealRecord(
-        key: _writeKey,
-        iv: _writeIv,
-        seqNum: _writeSeq,
-        innerType: 0x17,
-        payload: payload);
+      key: _writeKey,
+      iv: _writeIv,
+      seqNum: _writeSeq,
+      innerType: 0x17,
+      payload: payload,
+    );
     _writeSeq++;
     _transport.write(record);
+  }
+
+  /// 把已经交给传输层的记录真正写出去。
+  Future<void> flush() => _transport.flush();
+
+  /// 解密后的应用数据。一条 ADB 消息可能跨多个 TLS 记录。
+  Stream<Uint8List> plaintextStream() async* {
+    while (true) {
+      yield await readApplicationData();
+    }
   }
 
   void close() => _transport.close();
@@ -101,8 +117,10 @@ class TlsException implements Exception {
 
 TlsException _alertException(List<int> payload) {
   final code = payload.length >= 2 ? payload[1] : -1;
-  return TlsException('Server sent alert (level=${payload.isNotEmpty ? payload[0] : -1}, '
-      'description=$code)');
+  return TlsException(
+    'Server sent alert (level=${payload.isNotEmpty ? payload[0] : -1}, '
+    'description=$code)',
+  );
 }
 
 /// 执行 TLS 1.3 handshake（客户端）。成功返回 [Tls13Connection]，失败抛 [TlsException]。
@@ -114,9 +132,40 @@ Future<Tls13Connection> tls13ClientHandshake({
   required AdbRsaKeyPair clientKey,
   required AdbX509Certificate clientCertificate,
   String exporterLabel = 'adb-label',
-}) async {
-  final transport = _SocketTransport(socket);
+}) {
+  return _tls13ClientHandshake(
+    _SocketTransport(socket),
+    clientKey: clientKey,
+    clientCertificate: clientCertificate,
+    exporterLabel: exporterLabel,
+  );
+}
 
+/// 在已经取出的字节流上做 TLS 1.3 客户端握手。
+///
+/// 无线调试的 `STLS` 之后，ADB 帧结束，后续字节是 TLS 记录。读循环已经
+/// 占着原来的 socket，不能再订阅一次，所以从剩余字节流继续。
+Future<Tls13Connection> tls13ClientHandshakeOnStream({
+  required Stream<List<int>> input,
+  required Future<void> Function(List<int> data) write,
+  required AdbRsaKeyPair clientKey,
+  required AdbX509Certificate clientCertificate,
+  String exporterLabel = 'adb-label',
+}) {
+  return _tls13ClientHandshake(
+    _SocketTransport.stream(input: input, write: write),
+    clientKey: clientKey,
+    clientCertificate: clientCertificate,
+    exporterLabel: exporterLabel,
+  );
+}
+
+Future<Tls13Connection> _tls13ClientHandshake(
+  _SocketTransport transport, {
+  required AdbRsaKeyPair clientKey,
+  required AdbX509Certificate clientCertificate,
+  String exporterLabel = 'adb-label',
+}) async {
   // ---- 1. ClientHello ----
   final clientRandom = randomBytes(32);
   final ecdhe = X25519KeyPair.generate();
@@ -131,6 +180,7 @@ Future<Tls13Connection> tls13ClientHandshake({
   chRecord[4] = ch.length & 0xff;
   chRecord.setAll(5, ch);
   transport.write(chRecord);
+  await transport.flush();
 
   final transcript = BytesBuilder()..add(ch);
 
@@ -149,17 +199,24 @@ Future<Tls13Connection> tls13ClientHandshake({
   final zero = Uint8List(kHashLen);
   final earlySecret = hkdfExtract(salt: zero, ikm: zero);
   final derived = hkdfExpandLabel(
-      prk: earlySecret,
-      label: 'derived',
-      context: sha256(const []),
-      length: kHashLen);
+    prk: earlySecret,
+    label: 'derived',
+    context: sha256(const []),
+    length: kHashLen,
+  );
   final handshakeSecret = hkdfExtract(salt: derived, ikm: dhe);
 
   final transcriptUpToSh = transcript.toBytes();
   final clientHsTraffic = deriveSecret(
-      secret: handshakeSecret, label: 'c hs traffic', messages: transcriptUpToSh);
+    secret: handshakeSecret,
+    label: 'c hs traffic',
+    messages: transcriptUpToSh,
+  );
   final serverHsTraffic = deriveSecret(
-      secret: handshakeSecret, label: 's hs traffic', messages: transcriptUpToSh);
+    secret: handshakeSecret,
+    label: 's hs traffic',
+    messages: transcriptUpToSh,
+  );
 
   var readKey = deriveTrafficKey(serverHsTraffic);
   var readIv = deriveTrafficIv(serverHsTraffic);
@@ -186,14 +243,21 @@ Future<Tls13Connection> tls13ClientHandshake({
     }
     if (outerType != 0x17) {
       throw TlsException(
-          'Unexpected record type 0x${outerType.toRadixString(16)} during handshake');
+        'Unexpected record type 0x${outerType.toRadixString(16)} during handshake',
+      );
     }
     final decrypted = openRecord(
-        key: readKey, iv: readIv, seqNum: readSeq, record: record);
+      key: readKey,
+      iv: readIv,
+      seqNum: readSeq,
+      record: record,
+    );
     readSeq++;
     if (decrypted.innerType != 0x16) {
-      throw TlsException('Server handshake data expected, got inner type '
-          '0x${decrypted.innerType.toRadixString(16)}');
+      throw TlsException(
+        'Server handshake data expected, got inner type '
+        '0x${decrypted.innerType.toRadixString(16)}',
+      );
     }
     handshake.add(decrypted.payload);
 
@@ -213,13 +277,19 @@ Future<Tls13Connection> tls13ClientHandshake({
           serverPublicKey = ParsedX509Certificate.parse(certs.first).publicKey;
           break;
         case kHandshakeCertificateVerify:
-          _verifyServerCertificateVerify(msg.body, serverPublicKey, transcript.toBytes());
+          _verifyServerCertificateVerify(
+            msg.body,
+            serverPublicKey,
+            transcript.toBytes(),
+          );
           transcript.add(msg.raw);
           break;
         case kHandshakeFinished:
           final transcriptHash = sha256(transcript.toBytes());
           final expected = finishedMac(
-              trafficSecret: serverHsTraffic, transcriptHash: transcriptHash);
+            trafficSecret: serverHsTraffic,
+            transcriptHash: transcriptHash,
+          );
           if (!_equalBytes(expected, msg.body)) {
             throw TlsException('Server Finished verify_data mismatch');
           }
@@ -235,23 +305,27 @@ Future<Tls13Connection> tls13ClientHandshake({
   // ---- 5. master + application traffic + exporter secret（transcript 截至 server Finished） ----
   final transcriptUpToServerFinished = transcript.toBytes();
   final masterDerived = hkdfExpandLabel(
-      prk: handshakeSecret,
-      label: 'derived',
-      context: sha256(const []),
-      length: kHashLen);
+    prk: handshakeSecret,
+    label: 'derived',
+    context: sha256(const []),
+    length: kHashLen,
+  );
   final masterSecret = hkdfExtract(salt: masterDerived, ikm: zero);
   final clientApTraffic = deriveSecret(
-      secret: masterSecret,
-      label: 'c ap traffic',
-      messages: transcriptUpToServerFinished);
+    secret: masterSecret,
+    label: 'c ap traffic',
+    messages: transcriptUpToServerFinished,
+  );
   final serverApTraffic = deriveSecret(
-      secret: masterSecret,
-      label: 's ap traffic',
-      messages: transcriptUpToServerFinished);
+    secret: masterSecret,
+    label: 's ap traffic',
+    messages: transcriptUpToServerFinished,
+  );
   final exporterSecret = deriveSecret(
-      secret: masterSecret,
-      label: 'exp master',
-      messages: transcriptUpToServerFinished);
+    secret: masterSecret,
+    label: 'exp master',
+    messages: transcriptUpToServerFinished,
+  );
 
   // 读密钥切换到 application traffic（序号归零）。
   readKey = deriveTrafficKey(serverApTraffic);
@@ -267,28 +341,36 @@ Future<Tls13Connection> tls13ClientHandshake({
     transcript.add(certMsg);
     clientFlightParts.add(certMsg);
 
-    final verifyMsg = _buildClientCertificateVerify(clientKey, transcript.toBytes());
+    final verifyMsg = _buildClientCertificateVerify(
+      clientKey,
+      transcript.toBytes(),
+    );
     transcript.add(verifyMsg);
     clientFlightParts.add(verifyMsg);
   }
 
   final finishedHash = sha256(transcript.toBytes());
   final clientFinished = finishedMac(
-      trafficSecret: clientHsTraffic, transcriptHash: finishedHash);
+    trafficSecret: clientHsTraffic,
+    transcriptHash: finishedHash,
+  );
   final finishedMsg = _wrapHandshake(kHandshakeFinished, clientFinished);
   transcript.add(finishedMsg);
   clientFlightParts.add(finishedMsg);
 
   final clientFlight = Uint8List.fromList(
-      clientFlightParts.expand((p) => p).toList());
+    clientFlightParts.expand((p) => p).toList(),
+  );
   final flightRecord = sealRecord(
-      key: writeKey,
-      iv: writeIv,
-      seqNum: writeSeq,
-      innerType: kHandshakeInnerType,
-      payload: clientFlight);
+    key: writeKey,
+    iv: writeIv,
+    seqNum: writeSeq,
+    innerType: kHandshakeInnerType,
+    payload: clientFlight,
+  );
   writeSeq++;
   transport.write(flightRecord);
+  await transport.flush();
 
   // 写密钥切换到 application traffic（序号归零）。
   writeKey = deriveTrafficKey(clientApTraffic);
@@ -297,7 +379,10 @@ Future<Tls13Connection> tls13ClientHandshake({
 
   // ---- 7. exporter（BoringSSL SSL_export_keying_material, use_context=false） ----
   final exporter = computeTls13Exporter(
-      exporterSecret: exporterSecret, label: exporterLabel, length: 64);
+    exporterSecret: exporterSecret,
+    label: exporterLabel,
+    length: 64,
+  );
 
   return Tls13Connection._(
     transport: transport,
@@ -319,9 +404,39 @@ Future<Tls13Connection> tls13ServerHandshake({
   required AdbRsaKeyPair serverKey,
   required AdbX509Certificate serverCertificate,
   String exporterLabel = 'adb-label',
-}) async {
-  final transport = _SocketTransport(socket);
+}) {
+  return _tls13ServerHandshake(
+    _SocketTransport(socket),
+    serverKey: serverKey,
+    serverCertificate: serverCertificate,
+    exporterLabel: exporterLabel,
+  );
+}
 
+/// 在已经取出的字节流上做 TLS 1.3 服务端握手。
+///
+/// 无线调试测试里，设备先用 ADB 帧读完 `STLS`，后续字节才是 TLS 记录。
+Future<Tls13Connection> tls13ServerHandshakeOnStream({
+  required Stream<List<int>> input,
+  required Future<void> Function(List<int> data) write,
+  required AdbRsaKeyPair serverKey,
+  required AdbX509Certificate serverCertificate,
+  String exporterLabel = 'adb-label',
+}) {
+  return _tls13ServerHandshake(
+    _SocketTransport.stream(input: input, write: write),
+    serverKey: serverKey,
+    serverCertificate: serverCertificate,
+    exporterLabel: exporterLabel,
+  );
+}
+
+Future<Tls13Connection> _tls13ServerHandshake(
+  _SocketTransport transport, {
+  required AdbRsaKeyPair serverKey,
+  required AdbX509Certificate serverCertificate,
+  String exporterLabel = 'adb-label',
+}) async {
   // ---- 1. 读取 ClientHello（明文记录） ----
   final chRaw = await transport.readPlainHandshakeRecord();
   if (chRaw.isEmpty || chRaw[0] != kHandshakeClientHello) {
@@ -343,23 +458,31 @@ Future<Tls13Connection> tls13ServerHandshake({
   shRecord[4] = sh.length & 0xff;
   shRecord.setAll(5, sh);
   transport.write(shRecord);
+  await transport.flush();
   transcript.add(sh);
 
   // ---- 3. 密钥调度（RFC 8446 §7.1） ----
   final zero = Uint8List(kHashLen);
   final earlySecret = hkdfExtract(salt: zero, ikm: zero);
   final derived = hkdfExpandLabel(
-      prk: earlySecret,
-      label: 'derived',
-      context: sha256(const []),
-      length: kHashLen);
+    prk: earlySecret,
+    label: 'derived',
+    context: sha256(const []),
+    length: kHashLen,
+  );
   final handshakeSecret = hkdfExtract(salt: derived, ikm: dhe);
 
   final transcriptUpToSh = transcript.toBytes();
   final clientHsTraffic = deriveSecret(
-      secret: handshakeSecret, label: 'c hs traffic', messages: transcriptUpToSh);
+    secret: handshakeSecret,
+    label: 'c hs traffic',
+    messages: transcriptUpToSh,
+  );
   final serverHsTraffic = deriveSecret(
-      secret: handshakeSecret, label: 's hs traffic', messages: transcriptUpToSh);
+    secret: handshakeSecret,
+    label: 's hs traffic',
+    messages: transcriptUpToSh,
+  );
 
   var readKey = deriveTrafficKey(clientHsTraffic);
   var readIv = deriveTrafficIv(clientHsTraffic);
@@ -383,47 +506,57 @@ Future<Tls13Connection> tls13ServerHandshake({
   transcript.add(certMsg);
   parts.add(certMsg);
 
-  final verifyMsg = _buildServerCertificateVerify(serverKey, transcript.toBytes());
+  final verifyMsg = _buildServerCertificateVerify(
+    serverKey,
+    transcript.toBytes(),
+  );
   transcript.add(verifyMsg);
   parts.add(verifyMsg);
 
   final serverFinished = finishedMac(
-      trafficSecret: serverHsTraffic,
-      transcriptHash: sha256(transcript.toBytes()));
+    trafficSecret: serverHsTraffic,
+    transcriptHash: sha256(transcript.toBytes()),
+  );
   final finishedMsg = _wrapHandshake(kHandshakeFinished, serverFinished);
   transcript.add(finishedMsg);
   parts.add(finishedMsg);
 
   final flight = Uint8List.fromList(parts.expand((p) => p).toList());
   final flightRecord = sealRecord(
-      key: writeKey,
-      iv: writeIv,
-      seqNum: writeSeq,
-      innerType: kHandshakeInnerType,
-      payload: flight);
+    key: writeKey,
+    iv: writeIv,
+    seqNum: writeSeq,
+    innerType: kHandshakeInnerType,
+    payload: flight,
+  );
   writeSeq++;
   transport.write(flightRecord);
+  await transport.flush();
 
   // ---- 5. master + application traffic + exporter secret ----
   final transcriptUpToServerFinished = transcript.toBytes();
   final masterDerived = hkdfExpandLabel(
-      prk: handshakeSecret,
-      label: 'derived',
-      context: sha256(const []),
-      length: kHashLen);
+    prk: handshakeSecret,
+    label: 'derived',
+    context: sha256(const []),
+    length: kHashLen,
+  );
   final masterSecret = hkdfExtract(salt: masterDerived, ikm: zero);
   final clientApTraffic = deriveSecret(
-      secret: masterSecret,
-      label: 'c ap traffic',
-      messages: transcriptUpToServerFinished);
+    secret: masterSecret,
+    label: 'c ap traffic',
+    messages: transcriptUpToServerFinished,
+  );
   final serverApTraffic = deriveSecret(
-      secret: masterSecret,
-      label: 's ap traffic',
-      messages: transcriptUpToServerFinished);
+    secret: masterSecret,
+    label: 's ap traffic',
+    messages: transcriptUpToServerFinished,
+  );
   final exporterSecret = deriveSecret(
-      secret: masterSecret,
-      label: 'exp master',
-      messages: transcriptUpToServerFinished);
+    secret: masterSecret,
+    label: 'exp master',
+    messages: transcriptUpToServerFinished,
+  );
 
   // 写密钥切换到 application traffic（序号归零）。
   writeKey = deriveTrafficKey(serverApTraffic);
@@ -445,14 +578,21 @@ Future<Tls13Connection> tls13ServerHandshake({
     }
     if (outerType != 0x17) {
       throw TlsException(
-          'Unexpected record type 0x${outerType.toRadixString(16)} during handshake');
+        'Unexpected record type 0x${outerType.toRadixString(16)} during handshake',
+      );
     }
     final decrypted = openRecord(
-        key: readKey, iv: readIv, seqNum: readSeq, record: record);
+      key: readKey,
+      iv: readIv,
+      seqNum: readSeq,
+      record: record,
+    );
     readSeq++;
     if (decrypted.innerType != 0x16) {
-      throw TlsException('Client handshake data expected, got inner type '
-          '0x${decrypted.innerType.toRadixString(16)}');
+      throw TlsException(
+        'Client handshake data expected, got inner type '
+        '0x${decrypted.innerType.toRadixString(16)}',
+      );
     }
     handshake.add(decrypted.payload);
 
@@ -462,18 +602,21 @@ Future<Tls13Connection> tls13ServerHandshake({
         case kHandshakeCertificate:
           transcript.add(msg.raw);
           final certs = _parseServerCertificateMessage(msg.body);
-          clientPublicKey =
-              ParsedX509Certificate.parse(certs.first).publicKey;
+          clientPublicKey = ParsedX509Certificate.parse(certs.first).publicKey;
           break;
         case kHandshakeCertificateVerify:
           _verifyClientCertificateVerify(
-              msg.body, clientPublicKey, transcript.toBytes());
+            msg.body,
+            clientPublicKey,
+            transcript.toBytes(),
+          );
           transcript.add(msg.raw);
           break;
         case kHandshakeFinished:
           final expected = finishedMac(
-              trafficSecret: clientHsTraffic,
-              transcriptHash: sha256(transcript.toBytes()));
+            trafficSecret: clientHsTraffic,
+            transcriptHash: sha256(transcript.toBytes()),
+          );
           if (!_equalBytes(expected, msg.body)) {
             throw TlsException('Client Finished verify_data mismatch');
           }
@@ -482,7 +625,8 @@ Future<Tls13Connection> tls13ServerHandshake({
           break;
         default:
           throw TlsException(
-              'Unexpected client handshake message type ${msg.header}');
+            'Unexpected client handshake message type ${msg.header}',
+          );
       }
     }
   }
@@ -493,7 +637,10 @@ Future<Tls13Connection> tls13ServerHandshake({
   readSeq = 0;
 
   final exporter = computeTls13Exporter(
-      exporterSecret: exporterSecret, label: exporterLabel, length: 64);
+    exporterSecret: exporterSecret,
+    label: exporterLabel,
+    length: 64,
+  );
 
   return Tls13Connection._(
     transport: transport,
@@ -531,7 +678,8 @@ const int kCipherSuiteAes128GcmSha256 = 0x1301;
 Uint8List randomBytes(int length) {
   final rng = Random.secure();
   return Uint8List.fromList(
-      List<int>.generate(length, (_) => rng.nextInt(256)));
+    List<int>.generate(length, (_) => rng.nextInt(256)),
+  );
 }
 
 // ---- ClientHello 构造 ----
@@ -555,11 +703,7 @@ Uint8List _buildClientHello(Uint8List randomValue, Uint8List ecdhePublicKey) {
   addExtension(kExtensionSupportedGroups, [..._u16(2), 0x00, 0x1d]);
 
   // key_share（KeyShareClientHello：u16 client_shares 长度 + 条目）
-  final share = <int>[
-    ..._u16(kGroupX25519),
-    ..._u16(32),
-    ...ecdhePublicKey,
-  ];
+  final share = <int>[..._u16(kGroupX25519), ..._u16(32), ...ecdhePublicKey];
   addExtension(kExtensionKeyShare, [..._u16(share.length), ...share]);
 
   final body = BytesBuilder()
@@ -602,7 +746,8 @@ Uint8List _parseServerHelloKeyShare(Uint8List body) {
         throw TlsException('Unsupported key share group $group');
       }
       final keyLen = _u16At(body, dataStart + 2);
-      if (keyLen != 32) throw TlsException('Unexpected X25519 key length $keyLen');
+      if (keyLen != 32)
+        throw TlsException('Unexpected X25519 key length $keyLen');
       return Uint8List.sublistView(body, dataStart + 4, dataStart + 4 + keyLen);
     }
     offset = dataStart + extLen;
@@ -615,14 +760,17 @@ List<Uint8List> _parseServerCertificateMessage(Uint8List body) {
   var offset = 0;
   final ctxLen = _require(body, offset);
   offset += 1 + ctxLen;
-  final listLen = body[offset] << 16 | (body[offset + 1] << 8) | body[offset + 2];
+  final listLen =
+      body[offset] << 16 | (body[offset + 1] << 8) | body[offset + 2];
   offset += 3;
   final listEnd = offset + listLen;
-  if (listEnd > body.length) throw TlsException('Certificate list exceeds message');
+  if (listEnd > body.length)
+    throw TlsException('Certificate list exceeds message');
 
   final certs = <Uint8List>[];
   while (offset < listEnd) {
-    final certLen = body[offset] << 16 | (body[offset + 1] << 8) | body[offset + 2];
+    final certLen =
+        body[offset] << 16 | (body[offset + 1] << 8) | body[offset + 2];
     offset += 3;
     if (offset + certLen + 2 > body.length) {
       throw TlsException('Certificate entry exceeds message');
@@ -638,12 +786,18 @@ List<Uint8List> _parseServerCertificateMessage(Uint8List body) {
 
 /// 验签服务端 CertificateVerify（rsa_pss_rsae_sha256）。
 void _verifyServerCertificateVerify(
-    Uint8List body, RsaPublicKey? pub, Uint8List transcript) {
-  if (pub == null) throw TlsException('CertificateVerify before any certificate');
+  Uint8List body,
+  RsaPublicKey? pub,
+  Uint8List transcript,
+) {
+  if (pub == null)
+    throw TlsException('CertificateVerify before any certificate');
   if (body.length < 4) throw TlsException('CertificateVerify too short');
   final scheme = _u16At(body, 0);
   if (scheme != kSignatureRsaPssRsaeSha256) {
-    throw TlsException('Unsupported signature scheme 0x${scheme.toRadixString(16)}');
+    throw TlsException(
+      'Unsupported signature scheme 0x${scheme.toRadixString(16)}',
+    );
   }
   final sigLen = _u16At(body, 2);
   if (body.length != 4 + sigLen) {
@@ -679,9 +833,13 @@ Uint8List _buildClientCertificateMessage(AdbX509Certificate clientCertificate) {
 
 /// 客户端 CertificateVerify 消息。[transcript] 为截至（含）Certificate 的级联。
 Uint8List _buildClientCertificateVerify(
-    AdbRsaKeyPair clientKey, Uint8List transcript) {
+  AdbRsaKeyPair clientKey,
+  Uint8List transcript,
+) {
   final signature = rsaPssSha256Sign(
-      clientKey, _signedContent('client', sha256(transcript)));
+    clientKey,
+    _signedContent('client', sha256(transcript)),
+  );
   final body = <int>[
     ..._u16(kSignatureRsaPssRsaeSha256),
     ..._u16(signature.length),
@@ -692,7 +850,9 @@ Uint8List _buildClientCertificateVerify(
 
 /// CertificateVerify 的签名内容（RFC 8446 §4.4.3）。
 Uint8List _signedContent(String role, Uint8List transcriptHash) {
-  final contextPart = Uint8List.fromList('TLS 1.3, $role CertificateVerify'.codeUnits);
+  final contextPart = Uint8List.fromList(
+    'TLS 1.3, $role CertificateVerify'.codeUnits,
+  );
   final out = Uint8List(64 + contextPart.length + 1 + transcriptHash.length);
   out.fillRange(0, 64, 0x20);
   out.setRange(64, 64 + contextPart.length, contextPart);
@@ -716,7 +876,8 @@ Uint8List _parseClientHelloKeyShare(Uint8List body) {
   var extTotal = _u16At(body, offset);
   offset += 2;
   final extEnd = offset + extTotal;
-  if (extEnd > body.length) throw TlsException('ClientHello extensions overflow');
+  if (extEnd > body.length)
+    throw TlsException('ClientHello extensions overflow');
 
   while (offset < extEnd) {
     final extType = _u16At(body, offset);
@@ -762,11 +923,7 @@ Uint8List _buildServerHello(Uint8List serverEcdhePublic) {
   addExtension(kExtensionSupportedVersions, [0x03, 0x04]);
 
   // KeyShareServerHello：server_share {group, keylen, key}
-  final share = <int>[
-    ..._u16(kGroupX25519),
-    ..._u16(32),
-    ...serverEcdhePublic,
-  ];
+  final share = <int>[..._u16(kGroupX25519), ..._u16(32), ...serverEcdhePublic];
   addExtension(kExtensionKeyShare, share);
 
   final extBytes = extBuilder.toBytes();
@@ -814,9 +971,13 @@ Uint8List _buildServerCertificateMessage(AdbX509Certificate certificate) {
 
 /// 服务端 CertificateVerify（rsa_pss_rsae_sha256，签名内容 hash('server', ...)）。
 Uint8List _buildServerCertificateVerify(
-    AdbRsaKeyPair serverKey, Uint8List transcript) {
+  AdbRsaKeyPair serverKey,
+  Uint8List transcript,
+) {
   final signature = rsaPssSha256Sign(
-      serverKey, _signedContent('server', sha256(transcript)));
+    serverKey,
+    _signedContent('server', sha256(transcript)),
+  );
   final body = <int>[
     ..._u16(kSignatureRsaPssRsaeSha256),
     ..._u16(signature.length),
@@ -827,12 +988,18 @@ Uint8List _buildServerCertificateVerify(
 
 /// 验签客户端 CertificateVerify（rsa_pss_rsae_sha256）。
 void _verifyClientCertificateVerify(
-    Uint8List body, RsaPublicKey? pub, Uint8List transcript) {
-  if (pub == null) throw TlsException('CertificateVerify before any certificate');
+  Uint8List body,
+  RsaPublicKey? pub,
+  Uint8List transcript,
+) {
+  if (pub == null)
+    throw TlsException('CertificateVerify before any certificate');
   if (body.length < 4) throw TlsException('CertificateVerify too short');
   final scheme = _u16At(body, 0);
   if (scheme != kSignatureRsaPssRsaeSha256) {
-    throw TlsException('Unsupported signature scheme 0x${scheme.toRadixString(16)}');
+    throw TlsException(
+      'Unsupported signature scheme 0x${scheme.toRadixString(16)}',
+    );
   }
   final sigLen = _u16At(body, 2);
   if (body.length != 4 + sigLen) {
@@ -862,23 +1029,50 @@ Uint8List computeTls13Exporter({
   final digest = sha256(context);
   final emptyDigest = sha256(const []);
   final derived = hkdfExpandLabel(
-      prk: exporterSecret,
-      label: label,
-      context: emptyDigest,
-      length: kHashLen);
+    prk: exporterSecret,
+    label: label,
+    context: emptyDigest,
+    length: kHashLen,
+  );
   return hkdfExpandLabel(
-      prk: derived, label: 'exporter', context: digest, length: length);
+    prk: derived,
+    label: 'exporter',
+    context: digest,
+    length: length,
+  );
 }
 
 // ---- 传输层 ----
 
 /// 简单的按字节读取 socket（带缓冲）。
 class _SocketTransport {
-  final Socket socket;
   final StreamIterator<List<int>> _iterator;
   final List<int> _readBuffer = [];
+  final void Function(Uint8List data)? _writeSync;
+  final Future<void> Function(List<int> data)? _writeAsync;
+  final Future<void> Function() _flush;
+  final void Function() _close;
+  Future<void> _pending = Future<void>.value();
 
-  _SocketTransport(this.socket) : _iterator = StreamIterator(socket);
+  static Future<void> _noopFlush() async {}
+
+  static void _noopClose() {}
+
+  _SocketTransport(Socket socket)
+    : _iterator = StreamIterator(socket),
+      _writeSync = socket.add,
+      _writeAsync = null,
+      _flush = socket.flush,
+      _close = socket.close;
+
+  _SocketTransport.stream({
+    required Stream<List<int>> input,
+    required Future<void> Function(List<int> data) write,
+  }) : _iterator = StreamIterator(input),
+       _writeSync = null,
+       _writeAsync = write,
+       _flush = _noopFlush,
+       _close = _noopClose;
 
   Future<List<int>> _readChunk() async {
     if (await _iterator.moveNext()) {
@@ -918,9 +1112,28 @@ class _SocketTransport {
     return await readExact(len);
   }
 
-  void write(Uint8List data) => socket.add(data);
+  void write(Uint8List data) {
+    final sync = _writeSync;
+    if (sync != null) {
+      sync(data);
+      return;
+    }
+    final asyncWrite = _writeAsync!;
+    final pending = _pending.then((_) => asyncWrite(data));
+    // 链上的错误留给 flush 抛出；这里吞掉是为了后续 write 还能排队。
+    _pending = pending.catchError((Object _) {});
+    _lastWrite = pending;
+  }
 
-  void close() => socket.close();
+  Future<void>? _lastWrite;
+
+  Future<void> flush() async {
+    final lastWrite = _lastWrite;
+    if (lastWrite != null) await lastWrite;
+    await _flush();
+  }
+
+  void close() => _close();
 }
 
 // ---- 工具 ----

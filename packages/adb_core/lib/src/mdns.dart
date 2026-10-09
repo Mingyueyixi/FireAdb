@@ -48,8 +48,56 @@ class MdnsService {
 
   String get addressText => address?.address ?? host;
 
+  /// 展示用的 `地址:端口`。IPv6 地址带方括号，避免和端口粘在一起。
+  String get endpointText {
+    final text = addressText;
+    if (text.contains(':') && !text.startsWith('[')) return '[$text]:$port';
+    return '$text:$port';
+  }
+
   @override
-  String toString() => '$instanceName\t$serviceType\t$addressText:$port';
+  String toString() => '$instanceName\t$serviceType\t$endpointText';
+}
+
+/// 从一组地址里选出适合发起 adb 连接的那个。
+///
+/// 优先局域网 IPv4，其次全局 IPv6。链路本地的 `fe80::` 没有网卡标识时
+/// 系统会直接拒绝连接，所以只在没有其他地址时才用它。
+InternetAddress? preferReachableAddress(Iterable<InternetAddress> addresses) {
+  InternetAddress? ipv4;
+  InternetAddress? ipv6;
+  InternetAddress? loopback;
+  InternetAddress? linkLocalV4;
+  InternetAddress? linkLocalV6;
+  for (final address in addresses) {
+    if (address.isMulticast || _isUnspecified(address)) continue;
+    if (address.isLoopback) {
+      loopback ??= address;
+      continue;
+    }
+    if (address.isLinkLocal) {
+      if (address.type == InternetAddressType.IPv4) {
+        linkLocalV4 ??= address;
+      } else {
+        linkLocalV6 ??= address;
+      }
+      continue;
+    }
+    if (address.type == InternetAddressType.IPv4) {
+      ipv4 ??= address;
+    } else {
+      ipv6 ??= address;
+    }
+  }
+  return ipv4 ?? ipv6 ?? loopback ?? linkLocalV4 ?? linkLocalV6;
+}
+
+bool _isUnspecified(InternetAddress address) {
+  if (address.type == InternetAddressType.IPv4) {
+    return address.address == '0.0.0.0';
+  }
+  final raw = address.rawAddress;
+  return raw.every((byte) => byte == 0);
 }
 
 /// mDNS 层错误。
@@ -62,8 +110,8 @@ class MdnsException implements Exception {
 
 /// 纯 Dart 的 mDNS 服务浏览器（RFC 6762 / RFC 6763）。
 ///
-/// 通过向 `224.0.0.251:5353` 发送 PTR 查询（QU bit 置位，从临时端口发出，
-/// 应答方会单播回源端口，无需加入组播组），收集 PTR / SRV / TXT / A / AAAA
+/// 向 `224.0.0.251:5353` 和 `ff02::fb:5353` 发送 PTR 查询。查询 TTL 为 255，
+/// 并在每块网卡上发送；同时监听 5353 上的组播应答。收集 PTR / SRV / TXT / A / AAAA
 /// 记录并聚合为 [MdnsService]。
 ///
 /// ⚠️ 适用场景说明（给上层 UI / 用户文档参考）：
@@ -72,10 +120,10 @@ class MdnsException implements Exception {
 /// - 开启了 **Android 无线调试** 的设备（Android 11+）
 ///   - 设置路径：`开发者选项` → `无线调试` → 启用
 ///   - 设备会广播 `_adb-tls-pairing._tcp`（配对）和/或 `_adb-tls-connect._tcp`（连接）
-/// - 部分自定义固件/模拟器主动广播 `_adb._tcp`（legacy 传输）
+/// - 执行过 `adb tcpip` 的设备会广播 `_adb._tcp`（经典明文端口）
 ///
 /// ❌ **无法发现的设备**：
-/// - 通过 `adb connect 192.168.x.x:5555` 手动连接的设备（纯 TCP，无 mDNS 广播）
+/// - 只在电脑上执行 `adb connect`、手机自己没有打开 tcpip 或无线调试的设备
 /// - 未开启无线调试、仅开启 USB 调试的设备
 /// - 旧版本 Android（< 11）或未实现 mDNS 广播的 ROM
 ///
@@ -89,7 +137,7 @@ class MdnsBrowser {
     InternetAddress? group,
     this.port = kMdnsPort,
     this.timeout = const Duration(seconds: 8),
-    this.ttl = 1,
+    this.ttl = 255,
   }) : group = group ?? kMdnsGroupV4;
 
   /// 查询目标（默认 mDNS 组播组）。
@@ -115,62 +163,187 @@ class MdnsBrowser {
       adbServiceTypeTransport,
     },
   }) async {
-    final results = <MdnsService>[];
-    
-    // 使用配置的 group 地址进行发现
-    results.addAll(await _discoverOn(InternetAddress.anyIPv4, group, serviceTypes));
-    
-    // 如果 group 是 IPv6，也尝试 IPv6 发现
-    if (group.type == InternetAddressType.IPv6) {
-      try {
-        results.addAll(await _discoverOn(InternetAddress.anyIPv6, group, serviceTypes));
-      } catch (_) {
-        // 忽略 IPv6 不可用的情况
+    if (!_isMdnsMulticast(group)) {
+      final bind = group.type == InternetAddressType.IPv6
+          ? InternetAddress.anyIPv6
+          : InternetAddress.anyIPv4;
+      return _discoverOn(bind, serviceTypes);
+    }
+    var sockets = <RawDatagramSocket>[];
+    try {
+      sockets = await _openLanSockets();
+    } catch (_) {
+      sockets = <RawDatagramSocket>[];
+    }
+    if (sockets.isEmpty) {
+      return _discoverOn(InternetAddress.anyIPv4, serviceTypes);
+    }
+    try {
+      return await _collect(sockets, serviceTypes, lan: true);
+    } finally {
+      for (final socket in sockets) {
+        socket.close();
       }
     }
-    
-    // 去重
-    final seen = <String>{};
-    return results.where((s) => seen.add(s.instanceName)).toList();
+  }
+
+  /// 测试里会把查询发到 loopback 的假应答方，不走局域网组播。
+  bool _isMdnsMulticast(InternetAddress address) =>
+      address.address == kMdnsGroupV4.address ||
+      address.address == kMdnsGroupV6.address;
+
+  Future<List<RawDatagramSocket>> _openLanSockets() async {
+    final sockets = <RawDatagramSocket>[];
+    final interfaces = await NetworkInterface.list(
+      includeLinkLocal: true,
+      type: InternetAddressType.any,
+    );
+
+    final v4 = await _tryBind(InternetAddress.anyIPv4, port, shared: true);
+    if (v4 != null) {
+      _joinAll(v4, kMdnsGroupV4, interfaces);
+      sockets.add(v4);
+    }
+    final v6 = await _tryBind(InternetAddress.anyIPv6, port, shared: true);
+    if (v6 != null) {
+      _joinAll(v6, kMdnsGroupV6, interfaces);
+      sockets.add(v6);
+    }
+
+    for (final iface in interfaces) {
+      for (final address in iface.addresses) {
+        if (address.isLoopback || address.isLinkLocal) continue;
+        final sender = await _tryBind(address, 0, shared: false);
+        if (sender != null) sockets.add(sender);
+      }
+    }
+    return sockets;
+  }
+
+  Future<RawDatagramSocket?> _tryBind(
+    InternetAddress address,
+    int bindPort, {
+    required bool shared,
+  }) async {
+    try {
+      return await RawDatagramSocket.bind(
+        address,
+        bindPort,
+        reuseAddress: true,
+        reusePort: shared && !Platform.isWindows,
+        ttl: ttl,
+      );
+    } on SocketException {
+      if (!shared) return null;
+      try {
+        return await RawDatagramSocket.bind(
+          address,
+          bindPort,
+          reuseAddress: true,
+          ttl: ttl,
+        );
+      } on SocketException {
+        return null;
+      }
+    }
+  }
+
+  void _joinAll(
+    RawDatagramSocket socket,
+    InternetAddress groupAddress,
+    List<NetworkInterface> interfaces,
+  ) {
+    var joined = false;
+    for (final iface in interfaces) {
+      final matches = iface.addresses.any(
+        (address) => address.type == groupAddress.type,
+      );
+      if (!matches) continue;
+      try {
+        socket.joinMulticast(groupAddress, iface);
+        joined = true;
+      } on SocketException {
+        continue;
+      }
+    }
+    if (joined) return;
+    try {
+      socket.joinMulticast(groupAddress);
+    } on SocketException {
+      return;
+    }
   }
 
   Future<List<MdnsService>> _discoverOn(
     InternetAddress bindAddr,
-    InternetAddress groupAddr,
     Set<String> serviceTypes,
   ) async {
     final socket = await RawDatagramSocket.bind(
-        bindAddr, 0, reuseAddress: true, ttl: ttl);
+      bindAddr,
+      0,
+      reuseAddress: true,
+      ttl: ttl,
+    );
     try {
-      final resolver =
-          _MdnsResolver(serviceTypes: _queryTypes(serviceTypes));
-      final subscription = socket.listen((event) {
-        if (event == RawSocketEvent.read) {
-          final datagram = socket.receive();
-          if (datagram != null) {
-            resolver.handleDatagram(datagram.data);
-          }
-        }
-      });
-
-      final completer = Completer<void>();
-      final timer = Timer(timeout, () {
-        if (!completer.isCompleted) completer.complete();
-      });
-      try {
-        for (final type in serviceTypes) {
-          final qname = _encodeName('$type.$kMdnsDomain');
-          socket.send(_buildPtrQuery(qname), groupAddr, port);
-        }
-        await completer.future;
-      } finally {
-        timer.cancel();
-        subscription.cancel();
-      }
-      return resolver.services();
+      return await _collect(
+        <RawDatagramSocket>[socket],
+        serviceTypes,
+        lan: false,
+      );
     } finally {
       socket.close();
     }
+  }
+
+  Future<List<MdnsService>> _collect(
+    List<RawDatagramSocket> sockets,
+    Set<String> serviceTypes, {
+    required bool lan,
+  }) async {
+    final resolver = _MdnsResolver(serviceTypes: _queryTypes(serviceTypes));
+    final subscriptions = <StreamSubscription<RawSocketEvent>>[];
+    for (final socket in sockets) {
+      subscriptions.add(
+        socket.listen((event) {
+          if (event != RawSocketEvent.read) return;
+          final datagram = socket.receive();
+          if (datagram == null) return;
+          resolver.handleDatagram(datagram.data, datagram.address);
+        }),
+      );
+    }
+
+    final completer = Completer<void>();
+    final timer = Timer(timeout, () {
+      if (!completer.isCompleted) completer.complete();
+    });
+    try {
+      for (final socket in sockets) {
+        final ipv6 = socket.address.type == InternetAddressType.IPv6;
+        final destination = lan ? (ipv6 ? kMdnsGroupV6 : kMdnsGroupV4) : group;
+        final destinationPort = port;
+        final unicastResponse = !lan || socket.port != port;
+        for (final type in serviceTypes) {
+          final qname = _encodeName('$type.$kMdnsDomain');
+          try {
+            socket.send(
+              _buildPtrQuery(qname, unicastResponse: unicastResponse),
+              destination,
+              destinationPort,
+            );
+          } on SocketException {
+            continue;
+          }
+        }
+      }
+      await completer.future;
+    } finally {
+      timer.cancel();
+      for (final subscription in subscriptions) {
+        await subscription.cancel();
+      }
+    }
+    return resolver.services();
   }
 }
 
@@ -197,8 +370,7 @@ Future<List<MdnsService>> discoverAdbServices({
 // ---------------------------------------------------------------------------
 
 List<int> _encodeName(String name) {
-  final clean =
-      name.endsWith('.') ? name.substring(0, name.length - 1) : name;
+  final clean = name.endsWith('.') ? name.substring(0, name.length - 1) : name;
   final out = <int>[];
   for (final label in clean.split('.')) {
     if (label.isEmpty) continue;
@@ -211,8 +383,11 @@ List<int> _encodeName(String name) {
   return out;
 }
 
-/// PTR 查询（ID=0，QDCOUNT=1，QTYPE=PTR，QCLASS=IN|QU）。
-List<int> _buildPtrQuery(List<int> qname) {
+/// PTR 查询（ID=0，QDCOUNT=1，QTYPE=PTR）。
+///
+/// [unicastResponse] 置位 QU，请应答方单播回源端口。从 5353 发出的查询不置位，
+/// 应答走组播，由监听 5353 的 socket 接收。
+List<int> _buildPtrQuery(List<int> qname, {bool unicastResponse = true}) {
   final out = <int>[];
   out.addAll([0, 0]); // ID
   out.addAll([0, 0]); // Flags（QR=0，标准查询）
@@ -222,7 +397,7 @@ List<int> _buildPtrQuery(List<int> qname) {
   out.addAll([0, 0]); // ARCOUNT
   out.addAll(qname);
   out.addAll([0, 12]); // QTYPE = PTR
-  out.addAll([0x80, 0x01]); // QCLASS = IN(1) | QU(1<<15)
+  out.addAll(unicastResponse ? [0x80, 0x01] : [0x00, 0x01]);
   return out;
 }
 
@@ -293,15 +468,17 @@ _ParsedResponse? _parseDnsResponse(List<int> data) {
     final rdlen = _u16(data, name.end + 8);
     final rdataStart = name.end + 10;
     if (rdataStart + rdlen > data.length) return null;
-    message.records.add(_DnsRecord(
-      rname: name.name,
-      rtype: rtype,
-      rclass: rclass,
-      ttl: ttl,
-      data: data,
-      rdataStart: rdataStart,
-      rdlen: rdlen,
-    ));
+    message.records.add(
+      _DnsRecord(
+        rname: name.name,
+        rtype: rtype,
+        rclass: rclass,
+        ttl: ttl,
+        data: data,
+        rdataStart: rdataStart,
+        rdlen: rdlen,
+      ),
+    );
     p = rdataStart + rdlen;
   }
   return message;
@@ -388,21 +565,21 @@ class _ServiceState {
   String? hostName;
   int? port;
   final Map<String, String> txt = {};
-  InternetAddress? v4;
-  InternetAddress? v6;
+  final List<InternetAddress> addresses = <InternetAddress>[];
 }
 
 class _MdnsResolver {
-  _MdnsResolver({Set<String>? serviceTypes}) : serviceTypes = serviceTypes?.toSet();
+  _MdnsResolver({Set<String>? serviceTypes})
+    : serviceTypes = serviceTypes?.toSet();
 
   /// 本次查询的服务类型集合（`_type._tcp` 形式）；非空时只返回这些类型的服务，
   /// 用于滤掉无关应答（例如应答方对别的查询顺手回带了全部记录）。
   final Set<String>? serviceTypes;
 
   final Map<String, _ServiceState> _services = {};
-  final Map<String, InternetAddress> _hostAddresses = {};
+  final Map<String, List<InternetAddress>> _hostAddresses = {};
 
-  void handleDatagram(List<int> data) {
+  void handleDatagram(List<int> data, [InternetAddress? sender]) {
     final response = _parseDnsResponse(data);
     if (response == null) return;
 
@@ -411,53 +588,72 @@ class _MdnsResolver {
         case _dnsTypePtr:
           final target = _readName(record.data, record.rdataStart);
           if (target != null) {
-            final state = _services.putIfAbsent(
-                target.name, _ServiceState.new);
+            final state = _services.putIfAbsent(target.name, _ServiceState.new);
             state.serviceType = _serviceTypeFrom(record.rname);
+            _noteSender(target.name, sender);
           }
         case _dnsTypeSrv:
           if (record.rdlen < 6) continue;
           final port = _u16(record.data, record.rdataStart + 4);
           final targetName = _readName(record.data, record.rdataStart + 6);
           if (targetName == null) continue;
-          final state =
-              _services.putIfAbsent(record.rname, _ServiceState.new);
+          final state = _services.putIfAbsent(record.rname, _ServiceState.new);
           state.port = port;
           state.hostName = targetName.name;
+          _noteSender(record.rname, sender);
+          _noteSender(targetName.name, sender);
         case _dnsTypeTxt:
           _services
               .putIfAbsent(record.rname, _ServiceState.new)
               .txt
               .addAll(_parseTxt(record.rdata));
+          _noteSender(record.rname, sender);
         case _dnsTypeA:
           if (record.rdlen != 4) continue;
-          _hostAddresses[record.rname] = InternetAddress.fromRawAddress(
-              Uint8List.fromList(record.rdata));
+          _addHostAddress(
+            record.rname,
+            InternetAddress.fromRawAddress(Uint8List.fromList(record.rdata)),
+          );
+          _noteSender(record.rname, sender);
         case _dnsTypeAaaa:
           if (record.rdlen != 16) continue;
-          _hostAddresses[record.rname] = InternetAddress.fromRawAddress(
-              Uint8List.fromList(record.rdata));
+          _addHostAddress(
+            record.rname,
+            InternetAddress.fromRawAddress(Uint8List.fromList(record.rdata)),
+          );
+          _noteSender(record.rname, sender);
       }
     }
 
     _attachAddresses();
   }
 
-  /// A/AAAA 记录归属主机名，把解析出的地址倒灌回对应实例。
+  void _addHostAddress(String name, InternetAddress address) {
+    final list = _hostAddresses.putIfAbsent(name, () => <InternetAddress>[]);
+    if (list.any((item) => item.address == address.address)) return;
+    list.add(address);
+  }
+
+  void _noteSender(String name, InternetAddress? sender) {
+    if (sender == null || sender.isMulticast || _isUnspecified(sender)) return;
+    _addHostAddress(name, sender);
+  }
+
+  /// A/AAAA 和报文源地址都挂到对应实例上，再选出可连接的地址。
   void _attachAddresses() {
     for (final instance in _services.keys) {
       final state = _services[instance]!;
-      final candidates = <String>[
+      final names = <String>[
         if (state.hostName != null) state.hostName!,
         instance,
       ];
-      for (final name in candidates) {
-        final addr = _hostAddresses[name];
-        if (addr == null) continue;
-        if (addr.type == InternetAddressType.IPv4) {
-          state.v4 ??= addr;
-        } else {
-          state.v6 ??= addr;
+      for (final name in names) {
+        for (final address
+            in _hostAddresses[name] ?? const <InternetAddress>[]) {
+          if (state.addresses.any((item) => item.address == address.address)) {
+            continue;
+          }
+          state.addresses.add(address);
         }
       }
     }
@@ -466,7 +662,7 @@ class _MdnsResolver {
   List<MdnsService> services() {
     final result = <MdnsService>[];
     _services.forEach((instance, state) {
-      final address = state.v4 ?? state.v6;
+      final address = preferReachableAddress(state.addresses);
       final serviceType = state.serviceType ?? _serviceTypeFrom(instance);
       if (address == null || state.port == null || serviceType == null) {
         return;
@@ -475,14 +671,16 @@ class _MdnsResolver {
       if (wanted != null && !wanted.contains(serviceType)) {
         return;
       }
-      result.add(MdnsService(
-        instanceName: instance,
-        serviceType: serviceType,
-        host: state.hostName ?? '',
-        port: state.port!,
-        address: address,
-        txt: Map.unmodifiable(state.txt),
-      ));
+      result.add(
+        MdnsService(
+          instanceName: instance,
+          serviceType: serviceType,
+          host: state.hostName ?? '',
+          port: state.port!,
+          address: address,
+          txt: Map.unmodifiable(state.txt),
+        ),
+      );
     });
 
     result.sort((a, b) {

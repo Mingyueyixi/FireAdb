@@ -22,16 +22,19 @@ void main() {
       try {
         _checkPointersUsed(buildPairingResponse());
         final browser = MdnsBrowser(
-            group: InternetAddress.loopbackIPv4,
-            port: responder.port,
-            timeout: const Duration(seconds: 3));
+          group: InternetAddress.loopbackIPv4,
+          port: responder.port,
+          timeout: const Duration(seconds: 3),
+        );
 
         final services = await browser.discover(
-            serviceTypes: const {adbServiceTypePairing});
+          serviceTypes: const {adbServiceTypePairing},
+        );
 
         expect(services, isNotEmpty);
-        final service =
-            services.singleWhere((s) => s.serviceType == adbServiceTypePairing);
+        final service = services.singleWhere(
+          (s) => s.serviceType == adbServiceTypePairing,
+        );
 
         expect(service.instanceName, kFakeInstanceFqdn);
         expect(service.port, kFakePairPort);
@@ -45,15 +48,76 @@ void main() {
       }
     });
 
+    test('同时有 IPv4 和链路本地 IPv6 时使用 IPv4', () async {
+      final responder = await spawnFakeResponder(
+        0,
+        response: buildPairingResponse(
+          aaaa: <int>[0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+        ),
+      );
+      try {
+        final browser = MdnsBrowser(
+          group: InternetAddress.loopbackIPv4,
+          port: responder.port,
+          timeout: const Duration(seconds: 2),
+        );
+        final services = await browser.discover(
+          serviceTypes: const {adbServiceTypePairing},
+        );
+        expect(services.single.address?.address, '10.0.2.2');
+      } finally {
+        await responder.close();
+      }
+    });
+
+    test('可连接地址优先局域网 IPv4，只有链路本地时仍保留', () {
+      expect(
+        preferReachableAddress(<InternetAddress>[
+          InternetAddress('fe80::4ce5:66ff:fe22:614'),
+          InternetAddress('192.168.3.45'),
+        ])?.address,
+        '192.168.3.45',
+      );
+      expect(
+        preferReachableAddress(<InternetAddress>[
+          InternetAddress('fe80::4ce5:66ff:fe22:614'),
+        ])?.isLinkLocal,
+        isTrue,
+      );
+    });
+
+    test('链路本地地址连接时带上网卡标识', () {
+      expect(
+        linkLocalConnectHosts('fe80::1', <({String name, int index})>[
+          (name: 'wlan0', index: 12),
+        ]),
+        <String>['fe80::1%wlan0', 'fe80::1%12'],
+      );
+      expect(
+        linkLocalConnectHosts('192.168.3.45', <({String name, int index})>[
+          (name: 'wlan0', index: 12),
+        ]),
+        <String>['192.168.3.45'],
+      );
+      expect(
+        linkLocalConnectHosts('fe80::1%wlan0', <({String name, int index})>[
+          (name: 'wlan0', index: 12),
+        ]),
+        <String>['fe80::1%wlan0'],
+      );
+    });
+
     test('只查询 connect 服务时不返回配对结果', () async {
       final responder = await spawnFakeResponder(0);
       try {
         final browser = MdnsBrowser(
-            group: InternetAddress.loopbackIPv4,
-            port: responder.port,
-            timeout: const Duration(seconds: 2));
+          group: InternetAddress.loopbackIPv4,
+          port: responder.port,
+          timeout: const Duration(seconds: 2),
+        );
         final services = await browser.discover(
-            serviceTypes: const {adbServiceTypeConnect});
+          serviceTypes: const {adbServiceTypeConnect},
+        );
         expect(services, isEmpty);
       } finally {
         await responder.close();

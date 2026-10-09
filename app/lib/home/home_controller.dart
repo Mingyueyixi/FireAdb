@@ -98,6 +98,15 @@ class HomeController extends GetxController {
     }
   }
 
+  Future<void> pair(String host, int port, String code) async {
+    connecting.value = true;
+    try {
+      await manager.pairWireless(host, port, code);
+    } finally {
+      connecting.value = false;
+    }
+  }
+
   Future<AdbDevice> connect(String host, int port) async {
     connecting.value = true;
     try {

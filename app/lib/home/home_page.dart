@@ -14,6 +14,8 @@ class HomePage extends GetView<HomeController> {
   const HomePage({super.key});
 
   Future<void> _connect(BuildContext context, String host, int port) async {
+    // 防重入：键盘提交 / 历史记录等入口在连接进行中直接忽略。
+    if (controller.connecting.value) return;
     final l10n = context.l10n;
     final messenger = ScaffoldMessenger.of(context);
     final theme = Theme.of(context);
@@ -28,6 +30,42 @@ class HomePage extends GetView<HomeController> {
       Get.toNamed<void>('/workspace', arguments: device.serial);
     } catch (error, stackTrace) {
       logAppError('连接设备失败：$host:$port', error, stackTrace);
+      showAppMessage(
+        messenger,
+        theme,
+        title: l10n.homeConnectionFailed,
+        message: '$error',
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _pair(BuildContext context, MdnsService service) async {
+    final code = await showDialog<String>(
+      context: context,
+      builder: (context) => const _PairingCodeDialog(),
+    );
+    final password = code?.trim() ?? '';
+    if (password.isEmpty || !context.mounted) return;
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
+    try {
+      await controller.pair(service.addressText, service.port, password);
+      if (!context.mounted) return;
+      showAppMessage(
+        messenger,
+        theme,
+        title: l10n.homePairingSucceeded,
+        message: l10n.homePairingSucceededHint,
+      );
+    } catch (error, stackTrace) {
+      logAppError(
+        '无线配对失败：${service.addressText}:${service.port}',
+        error,
+        stackTrace,
+      );
+      if (!context.mounted) return;
       showAppMessage(
         messenger,
         theme,
@@ -525,10 +563,20 @@ class HomePage extends GetView<HomeController> {
                   ),
                   title: Text(s.instanceName),
                   subtitle: Text(
+                    // IPv6 端点（如 [fe80::…%wlan0]:5555）可能很长，限制行数
+                    // 与其他 tile 的 subtitle（maxLines: 2）保持一致。
                     '${_serviceTypeLabel(context, s.serviceType)} · '
-                    '${s.addressText}:${s.port}',
+                    '${s.endpointText}',
+                    maxLines: 2,
                   ),
-                  trailing: _serviceConnectable(s)
+                  trailing: s.serviceType == adbServiceTypePairing
+                      ? TextButton(
+                          onPressed: controller.connecting.value
+                              ? null
+                              : () => _pair(context, s),
+                          child: Text(l10n.homePair),
+                        )
+                      : _serviceConnectable(s)
                       ? TextButton(
                           onPressed: controller.connecting.value
                               ? null
@@ -809,6 +857,62 @@ class HomePage extends GetView<HomeController> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PairingCodeDialog extends StatefulWidget {
+  const _PairingCodeDialog();
+
+  @override
+  State<_PairingCodeDialog> createState() => _PairingCodeDialogState();
+}
+
+class _PairingCodeDialogState extends State<_PairingCodeDialog> {
+  final TextEditingController _codeController = TextEditingController();
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  void _submit() => Navigator.pop(context, _codeController.text);
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return AlertDialog(
+      scrollable: true,
+      title: Text(l10n.homePairingTitle),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Text(l10n.homePairingCodeHelp),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _codeController,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: l10n.homePair,
+                border: const OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _submit(),
+            ),
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(l10n.commonCancel),
+        ),
+        TextButton(onPressed: _submit, child: Text(l10n.homePair)),
+      ],
     );
   }
 }

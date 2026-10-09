@@ -86,13 +86,13 @@ List<int> _txtRdata() {
 /// 构造一条 mDNS 响应：AN = PTR + SRV + TXT，AR = A。
 /// 名称按真实应答方的顺序出现：instance 首现于 PTR 的 rdata，
 /// host 首现于 SRV 的 rdata，之后用压缩指针引用。
-Uint8List buildPairingResponse({int port = kFakePairPort}) {
+Uint8List buildPairingResponse({int port = kFakePairPort, List<int>? aaaa}) {
   final w = _Writer();
   w.addAll([0, 0, 0x84, 0x00]);
   w.addAll([0, 0]); // QDCOUNT
   w.addAll([0, 3]); // ANCOUNT
   w.addAll([0, 0]); // NSCOUNT
-  w.addAll([0, 1]); // ARCOUNT
+  w.addAll([0, aaaa == null ? 1 : 2]); // ARCOUNT
 
   // PTR：rname = service，rdata = instance（首现）
   w.addAll(_encodeName(kFakeServiceFqdn));
@@ -111,8 +111,7 @@ Uint8List buildPairingResponse({int port = kFakePairPort}) {
   w.u32(120);
   final srvFixed = [0, 0, 0, 0, (port >> 8) & 0xff, port & 0xff];
   final hostBytes = _encodeName(kFakeHostFqdn);
-  final hostAnchor =
-      w.bytes.length + 2 + srvFixed.length; // 2 = rdlen 字段
+  final hostAnchor = w.bytes.length + 2 + srvFixed.length; // 2 = rdlen 字段
   w.u16(srvFixed.length + hostBytes.length);
   w.addAll(srvFixed);
   w.addAll(hostBytes);
@@ -134,6 +133,15 @@ Uint8List buildPairingResponse({int port = kFakePairPort}) {
   w.u16(4);
   w.addAll([10, 0, 2, 2]);
 
+  if (aaaa != null) {
+    w.name(kFakeHostFqdn);
+    w.u16(28);
+    w.u16(0x0001);
+    w.u32(120);
+    w.u16(aaaa.length);
+    w.addAll(aaaa);
+  }
+
   return Uint8List.fromList(w.bytes);
 }
 
@@ -141,15 +149,21 @@ Uint8List buildPairingResponse({int port = kFakePairPort}) {
 ///
 /// [port] 为 loopback 监听端口，传 0 表示由系统分配（用 [FakeMdnsResponder.port]
 /// 读取）。收到查询即回一条 [buildPairingResponse]。
-Future<FakeMdnsResponder> spawnFakeResponder(int port) async {
+Future<FakeMdnsResponder> spawnFakeResponder(
+  int port, {
+  Uint8List? response,
+}) async {
   final socket = await RawDatagramSocket.bind(
-      InternetAddress.loopbackIPv4, port, reuseAddress: true);
-  final response = buildPairingResponse();
+    InternetAddress.loopbackIPv4,
+    port,
+    reuseAddress: true,
+  );
+  final packet = response ?? buildPairingResponse();
   socket.listen((event) {
     if (event == RawSocketEvent.read) {
       final datagram = socket.receive();
       if (datagram == null) return;
-      socket.send(response, datagram.address, datagram.port);
+      socket.send(packet, datagram.address, datagram.port);
     }
   });
   return FakeMdnsResponder(socket);

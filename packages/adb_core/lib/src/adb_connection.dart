@@ -17,6 +17,8 @@ import 'adb_exceptions.dart';
 import 'adb_message.dart';
 import 'adb_stream_reader.dart';
 import 'adb_transport.dart';
+import 'tls13.dart';
+import 'x509.dart';
 
 /// 设备/主机连接结果状态。
 enum AdbConnectionState {
@@ -201,7 +203,8 @@ class AdbConnection {
   /// 握手状态变化。本机 ADB Server 用它把设备标成 `unauthorized` 或 `device`。
   final void Function(AdbConnectionState state)? onStateChanged;
 
-  late final AdbSizedReader _reader;
+  late AdbSizedReader _reader;
+  Tls13Connection? _tls;
   final Map<int, AdbStream> _streams = {};
   final Map<int, Completer<AdbStream>> _openWaiters = {};
   int _nextLocalId = 1;
@@ -240,7 +243,13 @@ class AdbConnection {
     final done = Completer<void>();
     _writeQueue = prev.catchError((_) {}).then((_) async {
       try {
-        await _transport.write(bytes);
+        final tls = _tls;
+        if (tls == null) {
+          await _transport.write(bytes);
+        } else {
+          tls.writeApplicationData(Uint8List.fromList(bytes));
+          await tls.flush();
+        }
         done.complete();
       } catch (e, st) {
         done.completeError(e, st);
@@ -305,8 +314,38 @@ class AdbConnection {
         await _onWrite(msg);
       case cmd.commandClose:
         _onClose(msg);
+      case cmd.commandStls:
+        await _onStls(msg);
       default:
         throw AdbInvalidCommandError('未知命令: ${msg.command}', data: msg);
+    }
+  }
+
+  /// 无线调试在 CNXN 之后要求切到 TLS。回一条 STLS，握手完成后继续收 CNXN。
+  Future<void> _onStls(AdbMessage msg) async {
+    if (_tls != null) return;
+    if (msg.arg0 < cmd.stlsVersion) {
+      throw AdbInvalidResponseError(
+        '设备 STLS 版本 ${msg.arg0} 低于 ${cmd.stlsVersion}',
+      );
+    }
+    final signers = this.signers;
+    final key = (signers == null || signers.isEmpty) ? null : signers.first;
+    if (key == null) {
+      throw AdbDeviceAuthError('无线调试需要本机 ADB 密钥。请先在配对服务里输入配对码。');
+    }
+    await _sendMessage(cmd.commandStls, cmd.stlsVersion, 0, const []);
+    try {
+      final tls = await tls13ClientHandshakeOnStream(
+        input: _reader.takeRemainingStream(),
+        write: _transport.write,
+        clientKey: key,
+        clientCertificate: buildSelfSignedRsaCertificate(key),
+      );
+      _tls = tls;
+      _reader = AdbSizedReader(tls.plaintextStream());
+    } on TlsException catch (error) {
+      throw AdbDeviceAuthError('无线调试 TLS 握手失败。若设备还不认识本机密钥，请先对配对服务输入配对码。$error');
     }
   }
 

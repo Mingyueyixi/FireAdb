@@ -35,6 +35,9 @@ const int commandClose = 0x45534c43;
 const int commandWrite = 0x45545257;
 const int commandStls = 0x534c5453;
 
+/// `A_STLS_VERSION`。arg0 为 `0x01000000`。
+const int stlsVersion = 0x01000000;
+
 /// 线上整数值 -> 人类可读命令名（调试用）。
 const Map<int, String> commandNames = {
   commandSync: 'SYNC',

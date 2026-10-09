@@ -314,7 +314,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @homeMdnsHelp.
   ///
   /// In zh, this message translates to:
-  /// **'✅ 能发现：\n• 设置 → 开发者选项 → 无线调试 → 已开启\n• 手机与电脑在同一 Wi-Fi（无 AP 隔离）\n\n❌ 无法发现：\n• 仅开启 USB 调试、未开无线调试\n• 通过 `adb connect IP:PORT` 手动连接的设备\n• Android 11 以下或未实现 mDNS 广播的 ROM\n\n💡 如扫描无结果，请使用上方「手动连接」输入 IP:端口直连'**
+  /// **'1. 配对服务：先打开配对码页面。建议悬浮窗或分屏，离开后系统会关闭该服务。\n2. 点本页「扫描」，扫到配对服务后点「配对」。\n3. 输入无线调试配对码，完成配对。\n4. 点对应的无线调试端口进行连接。\n已配对过的可直接连接。'**
   String get homeMdnsHelp;
 
   /// No description provided for @homeScanFailed.
@@ -346,6 +346,36 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'配对服务'**
   String get homeServicePairing;
+
+  /// No description provided for @homePair.
+  ///
+  /// In zh, this message translates to:
+  /// **'配对'**
+  String get homePair;
+
+  /// No description provided for @homePairingTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'无线配对'**
+  String get homePairingTitle;
+
+  /// No description provided for @homePairingCodeHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入无线调试页面上的配对码。'**
+  String get homePairingCodeHelp;
+
+  /// No description provided for @homePairingSucceeded.
+  ///
+  /// In zh, this message translates to:
+  /// **'配对成功'**
+  String get homePairingSucceeded;
+
+  /// No description provided for @homePairingSucceededHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'请点对应的无线调试端口进行连接。'**
+  String get homePairingSucceededHint;
 
   /// No description provided for @homeDeviceCount.
   ///

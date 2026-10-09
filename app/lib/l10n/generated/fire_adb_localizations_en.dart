@@ -130,7 +130,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get homeMdnsHelp =>
-      '✅ Discoverable:\n• Settings → Developer options → Wireless debugging is enabled\n• Phone and computer are on the same Wi-Fi network (no AP isolation)\n\n❌ Not discoverable:\n• USB debugging is enabled but Wireless debugging is off\n• Devices connected manually with `adb connect IP:PORT`\n• Android versions below 11 or ROMs without mDNS broadcasting\n\n💡 If no devices are found, enter an IP address and port in Manual connection above.';
+      '1. Pairing service: open the pairing code screen first. A floating window or split screen is recommended, because leaving that screen closes the service.\n2. Tap Scan on this page. When the pairing service appears, tap Pair.\n3. Enter the wireless debugging pairing code.\n4. Tap the matching wireless debugging port to connect.\nIf already paired, connect directly.';
 
   @override
   String homeScanFailed(Object error) {
@@ -149,6 +149,23 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get homeServicePairing => 'Pairing service';
+
+  @override
+  String get homePair => 'Pair';
+
+  @override
+  String get homePairingTitle => 'Wireless pairing';
+
+  @override
+  String get homePairingCodeHelp =>
+      'Enter the pairing code shown on the wireless debugging screen.';
+
+  @override
+  String get homePairingSucceeded => 'Pairing succeeded';
+
+  @override
+  String get homePairingSucceededHint =>
+      'Tap the matching wireless debugging port to connect.';
 
   @override
   String homeDeviceCount(int count) {
