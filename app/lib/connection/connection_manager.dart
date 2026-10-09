@@ -10,12 +10,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../app_feedback.dart';
 import 'model/connected_device.dart';
 import 'model/device_profile.dart';
+import 'sdk_adb.dart';
+
+const int _defaultAdbServerPort = adbServerPort;
 
 /// 管理所有 ADB 连接与连接历史，负责 RSA 密钥加载与历史持久化。
 class ConnectionManager extends GetxService {
   static const String _historyPrefsKey = 'connection_history';
   static const String _manualHostPrefsKey = 'manual_connection_host';
   static const String _manualPortPrefsKey = 'manual_connection_port';
+  static const String _preferSdkAdbServerKey = 'prefer_sdk_adb_server';
+  static const String _adbServerPortKey = 'fire_adb_server_port';
 
   final RxMap<String, ConnectedDevice> _devices =
       <String, ConnectedDevice>{}.obs;
@@ -28,9 +33,34 @@ class ConnectionManager extends GetxService {
   LocalAdb? _localAdb;
   String? _loggedLocalUsbError;
 
-  /// 本进程自己监听着 127.0.0.1:5037。USB 设备由它登记，列表走 host:devices。
+  /// 本进程自己监听着本机 adb server 端口。USB 设备由它登记，列表走 host:devices。
   final RxBool ownsLocalAdbServer = false.obs;
+
+  /// FireAdb 自己的 adb server 端口。设备列表也连接这里。
+  final RxInt adbServerPort = _defaultAdbServerPort.obs;
+
+  /// 电脑上优先让 SDK 的 adb 占用 [adbServerPort]。Android 不使用这项。默认关闭。
+  final RxBool preferSdkAdbServer = false.obs;
+
+  /// 当前设备列表来自 SDK adb 启动的 server。
+  final RxBool usingSdkAdbServer = false.obs;
+
+  /// 找到的 adb 路径。没有则为空。
+  final RxnString sdkAdbPath = RxnString();
+
+  /// 最近一次启动 SDK adb server 的失败原因。
+  final RxnString sdkAdbError = RxnString();
   final RxnString localUsbError = RxnString();
+  bool _serverSettingsLoaded = false;
+
+  AdbHostClient hostClient({
+    Duration connectTimeout = const Duration(seconds: 10),
+  }) {
+    return AdbHostClient(
+      port: adbServerPort.value,
+      connectTimeout: connectTimeout,
+    );
+  }
 
   List<ConnectedDevice> get devices => _devices.values.toList();
 
@@ -66,27 +96,152 @@ class ConnectionManager extends GetxService {
     if (!_historyLoaded) _loadHistory();
   }
 
-  /// 没有官方 adb server 时，自己监听 5037。
+  /// 按设置选择本机 adb server 端口上的 server。
   ///
+  /// 电脑上勾选优先使用 SDK 时，先找 adb 并在该端口执行 `start-server`。
+  /// 找不到或启动失败时，再由本进程监听。Android 没有这项，始终走本进程。
+  /// 未勾选时默认由本进程监听。
+  Future<void> ensureLocalAdbServer({bool restart = false}) async {
+    await init();
+    _loadServerSettings();
+    if (!restart && (_localAdb != null || usingSdkAdbServer.value)) return;
+    await _applyAdbServer(releaseSdkServer: false);
+  }
+
+  Future<void> setPreferSdkAdbServer(bool value) async {
+    await init();
+    _loadServerSettings();
+    preferSdkAdbServer.value = value;
+    final preferences = _prefs;
+    if (preferences != null) {
+      final saved = await preferences.setBool(_preferSdkAdbServerKey, value);
+      if (!saved) throw StateError('SharedPreferences 未能保存 adb server 设置');
+    }
+    await _applyAdbServer(releaseSdkServer: !value);
+    _retargetHostClients();
+  }
+
+  Future<void> setAdbServerPort(int port) async {
+    if (port < 1 || port > 65535) {
+      throw ArgumentError.value(port, 'port', '端口必须在 1 到 65535 之间');
+    }
+    await init();
+    _loadServerSettings();
+    if (port == adbServerPort.value) return;
+    final previous = adbServerPort.value;
+    final preferences = _prefs;
+    if (preferences != null) {
+      final saved = await preferences.setInt(_adbServerPortKey, port);
+      if (!saved) throw StateError('SharedPreferences 未能保存 adb server 端口');
+    }
+    if (usingSdkAdbServer.value) {
+      final adb = sdkAdbPath.value ?? await findSdkAdb();
+      sdkAdbPath.value = adb;
+      if (adb != null) {
+        try {
+          await killSdkAdbServer(adb, port: previous);
+        } catch (error, stackTrace) {
+          logAppError('关闭 SDK adb server 失败', error, stackTrace);
+        }
+      }
+      usingSdkAdbServer.value = false;
+    }
+    await _stopFireServer();
+    adbServerPort.value = port;
+    await _applyAdbServer(releaseSdkServer: false);
+    _retargetHostClients();
+  }
+
+  void _loadServerSettings() {
+    if (_serverSettingsLoaded) return;
+    _serverSettingsLoaded = true;
+    final storedPrefer = _prefs?.getBool(_preferSdkAdbServerKey);
+    if (storedPrefer != null) preferSdkAdbServer.value = storedPrefer;
+    final storedPort = _prefs?.getInt(_adbServerPortKey);
+    if (storedPort != null && storedPort >= 1 && storedPort <= 65535) {
+      adbServerPort.value = storedPort;
+    }
+  }
+
+  void _retargetHostClients() {
+    final client = hostClient();
+    for (final device in _devices.values) {
+      device.retargetHostClient(client);
+    }
+  }
+
+  bool get _useSdkAdbServer => !Platform.isAndroid && preferSdkAdbServer.value;
+
+  Future<void> _applyAdbServer({required bool releaseSdkServer}) async {
+    if (_useSdkAdbServer) {
+      final adb = await findSdkAdb();
+      sdkAdbPath.value = adb;
+      if (adb != null) {
+        try {
+          await _stopFireServer();
+          await startSdkAdbServer(adb, port: adbServerPort.value);
+          usingSdkAdbServer.value = true;
+          sdkAdbError.value = null;
+          developer.log(
+            '已使用 SDK adb server：$adb，端口 ${adbServerPort.value}',
+            name: 'fire_adb',
+          );
+          return;
+        } catch (error, stackTrace) {
+          logAppError('启动 SDK adb server 失败', error, stackTrace);
+          sdkAdbError.value = '$error';
+          usingSdkAdbServer.value = false;
+        }
+      } else {
+        sdkAdbError.value = null;
+        usingSdkAdbServer.value = false;
+      }
+    } else {
+      sdkAdbError.value = null;
+      if (releaseSdkServer) {
+        final adb = sdkAdbPath.value ?? await findSdkAdb();
+        sdkAdbPath.value = adb;
+        if (adb != null) {
+          try {
+            await killSdkAdbServer(adb, port: adbServerPort.value);
+          } catch (error, stackTrace) {
+            logAppError('关闭 SDK adb server 失败', error, stackTrace);
+          }
+        }
+      }
+      usingSdkAdbServer.value = false;
+    }
+    await _startFireServer();
+  }
+
+  Future<void> _stopFireServer() async {
+    final local = _localAdb;
+    _localAdb = null;
+    ownsLocalAdbServer.value = false;
+    if (local != null) await local.close();
+  }
+
   /// USB 枚举只在桌面端做。Android 没有 libusb，设备来自手动 TCP 和本机模拟器端口扫描。
-  Future<void> ensureLocalAdbServer() async {
+  Future<void> _startFireServer() async {
     if (_localAdb != null) return;
     _resolveSigners();
+    final port = adbServerPort.value;
     final local = await LocalAdb.tryStart(
+      port: port,
       signers: _signers,
       onKilled: _onLocalServerKilled,
       onUsbError: _onLocalUsbError,
     );
     if (local == null) {
       developer.log(
-        '127.0.0.1:5037 已有 ADB Server，直接使用它列出的设备',
+        '127.0.0.1:$port 已有 ADB Server，直接使用它列出的设备',
         name: 'fire_adb',
       );
       return;
     }
     _localAdb = local;
     ownsLocalAdbServer.value = true;
-    developer.log('已启动本机 ADB Server 127.0.0.1:5037', name: 'fire_adb');
+    developer.log('已启动本机 ADB Server 127.0.0.1:$port', name: 'fire_adb');
   }
 
   void _onLocalUsbError(Object? error, StackTrace? stackTrace) {

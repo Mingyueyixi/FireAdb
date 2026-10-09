@@ -6,8 +6,8 @@ import '../app_feedback.dart';
 import '../connection/model/device_profile.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
 import '../widgets/adaptive.dart';
-import '../widgets/locale_selector.dart';
 import 'home_controller.dart';
+import 'home_settings_dialog.dart';
 
 /// 连接中心：设备列表 / 手动连接 / mDNS 设备发现 / 历史连接。
 class HomePage extends GetView<HomeController> {
@@ -217,7 +217,13 @@ class HomePage extends GetView<HomeController> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('FireAdb'),
-        actions: const <Widget>[LocaleSelector()],
+        actions: <Widget>[
+          IconButton(
+            tooltip: context.l10n.settingsTitle,
+            onPressed: () => showHomeSettings(context),
+            icon: const Icon(Icons.settings_outlined),
+          ),
+        ],
       ),
       body: Obx(
         () => SingleChildScrollView(
@@ -620,7 +626,9 @@ class HomePage extends GetView<HomeController> {
               )
             else if (controller.adbServerAbsent.value)
               Text(
-                l10n.homeAdbServerNotRunning,
+                l10n.homeAdbServerNotRunning(
+                  controller.manager.adbServerPort.value,
+                ),
                 style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               )
             else if (controller.adbDevicesError.value case final error?)

@@ -96,9 +96,11 @@ void main() {
       await tester.pump();
       expect(find.text('手动连接'), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.language));
+      await tester.tap(find.byIcon(Icons.settings_outlined));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('英文'));
+      await tester.tap(find.text('语言'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('English'));
       await tester.pumpAndSettle();
       expect(localeController.locale.value.languageCode, 'en');
       expect(find.text('Manual connection'), findsOneWidget);
@@ -110,9 +112,9 @@ void main() {
       await restoredController.load();
       expect(restoredController.locale.value.languageCode, 'en');
 
-      await tester.tap(find.byIcon(Icons.language));
+      await tester.tap(find.text('Language'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Chinese'));
+      await tester.tap(find.text('中文'));
       await tester.pumpAndSettle();
       expect(find.text('手动连接'), findsOneWidget);
     } finally {

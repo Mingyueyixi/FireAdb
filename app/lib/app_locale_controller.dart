@@ -2,12 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+class AppLanguage {
+  const AppLanguage(this.locale, this.nativeName);
+
+  final Locale locale;
+  final String nativeName;
+}
+
 class AppLocaleController extends GetxController {
   static const String _preferenceKey = 'appLocale';
-  static const List<Locale> supportedLocales = <Locale>[
-    Locale('zh'),
-    Locale('en'),
+  static const List<AppLanguage> languages = <AppLanguage>[
+    AppLanguage(Locale('zh'), '中文'),
+    AppLanguage(Locale('en'), 'English'),
   ];
+
+  static List<Locale> get supportedLocales => <Locale>[
+    for (final language in languages) language.locale,
+  ];
+
+  String nativeNameOf(Locale locale) {
+    for (final language in languages) {
+      if (language.locale == locale) return language.nativeName;
+    }
+    return languages.first.nativeName;
+  }
 
   final Rx<Locale> locale = const Locale('zh').obs;
 

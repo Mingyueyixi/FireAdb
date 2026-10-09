@@ -16,13 +16,15 @@ class HomeController extends GetxController {
     AdbHostClient? hostClient,
     Future<List<UsbAdbDevice>> Function()? listUsbDevices,
     bool? usbSupported,
-  }) : _hostClient =
-           hostClient ??
-           AdbHostClient(connectTimeout: const Duration(milliseconds: 400)),
+  }) : _injectedHostClient = hostClient,
        _listUsbDevices = listUsbDevices ?? listUsbAdbDevices,
        usbSupported = usbSupported ?? libadbUsbSupported;
 
-  final AdbHostClient _hostClient;
+  final AdbHostClient? _injectedHostClient;
+
+  AdbHostClient get _hostClient =>
+      _injectedHostClient ??
+      manager.hostClient(connectTimeout: const Duration(milliseconds: 400));
   final Future<List<UsbAdbDevice>> Function() _listUsbDevices;
   final bool usbSupported;
 
@@ -58,16 +60,18 @@ class HomeController extends GetxController {
     _restoreManualConnection();
     if (!adbServerSupported.value && !usbSupported) return;
     _adbDeviceRefreshTimer = Timer.periodic(adbDeviceRefreshInterval, (_) {
-      _refreshListedDevices();
+      refreshListedDevices();
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (isClosed) return;
-      _refreshListedDevices();
+      refreshListedDevices();
     });
   }
 
   bool get showDirectUsbList =>
-      usbSupported && !manager.ownsLocalAdbServer.value;
+      usbSupported &&
+      !manager.ownsLocalAdbServer.value &&
+      !manager.usingSdkAdbServer.value;
 
   void _restoreManualConnection() {
     final endpoint = manager.manualEndpoint();
@@ -76,9 +80,13 @@ class HomeController extends GetxController {
     portController.text = '${endpoint.$2}';
   }
 
-  void _refreshListedDevices() {
+  void refreshListedDevices() {
     if (adbServerSupported.value) unawaited(refreshAdbDevices());
-    if (showDirectUsbList) unawaited(refreshUsbDevices());
+    if (showDirectUsbList) {
+      unawaited(refreshUsbDevices());
+    } else {
+      usbDevices.clear();
+    }
   }
 
   Future<AdbDevice> connectUsb(UsbAdbDevice device) async {
@@ -178,12 +186,14 @@ class HomeController extends GetxController {
 
   Future<bool> _restartLocalServer() async {
     try {
-      await manager.ensureLocalAdbServer();
+      await manager.ensureLocalAdbServer(restart: true);
     } catch (error, stackTrace) {
       logAppError('启动本机 ADB Server 失败', error, stackTrace);
       return false;
     }
-    if (!manager.ownsLocalAdbServer.value) return false;
+    if (!manager.ownsLocalAdbServer.value && !manager.usingSdkAdbServer.value) {
+      return false;
+    }
     try {
       adbDevices.assignAll(await _hostClient.devices(long: true));
       _loggedAdbError = null;

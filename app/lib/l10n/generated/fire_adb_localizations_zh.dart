@@ -19,6 +19,44 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get settingsEnglish => '英文';
 
   @override
+  String get settingsTitle => '设置';
+
+  @override
+  String get settingsPreferSdkAdb => '优先使用 SDK 的 adb server';
+
+  @override
+  String get settingsChooseLanguage => '选择语言';
+
+  @override
+  String get settingsAdbServerPort => 'FireAdb server 端口';
+
+  @override
+  String get settingsAdbServerPortHelp =>
+      '默认 5037。应用后，FireAdb 在新端口重新启动自己的 server，本应用的设备列表连到这里。其他 adb 客户端仍去连接 5037 上的 adb server；5037 上没有服务时，adb 会自己在 5037 起一个。';
+
+  @override
+  String get settingsApply => '应用';
+
+  @override
+  String get settingsAdbServerPortInvalid => '请输入 1 到 65535 之间的端口';
+
+  @override
+  String get settingsPreferSdkAdbHelp => '在电脑上找到 adb 后，由它在上面的端口启动，不再由本进程监听。';
+
+  @override
+  String settingsSdkAdbPath(Object path) {
+    return '已找到 $path';
+  }
+
+  @override
+  String get settingsSdkAdbMissing => '未找到 adb，仍使用 FireAdb 的 server。';
+
+  @override
+  String settingsSdkAdbStartFailed(Object error) {
+    return '启动 SDK 的 adb server 失败：$error';
+  }
+
+  @override
   String settingsLanguageSaveFailed(Object error) {
     return '保存语言设置失败：$error';
   }
@@ -131,8 +169,9 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get homeAdbServerUnavailable => '本机 ADB Server 不可用，设备列表无法刷新。';
 
   @override
-  String get homeAdbServerNotRunning =>
-      '本机没有 ADB Server（127.0.0.1:5037）。USB 设备会直接列出，网络设备请手动连接或扫描。';
+  String homeAdbServerNotRunning(Object port) {
+    return '本机没有 ADB Server（127.0.0.1:$port）。USB 设备会直接列出，网络设备请手动连接或扫描。';
+  }
 
   @override
   String get homeFireAdbConnected => 'FireAdb 已连接';
@@ -288,6 +327,9 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get commonCancel => '取消';
+
+  @override
+  String get commonClose => '关闭';
 
   @override
   String get commonSave => '保存';

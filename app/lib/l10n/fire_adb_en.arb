@@ -3,6 +3,27 @@
   "settingsLanguage": "Language",
   "settingsChinese": "Chinese",
   "settingsEnglish": "English",
+  "settingsTitle": "Settings",
+  "settingsPreferSdkAdb": "Prefer the SDK adb server",
+  "settingsChooseLanguage": "Choose language",
+  "settingsAdbServerPort": "FireAdb server port",
+  "settingsAdbServerPortHelp": "The default is 5037. After you apply a change, FireAdb restarts its own server on the new port, and this app's device list connects there. Other adb clients still connect to the adb server on 5037. If nothing is listening on 5037, adb starts a server there itself.",
+  "settingsApply": "Apply",
+  "settingsAdbServerPortInvalid": "Enter a port from 1 to 65535",
+  "settingsPreferSdkAdbHelp": "When adb is found on this computer, it starts on the port above instead of FireAdb listening itself.",
+  "settingsSdkAdbPath": "Found {path}",
+  "@settingsSdkAdbPath": {
+    "placeholders": {
+      "path": {}
+    }
+  },
+  "settingsSdkAdbMissing": "adb was not found. FireAdb's own server is still used.",
+  "settingsSdkAdbStartFailed": "Could not start the SDK adb server: {error}",
+  "@settingsSdkAdbStartFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "settingsLanguageSaveFailed": "Could not save language settings: {error}",
   "@settingsLanguageSaveFailed": {
     "placeholders": {
@@ -68,7 +89,12 @@
   },
   "homeNoAdbDevices": "The ADB server did not find any devices.",
   "homeAdbServerUnavailable": "The local ADB server is unavailable, so the device list cannot refresh.",
-  "homeAdbServerNotRunning": "No ADB server is listening on 127.0.0.1:5037. USB devices are listed directly. Connect network devices manually or scan for them.",
+  "homeAdbServerNotRunning": "No ADB server is listening on 127.0.0.1:{port}. USB devices are listed directly. Connect network devices manually or scan for them.",
+  "@homeAdbServerNotRunning": {
+    "placeholders": {
+      "port": {}
+    }
+  },
   "homeFireAdbConnected": "Connected in FireAdb",
   "commonDisconnect": "Disconnect",
   "homeUsbConnectionUnavailable": "USB connection unavailable",
@@ -138,6 +164,7 @@
   },
   "shellOutputLimitNote": "There is no line limit. When the size limit is reached, only the oldest output is removed.",
   "commonCancel": "Cancel",
+  "commonClose": "Close",
   "commonSave": "Save",
   "commonSettingsSaveFailed": "Could not save settings",
   "shellClearOutput": "Clear output",

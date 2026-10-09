@@ -19,6 +19,46 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String get settingsEnglish => 'English';
 
   @override
+  String get settingsTitle => 'Settings';
+
+  @override
+  String get settingsPreferSdkAdb => 'Prefer the SDK adb server';
+
+  @override
+  String get settingsChooseLanguage => 'Choose language';
+
+  @override
+  String get settingsAdbServerPort => 'FireAdb server port';
+
+  @override
+  String get settingsAdbServerPortHelp =>
+      'The default is 5037. After you apply a change, FireAdb restarts its own server on the new port, and this app\'s device list connects there. Other adb clients still connect to the adb server on 5037. If nothing is listening on 5037, adb starts a server there itself.';
+
+  @override
+  String get settingsApply => 'Apply';
+
+  @override
+  String get settingsAdbServerPortInvalid => 'Enter a port from 1 to 65535';
+
+  @override
+  String get settingsPreferSdkAdbHelp =>
+      'When adb is found on this computer, it starts on the port above instead of FireAdb listening itself.';
+
+  @override
+  String settingsSdkAdbPath(Object path) {
+    return 'Found $path';
+  }
+
+  @override
+  String get settingsSdkAdbMissing =>
+      'adb was not found. FireAdb\'s own server is still used.';
+
+  @override
+  String settingsSdkAdbStartFailed(Object error) {
+    return 'Could not start the SDK adb server: $error';
+  }
+
+  @override
   String settingsLanguageSaveFailed(Object error) {
     return 'Could not save language settings: $error';
   }
@@ -136,8 +176,9 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
       'The local ADB server is unavailable, so the device list cannot refresh.';
 
   @override
-  String get homeAdbServerNotRunning =>
-      'No ADB server is listening on 127.0.0.1:5037. USB devices are listed directly. Connect network devices manually or scan for them.';
+  String homeAdbServerNotRunning(Object port) {
+    return 'No ADB server is listening on 127.0.0.1:$port. USB devices are listed directly. Connect network devices manually or scan for them.';
+  }
 
   @override
   String get homeFireAdbConnected => 'Connected in FireAdb';
@@ -300,6 +341,9 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get commonCancel => 'Cancel';
+
+  @override
+  String get commonClose => 'Close';
 
   @override
   String get commonSave => 'Save';

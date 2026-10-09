@@ -119,6 +119,72 @@ abstract class FireAdbLocalizations {
   /// **'英文'**
   String get settingsEnglish;
 
+  /// No description provided for @settingsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'设置'**
+  String get settingsTitle;
+
+  /// No description provided for @settingsPreferSdkAdb.
+  ///
+  /// In zh, this message translates to:
+  /// **'优先使用 SDK 的 adb server'**
+  String get settingsPreferSdkAdb;
+
+  /// No description provided for @settingsChooseLanguage.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择语言'**
+  String get settingsChooseLanguage;
+
+  /// No description provided for @settingsAdbServerPort.
+  ///
+  /// In zh, this message translates to:
+  /// **'FireAdb server 端口'**
+  String get settingsAdbServerPort;
+
+  /// No description provided for @settingsAdbServerPortHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'默认 5037。应用后，FireAdb 在新端口重新启动自己的 server，本应用的设备列表连到这里。其他 adb 客户端仍去连接 5037 上的 adb server；5037 上没有服务时，adb 会自己在 5037 起一个。'**
+  String get settingsAdbServerPortHelp;
+
+  /// No description provided for @settingsApply.
+  ///
+  /// In zh, this message translates to:
+  /// **'应用'**
+  String get settingsApply;
+
+  /// No description provided for @settingsAdbServerPortInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 1 到 65535 之间的端口'**
+  String get settingsAdbServerPortInvalid;
+
+  /// No description provided for @settingsPreferSdkAdbHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'在电脑上找到 adb 后，由它在上面的端口启动，不再由本进程监听。'**
+  String get settingsPreferSdkAdbHelp;
+
+  /// No description provided for @settingsSdkAdbPath.
+  ///
+  /// In zh, this message translates to:
+  /// **'已找到 {path}'**
+  String settingsSdkAdbPath(Object path);
+
+  /// No description provided for @settingsSdkAdbMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'未找到 adb，仍使用 FireAdb 的 server。'**
+  String get settingsSdkAdbMissing;
+
+  /// No description provided for @settingsSdkAdbStartFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'启动 SDK 的 adb server 失败：{error}'**
+  String settingsSdkAdbStartFailed(Object error);
+
   /// No description provided for @settingsLanguageSaveFailed.
   ///
   /// In zh, this message translates to:
@@ -320,8 +386,8 @@ abstract class FireAdbLocalizations {
   /// No description provided for @homeAdbServerNotRunning.
   ///
   /// In zh, this message translates to:
-  /// **'本机没有 ADB Server（127.0.0.1:5037）。USB 设备会直接列出，网络设备请手动连接或扫描。'**
-  String get homeAdbServerNotRunning;
+  /// **'本机没有 ADB Server（127.0.0.1:{port}）。USB 设备会直接列出，网络设备请手动连接或扫描。'**
+  String homeAdbServerNotRunning(Object port);
 
   /// No description provided for @homeFireAdbConnected.
   ///
@@ -616,6 +682,12 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'取消'**
   String get commonCancel;
+
+  /// No description provided for @commonClose.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭'**
+  String get commonClose;
 
   /// No description provided for @commonSave.
   ///

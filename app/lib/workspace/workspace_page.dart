@@ -4,7 +4,6 @@ import 'package:get/get.dart';
 
 import '../l10n/fire_adb_localizations_ext.dart';
 import '../widgets/adaptive.dart' show isWide, isAtLeastTablet;
-import '../widgets/locale_selector.dart';
 import 'data/feature_spec.dart';
 import 'feature_cache.dart';
 import 'feature_tile.dart';
@@ -57,7 +56,6 @@ class WorkspacePage extends GetView<WorkspaceController> {
       appBar: AppBar(
         leading: _homeButton(context),
         title: const Text('FireAdb'),
-        actions: const <Widget>[LocaleSelector()],
       ),
       body: Row(
         children: <Widget>[
@@ -116,7 +114,6 @@ class WorkspacePage extends GetView<WorkspaceController> {
         appBar: AppBar(
           leading: BackButton(onPressed: controller.closeFeature),
           title: Text(featureTitle(context, spec)),
-          actions: const <Widget>[LocaleSelector()],
         ),
         body: cache,
       ),
@@ -128,7 +125,6 @@ class WorkspacePage extends GetView<WorkspaceController> {
     return Scaffold(
       appBar: AppBar(
         leading: _homeButton(context),
-        actions: const <Widget>[LocaleSelector()],
         title: DropdownButtonHideUnderline(
           child: DropdownButton<String>(
             value: controller.selectedSerial.value,
@@ -165,7 +161,6 @@ class WorkspacePage extends GetView<WorkspaceController> {
       appBar: AppBar(
         leading: _homeButton(context),
         title: const Text('FireAdb'),
-        actions: const <Widget>[LocaleSelector()],
       ),
       body: Center(
         child: Column(

@@ -17,8 +17,14 @@ class ConnectedDevice {
 
   final String serial;
   final AdbDevice? _device;
-  final AdbHostClient? _hostClient;
+  AdbHostClient? _hostClient;
   final String? _adbSerial;
+
+  /// 本机 adb server 端口变了之后，后续命令改连新端口。
+  void retargetHostClient(AdbHostClient client) {
+    if (_device != null) return;
+    _hostClient = client;
+  }
 
   bool get isConnected => _device?.isConnected ?? true;
 
