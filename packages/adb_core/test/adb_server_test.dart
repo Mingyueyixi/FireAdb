@@ -228,6 +228,98 @@ void main() {
       await server.close();
     }
   });
+
+  test('forward:tcp:0 在本机监听，不把 forward 命令 OPEN 给设备', () async {
+    final key = AdbRsaKeyPair.generate();
+    final pair = MemoryPair.create();
+    final opened = <String>[];
+    final fake = FakeAdbd(serial: 'emulator-5554')
+      ..serviceHandler = (String dest) async {
+        opened.add(dest);
+        if (dest.startsWith('tcp:')) return null;
+        return '';
+      };
+    unawaited(fake.serve(pair.device));
+    final connection = AdbConnection(pair.host, signers: <AdbRsaKeyPair>[key]);
+    await connection.connect();
+    final server = AdbServer();
+    await server.start(port: 0, scanEmulators: false);
+    server.upsert(
+      AdbServerDevice(connection: connection, serial: 'emulator-5554'),
+    );
+    final port = server.port!;
+    try {
+      final socket = await Socket.connect(InternetAddress.loopbackIPv4, port);
+      final reader = AdbSizedReader(socket);
+      socket.add(encodeServiceRequest('host:tport:serial:emulator-5554'));
+      await socket.flush();
+      expect(
+        ascii.decode(await reader.readExactly(4), allowInvalid: true),
+        'OKAY',
+      );
+      await reader.readExactly(8);
+      socket.add(encodeServiceRequest('host:forward:tcp:0;tcp:42337'));
+      await socket.flush();
+      expect(
+        ascii.decode(await reader.readExactly(4), allowInvalid: true),
+        'OKAY',
+      );
+      expect(
+        ascii.decode(await reader.readExactly(4), allowInvalid: true),
+        'OKAY',
+      );
+      final lenText = ascii.decode(
+        await reader.readExactly(4),
+        allowInvalid: true,
+      );
+      final length = int.parse(lenText, radix: 16);
+      final forwarded = int.parse(
+        utf8.decode(await reader.readExactly(length)),
+      );
+      await reader.close();
+      await socket.close();
+
+      expect(opened, isEmpty);
+      final listing = await _hostPayload(port, 'host:list-forward');
+      expect(listing, 'emulator-5554 tcp:$forwarded tcp:42337\n');
+
+      final inbound = await Socket.connect(
+        InternetAddress.loopbackIPv4,
+        forwarded,
+      );
+      final echoed = Completer<String>();
+      inbound.listen((data) {
+        if (!echoed.isCompleted) echoed.complete(utf8.decode(data));
+      });
+      inbound.add(utf8.encode('ping'));
+      await inbound.flush();
+      expect(await echoed.future.timeout(const Duration(seconds: 2)), 'ping');
+      expect(opened, ['tcp:42337']);
+      await inbound.close();
+
+      final removed = await _hostStatus(
+        port,
+        'host-serial:emulator-5554:killforward:tcp:$forwarded',
+      );
+      expect(removed, 'OKAY');
+    } finally {
+      await server.close();
+      await connection.close();
+    }
+  });
+}
+
+Future<String> _hostStatus(int port, String service) async {
+  final socket = await Socket.connect(InternetAddress.loopbackIPv4, port);
+  final reader = AdbSizedReader(socket);
+  try {
+    socket.add(encodeServiceRequest(service));
+    await socket.flush();
+    return ascii.decode(await reader.readExactly(4), allowInvalid: true);
+  } finally {
+    await reader.close();
+    await socket.close();
+  }
 }
 
 Future<String> _hostPayload(int port, String service) async {

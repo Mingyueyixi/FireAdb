@@ -3,6 +3,7 @@
 /// 官方 `adb server` 是 platform-tools 里的 `adb` 进程。这里实现同一套
 /// smart socket：`host:devices`、`host:transport`，以及把后续的
 /// `shell:` / `exec:` / `sync:` 转到已经握完手的 [AdbConnection]。
+/// `forward:` 由本机监听端口再打开设备上的目标服务，不把这条命令本身 OPEN 给设备。
 /// USB 枚举不在这个库里，由调用方把设备登记进来。
 library;
 
@@ -99,6 +100,7 @@ class AdbServer {
   final Map<String, AdbServerDevice> _devices = {};
   final Map<Socket, Future<void>> _writes = {};
   final List<void Function()> _trackers = [];
+  final List<_ForwardRule> _forwards = [];
   Timer? _emulatorTimer;
   var _emulatorScanRunning = false;
   final Set<int> _emulatorBusy = <int>{};
@@ -182,7 +184,10 @@ class AdbServer {
   }
 
   void remove(String serial) {
-    if (_devices.remove(serial) != null) _notify();
+    final device = _devices.remove(serial);
+    if (device == null) return;
+    unawaited(_dropForwards(device: device));
+    _notify();
   }
 
   Future<void> close() async {
@@ -190,6 +195,7 @@ class AdbServer {
     _closed = true;
     _emulatorTimer?.cancel();
     _emulatorTimer = null;
+    await _dropForwards();
     final emulators = _devices.values
         .where((device) => device.serial.startsWith('emulator-'))
         .toList();
@@ -352,6 +358,11 @@ class AdbServer {
         service.startsWith('host:transport:')) {
       return _switchTransport(socket, reader, service);
     }
+    final forward = _hostForwardRequest(service);
+    if (forward != null) {
+      await _handleHostForward(socket, forward);
+      return _ClientNext.finish;
+    }
     if (service.startsWith('host-serial:') ||
         service.startsWith('host-usb:') ||
         service.startsWith('host:')) {
@@ -443,6 +454,11 @@ class AdbServer {
     } catch (_) {
       return _ClientNext.finish;
     }
+    final forwardCommand = _serverForwardCommand(nextService);
+    if (forwardCommand != null) {
+      await _applyForward(socket, device, forwardCommand, statusOkay: true);
+      return _ClientNext.finish;
+    }
     await _bridge(socket, reader, device, nextService);
     return _ClientNext.bridged;
   }
@@ -498,6 +514,203 @@ class AdbServer {
       await fromClient.cancel();
       await fromDevice.cancel();
     }
+  }
+
+  Future<void> _handleHostForward(
+    Socket socket,
+    _HostForwardRequest request,
+  ) async {
+    if (request.command == 'list-forward' && request.serial == null) {
+      await _okayPayload(socket, _forwardText());
+      return;
+    }
+    final AdbServerDevice? device;
+    if (request.serial != null) {
+      device = _find(request.serial!);
+      if (device == null) {
+        await _fail(socket, "device '${request.serial}' not found");
+        return;
+      }
+    } else {
+      final picked = _online(usb: request.usb);
+      if (picked.many) {
+        await _fail(socket, 'more than one device/emulator');
+        return;
+      }
+      device = picked.device;
+      if (device == null && request.command != 'list-forward') {
+        await _fail(socket, 'no devices/emulators found');
+        return;
+      }
+    }
+    if (device != null && !device.isOnline) {
+      await _fail(socket, "device '${device.serial}' ${device.state}");
+      return;
+    }
+    await _applyForward(socket, device, request.command);
+  }
+
+  /// `forward:` / `killforward:` / `list-forward` 都在 server 上完成。
+  /// 官方客户端先 `host:tport:`，再发 `host:forward:tcp:0;tcp:<端口>`。
+  /// 设备上的 adbd 没有这条服务，直接 OPEN 会被 CLSE。
+  ///
+  /// [statusOkay] 为真时多回一个 `OKAY`。`adb_connect` 已经读走第一个，
+  /// 命令行还要再读一个，然后才读端口数字。少这一个时，端口长度会被当成状态码。
+  Future<void> _applyForward(
+    Socket socket,
+    AdbServerDevice? device,
+    String command, {
+    bool statusOkay = false,
+  }) async {
+    if (command == 'list-forward') {
+      await _okayPayload(socket, _forwardText(device: device));
+      return;
+    }
+    if (command == 'killforward-all') {
+      await _dropForwards(device: device);
+      await _forwardOkay(socket, statusOkay: statusOkay);
+      return;
+    }
+    if (command.startsWith('killforward:')) {
+      final local = command.substring('killforward:'.length);
+      final removed = await _dropForwards(device: device, local: local);
+      if (!removed) {
+        await _fail(socket, "listener '$local' not found");
+        return;
+      }
+      await _forwardOkay(socket, statusOkay: statusOkay);
+      return;
+    }
+
+    final parsed = _parseForwardSpec(command);
+    if (parsed == null || device == null) {
+      await _fail(socket, 'cannot parse forward spec');
+      return;
+    }
+    final existing = _forwards
+        .where((rule) => rule.local == parsed.local)
+        .toList();
+    if (existing.isNotEmpty && parsed.norebind) {
+      await _fail(socket, 'cannot rebind existing socket');
+      return;
+    }
+    for (final rule in existing) {
+      await _closeForward(rule);
+    }
+    final ServerSocket listener;
+    try {
+      listener = await _bindForward(parsed.local);
+    } on SocketException catch (error) {
+      await _fail(socket, 'cannot bind listener: $error');
+      return;
+    }
+    final resolved = _resolvedLocal(parsed.local, listener.port);
+    final rule = _ForwardRule(
+      device: device,
+      local: resolved,
+      remote: parsed.remote,
+      socket: listener,
+    );
+    rule.subscription = listener.listen((client) {
+      unawaited(_pipeForward(rule, client));
+    });
+    _forwards.add(rule);
+    await _forwardOkay(
+      socket,
+      statusOkay: statusOkay,
+      payload: parsed.reportPort ? '${listener.port}' : null,
+    );
+  }
+
+  /// 成功时的应答。需要状态确认时是 `OKAY` + `OKAY`，`tcp:0` 再附上端口。
+  Future<void> _forwardOkay(
+    Socket socket, {
+    required bool statusOkay,
+    String? payload,
+  }) async {
+    if (statusOkay) await _okay(socket);
+    if (payload != null) {
+      await _okayPayload(socket, payload);
+      return;
+    }
+    await _okay(socket);
+  }
+
+  Future<void> _pipeForward(_ForwardRule rule, Socket client) async {
+    final AdbStream stream;
+    try {
+      stream = await rule.device.connection.open(rule.remote);
+    } catch (_) {
+      client.destroy();
+      return;
+    }
+    final fromClient = client.listen(
+      (List<int> data) {
+        unawaited(
+          stream.write(data).then<void>(
+            (_) {},
+            onError: (Object _, StackTrace _) {
+              unawaited(stream.close());
+            },
+          ),
+        );
+      },
+      onDone: () {
+        unawaited(stream.close());
+      },
+      onError: (Object _) {
+        unawaited(stream.close());
+      },
+    );
+    final fromDevice = stream.readStream().listen(
+      (List<int> data) {
+        client.add(data);
+        unawaited(client.flush().catchError((Object _) {}));
+      },
+      onDone: () {
+        client.destroy();
+      },
+      onError: (Object _) {
+        client.destroy();
+      },
+    );
+    try {
+      await stream.closed;
+    } finally {
+      await fromClient.cancel();
+      await fromDevice.cancel();
+      client.destroy();
+    }
+  }
+
+  String _forwardText({AdbServerDevice? device}) {
+    final lines = <String>[
+      for (final rule in _forwards)
+        if (device == null || rule.device.serial == device.serial)
+          '${rule.device.serial} ${rule.local} ${rule.remote}',
+    ];
+    if (lines.isEmpty) return '';
+    return '${lines.join('\n')}\n';
+  }
+
+  Future<bool> _dropForwards({AdbServerDevice? device, String? local}) async {
+    final matched = _forwards
+        .where(
+          (rule) =>
+              (device == null || rule.device.serial == device.serial) &&
+              (local == null || rule.local == local),
+        )
+        .toList();
+    for (final rule in matched) {
+      await _closeForward(rule);
+    }
+    return matched.isNotEmpty;
+  }
+
+  Future<void> _closeForward(_ForwardRule rule) async {
+    _forwards.remove(rule);
+    await rule.subscription?.cancel();
+    await rule.socket.close();
   }
 
   ({AdbServerDevice? device, bool many}) _online({required bool? usb}) {
@@ -733,6 +946,148 @@ class AdbServer {
     _writes[socket] = done.catchError((Object _) {});
     return done;
   }
+}
+
+class _ForwardRule {
+  _ForwardRule({
+    required this.device,
+    required this.local,
+    required this.remote,
+    required this.socket,
+  });
+
+  final AdbServerDevice device;
+  final String local;
+  final String remote;
+  final ServerSocket socket;
+  StreamSubscription<Socket>? subscription;
+}
+
+class _HostForwardRequest {
+  _HostForwardRequest({this.serial, this.usb, required this.command});
+
+  final String? serial;
+  final bool? usb;
+  final String command;
+}
+
+const List<String> _forwardMarkers = <String>[
+  ':forward:norebind:',
+  ':forward:',
+  ':killforward-all',
+  ':killforward:',
+  ':list-forward',
+];
+
+bool _isServerForward(String command) {
+  return command == 'list-forward' ||
+      command == 'killforward-all' ||
+      command.startsWith('killforward:') ||
+      command.startsWith('forward:');
+}
+
+/// 传输选中之后，官方 adb 仍带 `host:` 前缀，例如 `host:forward:tcp:0;tcp:9`。
+String? _serverForwardCommand(String service) {
+  if (_isServerForward(service)) return service;
+  if (service.startsWith('host:') &&
+      _isServerForward(service.substring('host:'.length))) {
+    return service.substring('host:'.length);
+  }
+  return null;
+}
+
+_HostForwardRequest? _hostForwardRequest(String service) {
+  final String command;
+  String? serial;
+  bool? usb;
+  if (service.startsWith('host-serial:')) {
+    final split = _splitSerialCommand(service.substring('host-serial:'.length));
+    if (split == null) return null;
+    serial = split.$1;
+    command = split.$2;
+  } else if (service.startsWith('host-usb:')) {
+    usb = true;
+    command = service.substring('host-usb:'.length);
+  } else if (service.startsWith('host:')) {
+    command = service.substring('host:'.length);
+  } else {
+    return null;
+  }
+  if (!_isServerForward(command)) return null;
+  return _HostForwardRequest(serial: serial, usb: usb, command: command);
+}
+
+(String, String)? _splitSerialCommand(String rest) {
+  var best = rest.length;
+  String? marker;
+  for (final candidate in _forwardMarkers) {
+    final index = rest.indexOf(candidate);
+    if (index <= 0) continue;
+    final longer = marker != null && candidate.length > marker.length;
+    if (index < best || (index == best && longer)) {
+      best = index;
+      marker = candidate;
+    }
+  }
+  if (marker == null) return null;
+  return (rest.substring(0, best), rest.substring(best + 1));
+}
+
+({String local, String remote, bool norebind, bool reportPort})?
+_parseForwardSpec(String command) {
+  var norebind = false;
+  var rest = command;
+  if (rest.startsWith('forward:norebind:')) {
+    norebind = true;
+    rest = rest.substring('forward:norebind:'.length);
+  } else if (rest.startsWith('forward:')) {
+    rest = rest.substring('forward:'.length);
+  } else {
+    return null;
+  }
+  final semi = rest.indexOf(';');
+  if (semi <= 0 || semi >= rest.length - 1) return null;
+  final local = rest.substring(0, semi);
+  final remote = rest.substring(semi + 1);
+  final port = _forwardPort(local);
+  if (port == null || remote.isEmpty) return null;
+  return (
+    local: local,
+    remote: remote,
+    norebind: norebind,
+    reportPort: port == 0,
+  );
+}
+
+/// `tcp:0`、`tcp:8080`、`tcp:127.0.0.1:8080`。端口 0 表示由系统分配。
+int? _forwardPort(String local) {
+  if (!local.startsWith('tcp:')) return null;
+  final spec = local.substring('tcp:'.length);
+  final colon = spec.lastIndexOf(':');
+  final portText = colon < 0 ? spec : spec.substring(colon + 1);
+  final port = int.tryParse(portText);
+  if (port == null || port < 0 || port > 65535) return null;
+  if (colon >= 0 && spec.substring(0, colon).isEmpty) return null;
+  return port;
+}
+
+Future<ServerSocket> _bindForward(String local) {
+  final spec = local.substring('tcp:'.length);
+  final colon = spec.lastIndexOf(':');
+  if (colon < 0) {
+    return ServerSocket.bind(InternetAddress.loopbackIPv4, int.parse(spec));
+  }
+  return ServerSocket.bind(
+    spec.substring(0, colon),
+    int.parse(spec.substring(colon + 1)),
+  );
+}
+
+String _resolvedLocal(String requested, int port) {
+  final spec = requested.substring('tcp:'.length);
+  final colon = spec.lastIndexOf(':');
+  if (colon < 0) return 'tcp:$port';
+  return 'tcp:${spec.substring(0, colon)}:$port';
 }
 
 /// `host[:port]`，缺省端口 5555。
