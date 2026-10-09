@@ -4,8 +4,9 @@ import 'package:hooks/hooks.dart';
 
 /// `flutter build` / `flutter run` 会先跑这个钩子，再打包 assets。
 ///
-/// 只有 jar 不存在，或 [service.version] 和已构建的版本不一致时才启动 Gradle。
+/// jar 不在就启动 Gradle。jar 在，且两边版本文件都在，才比较版本。
 /// 改了 `android/fire_app_service` 的源码后，把 `service.version` 加一。
+/// jar 和版本戳都记进钩子依赖，文件被删掉时 Flutter 会重新进入这里。
 void main(List<String> args) async {
   await build(args, (input, output) async {
     final packageDir = Directory.fromUri(input.packageRoot);
@@ -16,8 +17,10 @@ void main(List<String> args) async {
     final builtVersion = File(
       _path(packageDir, ['assets', 'fire-app-service.version']),
     );
-    if (versionFile.existsSync()) output.dependencies.add(versionFile.uri);
-    if (_versionMatches(jar, versionFile, builtVersion)) return;
+    if (_jarIsCurrent(jar, versionFile, builtVersion)) {
+      _track(output, <File>[versionFile, jar, builtVersion]);
+      return;
+    }
 
     final androidDir = Directory(_path(packageDir, ['android']));
     final gradle = Platform.isWindows ? 'gradlew.bat' : './gradlew';
@@ -40,17 +43,22 @@ void main(List<String> args) async {
       throw StateError('Gradle 已结束，但没有生成 ${jar.path}');
     }
     _writeBuiltVersion(versionFile, builtVersion);
+    _track(output, <File>[versionFile, jar, builtVersion]);
   });
 }
 
-bool _versionMatches(File jar, File versionFile, File builtVersion) {
-  if (!jar.existsSync() ||
-      !versionFile.existsSync() ||
-      !builtVersion.existsSync()) {
-    return false;
-  }
+/// jar 不在则过期。jar 在，且源版本和已构建版本都在，才比较内容。
+bool _jarIsCurrent(File jar, File versionFile, File builtVersion) {
+  if (!jar.existsSync()) return false;
+  if (!versionFile.existsSync() || !builtVersion.existsSync()) return false;
   return versionFile.readAsStringSync().trim() ==
       builtVersion.readAsStringSync().trim();
+}
+
+void _track(BuildOutputBuilder output, List<File> files) {
+  for (final file in files) {
+    if (file.existsSync()) output.dependencies.add(file.uri);
+  }
 }
 
 void _writeBuiltVersion(File versionFile, File builtVersion) {

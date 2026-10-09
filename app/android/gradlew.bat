@@ -16,19 +16,6 @@ if "%DIRNAME%" == "" set DIRNAME=.
 set APP_BASE_NAME=%~n0
 set APP_HOME=%DIRNAME%
 
-@rem local.properties is gitignored. Flutter points JAVA_HOME at Android Studio JBR.
-@rem Override it before the Gradle client starts.
-if exist "%APP_HOME%local.properties" (
-  for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%APP_HOME%local.properties") do (
-    if /I "%%A"=="org.gradle.java.home" set "JAVA_HOME=%%B"
-  )
-)
-@rem Unescape \\ \: \/, then turn remaining \ into /.
-if defined JAVA_HOME set "JAVA_HOME=%JAVA_HOME:\\=\%"
-if defined JAVA_HOME set "JAVA_HOME=%JAVA_HOME:\:=:%"
-if defined JAVA_HOME set "JAVA_HOME=%JAVA_HOME:\/=/%"
-if defined JAVA_HOME set "JAVA_HOME=%JAVA_HOME:\=/%"
-
 @rem Find java.exe
 if defined JAVA_HOME goto findJavaFromJavaHome
 

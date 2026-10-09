@@ -69,7 +69,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    # 版本见 android/fire_app_service/service.version，不一致时 hook/build.dart 才会重编。
+    # jar 不在就由 hook/build.dart 重编；都在才比较 service.version。
     - assets/fire-app-service.jar
 
   # To add assets to your application, add an assets section, like this:

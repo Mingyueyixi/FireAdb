@@ -5,7 +5,7 @@
 /// client → server: <hex4><service>
 /// server → client: "OKAY"            或 "FAIL" <hex4><reason>
 /// 查询:            再跟 <hex4><payload>
-/// transport:       OKAY 后追加 4 字节 Little-Endian transport id
+/// transport:       OKAY 后追加 8 字节 Little-Endian transport id
 /// ```
 library;
 
@@ -116,6 +116,10 @@ class FakeAdbServer {
           (id >> 8) & 0xff,
           (id >> 16) & 0xff,
           (id >> 24) & 0xff,
+          (id >> 32) & 0xff,
+          (id >> 40) & 0xff,
+          (id >> 48) & 0xff,
+          (id >> 56) & 0xff,
         ]),
       );
       await socket.flush();

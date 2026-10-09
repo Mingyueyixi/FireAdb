@@ -162,7 +162,10 @@ void main() {
           ascii.decode(await reader.readExactly(4), allowInvalid: true),
           'OKAY',
         );
-        expect((await reader.readExactly(4)).length, 4);
+        final id = await reader.readExactly(8);
+        expect(id.length, 8);
+        expect(id[0], 1);
+        expect(id.sublist(1), List<int>.filled(7, 0));
         socket.add(encodeServiceRequest('shell:echo hi'));
         await socket.flush();
         expect(

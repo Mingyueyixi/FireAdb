@@ -417,12 +417,17 @@ class AdbServer {
       return _ClientNext.finish;
     }
     await _okay(socket);
+    // TransportId 是 uint64_t。官方客户端读满 8 字节才发下一条 shell。
     final id = device.transportId;
     await _write(socket, <int>[
       id & 0xff,
       (id >> 8) & 0xff,
       (id >> 16) & 0xff,
       (id >> 24) & 0xff,
+      (id >> 32) & 0xff,
+      (id >> 40) & 0xff,
+      (id >> 48) & 0xff,
+      (id >> 56) & 0xff,
     ]);
     return _bridgeNext(socket, reader, device);
   }

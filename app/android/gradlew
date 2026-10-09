@@ -62,15 +62,6 @@ cd "$SAVED" >/dev/null
 
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 
-# local.properties is gitignored. Flutter points JAVA_HOME at Android Studio JBR.
-# Override it before the Gradle client starts.
-if [ -f "$APP_HOME/local.properties" ] ; then
-    JAVA_HOME_FROM_LOCAL=`grep -E '^org\.gradle\.java\.home=' "$APP_HOME/local.properties" | tail -n 1 | cut -d= -f2- | sed -e 's/\\\\/\\/g' -e 's/\\:/:/g' -e 's/\\\//\//g' -e 's/\\/\//g'`
-    if [ -n "$JAVA_HOME_FROM_LOCAL" ] ; then
-        JAVA_HOME=$JAVA_HOME_FROM_LOCAL
-    fi
-fi
-
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then
     if [ -x "$JAVA_HOME/jre/sh/java" ] ; then

@@ -64,7 +64,6 @@ class AppDisplayLoader {
   final InstalledApp? Function(String packageName) appOf;
 
   late final ObjectLoader<String, AppDisplay> _items;
-  FireAppServiceSession? _service;
   var _generation = 0;
 
   AppDisplay? operator [](String packageName) => _items[packageName];
@@ -77,42 +76,18 @@ class AppDisplayLoader {
 
   void ensure(InstalledApp app) {
     final path = app.primaryPath;
-    if (_service == null && (path == null || path.isEmpty)) return;
+    if (deviceOf() == null && (path == null || path.isEmpty)) return;
     _items.ensure(app.packageName);
   }
 
   void reset() {
     _generation++;
     _items.clear();
-    final previous = _service;
-    _service = null;
-    if (previous != null) unawaited(previous.close());
-  }
-
-  void open() {
-    final device = deviceOf();
-    if (device == null) return;
-    final service = FireAppServiceSession(device);
-    _service = service;
-    unawaited(_start(service, device.serial));
   }
 
   void dispose() {
     _generation++;
     _items.dispose();
-    final service = _service;
-    _service = null;
-    if (service != null) unawaited(service.close());
-  }
-
-  Future<void> _start(FireAppServiceSession service, String serial) async {
-    try {
-      await service.start();
-    } catch (error, stackTrace) {
-      logAppError('启动应用信息服务失败：$serial', error, stackTrace);
-      if (identical(_service, service)) _service = null;
-      await service.close();
-    }
   }
 
   Future<AppDisplay?> _load(String packageName) async {
@@ -137,17 +112,15 @@ class AppDisplayLoader {
   }
 
   Future<FireAppShow?> _loadShow(String packageName) async {
-    final service = _service;
+    final device = deviceOf();
     final generation = _generation;
-    if (service == null) return null;
+    if (device == null) return null;
     try {
-      final shown = await service.loadShow(packageName);
+      final shown = await loadFireAppShow(device, packageName);
       if (generation != _generation) return null;
       return shown;
     } on TimeoutException catch (error, stackTrace) {
       logAppError('读取应用信息超时：$packageName', error, stackTrace);
-      if (identical(_service, service)) _service = null;
-      await service.close();
       return null;
     } catch (error, stackTrace) {
       logAppError('读取应用信息失败：$packageName', error, stackTrace);

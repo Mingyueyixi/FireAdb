@@ -8,7 +8,7 @@
 /// 带返回数据的请求在 OKAY 后再跟 <hex4><payload>。
 /// ```
 /// 注意握手不使用版本前缀，先发 `host:tport:any|usb|local|serial:<serial>`，
-/// 服务端 OKAY 后追加 4 字节 Little-Endian transport id。
+/// 服务端 OKAY 后追加 8 字节 Little-Endian transport id（`uint64_t`）。
 ///
 /// 参考：`third_party/aosp-adb/client/adb_client.cpp`（`_adb_connect`、
 /// `switch_socket_transport`、`adb_status`）与 `adb_io.cpp:SendProtocolString`。
@@ -90,7 +90,7 @@ class AdbServerVersion {
 /// 连接到 `adb server`（5037）的客户端。
 ///
 /// 请求帧为 `<hex4><service>`；响应是 4 字节 `OKAY`/`FAIL`，带返回数据的查询
-/// 在 OKAY 后跟 `<hex4><payload>`，bind 传输则在 OKAY 后跟 4 字节 transport id。
+/// 在 OKAY 后跟 `<hex4><payload>`，bind 传输则在 OKAY 后跟 8 字节 transport id。
 class AdbHostClient {
   AdbHostClient({
     this.host = '127.0.0.1',
@@ -446,8 +446,7 @@ class AdbHostClient {
       await _sendRequest(socket, service);
       final reader = AdbSizedReader(socket);
       await _readStatus(reader, service);
-      final idBytes = await reader.readExactly(4);
-      return _readUint32LE(idBytes);
+      return _readUint64LE(await reader.readExactly(8));
     } finally {
       await socket.close();
     }
@@ -479,6 +478,17 @@ class AdbHostClient {
       throw AdbInvalidResponseError('transport id 应为 4 字节，实际 ${b.length}');
     }
     return (b[3] << 24) | (b[2] << 16) | (b[1] << 8) | b[0];
+  }
+
+  static int _readUint64LE(Uint8List b) {
+    if (b.length != 8) {
+      throw AdbInvalidResponseError('transport id 应为 8 字节，实际 ${b.length}');
+    }
+    var value = 0;
+    for (var i = 0; i < 8; i++) {
+      value |= b[i] << (8 * i);
+    }
+    return value;
   }
 }
 

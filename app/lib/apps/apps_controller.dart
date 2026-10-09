@@ -172,7 +172,6 @@ class AppsController extends GetxController {
       error.value = const DeviceNotConnectedException();
       return;
     }
-    _display.open();
     try {
       final loaded = await repo.listApps();
       if (_closed || generation != _generation) return;

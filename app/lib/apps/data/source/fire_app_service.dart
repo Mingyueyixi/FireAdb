@@ -230,125 +230,163 @@ Future<void> ensureFireAppService(ConnectedDevice device) async {
   }
 }
 
-/// 一条保持打开的 `exec:`。可见行再要名称、版本和图标。
-class FireAppServiceSession {
-  FireAppServiceSession(this._device);
+/// 同一台设备上排队取应用信息。当前这批取完就关掉 `exec:`，进程随即退出。
+Future<FireAppShow> loadFireAppShow(
+  ConnectedDevice device,
+  String packageName,
+) {
+  final gate = _showGates.putIfAbsent(
+    device.serial,
+    () => _FireAppShowGate(device),
+  );
+  return gate.load(device, packageName);
+}
 
-  final ConnectedDevice _device;
-  final _reader = FireAppFrameReader();
-  final _frames = <FireAppFrame>[];
-  Completer<void>? _frameWait;
-  StreamSubscription<List<int>>? _subscription;
-  ConnectedShell? _shell;
-  var _closed = false;
-  Future<void> _chain = Future<void>.value();
+final _showGates = <String, _FireAppShowGate>{};
 
-  Future<void> start() {
-    return _exclusive(() async {
+class _ShowJob {
+  _ShowJob(this.packageName);
+
+  final String packageName;
+  final Completer<FireAppShow> done = Completer<FireAppShow>();
+  var attempts = 0;
+}
+
+class _FireAppShowGate {
+  _FireAppShowGate(this._device);
+
+  ConnectedDevice _device;
+  final _waiters = <_ShowJob>[];
+  var _running = false;
+
+  Future<FireAppShow> load(ConnectedDevice device, String packageName) {
+    _device = device;
+    final job = _ShowJob(packageName);
+    _waiters.add(job);
+    _kick();
+    return job.done.future;
+  }
+
+  void _kick() {
+    if (_running) return;
+    _running = true;
+    unawaited(_drain());
+  }
+
+  Future<void> _drain() async {
+    final reader = FireAppFrameReader();
+    final frames = <FireAppFrame>[];
+    Completer<void>? wait;
+    var failed = false;
+    ConnectedShell? shell;
+    StreamSubscription<List<int>>? subscription;
+    try {
       await ensureFireAppService(_device);
-      final shell = await _device.openExec(
+      shell = await _device.openExec(
         fireAppServiceCommand(fireAppServiceRemotePath),
       );
-      _shell = shell;
-      _subscription = shell.readStream.listen(
-        _onBytes,
-        onError: (Object error, StackTrace stackTrace) {
-          if (!_closed) _fail(error);
+      subscription = shell.readStream.listen(
+        (chunk) {
+          try {
+            frames.addAll(reader.add(chunk));
+          } catch (error, stackTrace) {
+            final pending = wait;
+            if (pending != null && !pending.isCompleted) {
+              pending.completeError(error, stackTrace);
+            }
+            return;
+          }
+          final pending = wait;
+          if (pending != null && !pending.isCompleted) pending.complete();
+        },
+        onError: (Object _) {
+          final pending = wait;
+          if (pending != null && !pending.isCompleted) {
+            pending.completeError(StateError('应用信息服务已结束'));
+          }
         },
         onDone: () {
-          if (!_closed) _fail(StateError('应用信息服务已结束'));
+          final pending = wait;
+          if (pending != null && !pending.isCompleted) {
+            pending.completeError(StateError('应用信息服务已结束'));
+          }
         },
       );
-      final ready = await _nextFrame().timeout(const Duration(seconds: 30));
+      final ready = await _next(frames, (value) => wait = value)
+          .timeout(const Duration(seconds: 30));
       if (ready is FireAppServiceError) {
         throw StateError(ready.message.isEmpty ? '应用信息服务启动失败' : ready.message);
       }
       if (ready is! FireAppReady) {
         throw StateError('应用信息服务没有就绪');
       }
-    });
-  }
-
-  /// 向正在运行的服务要一个应用的名称、版本和图标。同一条管道上的请求会排队。
-  Future<FireAppShow> loadShow(String packageName) {
-    final result = Completer<FireAppShow>();
-    _exclusive(() async {
-      await _write('SHOW $packageName');
-      final frame = await _nextFrame().timeout(const Duration(seconds: 20));
-      if (frame is FireAppShow) {
-        result.complete(frame);
-        return;
+      while (_waiters.isNotEmpty) {
+        final job = _waiters.removeAt(0);
+        job.attempts++;
+        try {
+          await shell.write(utf8.encode('SHOW ${job.packageName}\n'));
+          final frame = await _next(frames, (value) => wait = value)
+              .timeout(const Duration(seconds: 20));
+          if (frame is FireAppShow) {
+            job.done.complete(frame);
+            continue;
+          }
+          if (frame is FireAppServiceError) {
+            job.done.completeError(
+              StateError(frame.message.isEmpty ? '读取应用信息失败' : frame.message),
+            );
+            continue;
+          }
+          job.done.completeError(StateError('应用信息响应无效'));
+        } catch (error, stackTrace) {
+          failed = true;
+          if (job.attempts < 2 && !job.done.isCompleted) {
+            _waiters.insert(0, job);
+          } else if (!job.done.isCompleted) {
+            job.done.completeError(error, stackTrace);
+          }
+          break;
+        }
       }
-      if (frame is FireAppServiceError) {
-        result.completeError(
-          StateError(frame.message.isEmpty ? '读取应用信息失败' : frame.message),
-        );
-        return;
+    } catch (error, stackTrace) {
+      failed = true;
+      for (final job in _waiters) {
+        if (!job.done.isCompleted) {
+          job.done.completeError(error, stackTrace);
+        }
       }
-      result.completeError(StateError('应用信息响应无效'));
-    }).catchError((Object error, StackTrace stackTrace) {
-      if (!result.isCompleted) result.completeError(error, stackTrace);
-    });
-    return result.future;
-  }
-
-  Future<void> close() async {
-    if (_closed) return;
-    _closed = true;
-    try {
-      await _shell?.write(utf8.encode('QUIT\n'));
-    } catch (_) {}
-    await _subscription?.cancel();
-    _subscription = null;
-    try {
-      await _shell?.close();
-    } catch (_) {}
-    _shell = null;
-    _fail(StateError('应用信息服务已关闭'));
-  }
-
-  Future<void> _exclusive(Future<void> Function() action) {
-    final previous = _chain;
-    final gate = Completer<void>();
-    _chain = gate.future;
-    return previous.then((_) => action()).whenComplete(gate.complete);
-  }
-
-  Future<void> _write(String line) async {
-    final shell = _shell;
-    if (shell == null || _closed) {
-      throw StateError('应用信息服务未启动');
-    }
-    await shell.write(utf8.encode('$line\n'));
-  }
-
-  void _onBytes(List<int> chunk) {
-    try {
-      for (final frame in _reader.add(chunk)) {
-        _frames.add(frame);
+      _waiters.clear();
+    } finally {
+      if (!failed) {
+        try {
+          await shell?.write(utf8.encode('QUIT\n')).timeout(
+            const Duration(seconds: 2),
+          );
+        } catch (_) {}
       }
-      final wait = _frameWait;
-      if (wait != null && !wait.isCompleted) wait.complete();
-    } catch (error) {
-      _fail(error);
+      await subscription?.cancel();
+      try {
+        await shell?.close().timeout(const Duration(seconds: 2));
+      } catch (_) {}
+      _running = false;
+      if (_waiters.isNotEmpty) _kick();
     }
   }
 
-  Future<FireAppFrame> _nextFrame() async {
-    while (_frames.isEmpty) {
-      if (_closed) throw StateError('应用信息服务已关闭');
-      final wait = Completer<void>();
-      _frameWait = wait;
-      await wait.future;
+  Future<FireAppFrame> _next(
+    List<FireAppFrame> frames,
+    void Function(Completer<void>?) writeWait,
+  ) async {
+    while (frames.isEmpty) {
+      final pending = Completer<void>();
+      writeWait(pending);
+      if (frames.isNotEmpty && !pending.isCompleted) pending.complete();
+      try {
+        await pending.future;
+      } finally {
+        writeWait(null);
+      }
     }
-    return _frames.removeAt(0);
-  }
-
-  void _fail(Object error) {
-    _closed = true;
-    final wait = _frameWait;
-    if (wait != null && !wait.isCompleted) {
-      wait.completeError(error);
-    }
+    return frames.removeAt(0);
   }
 }

@@ -4,7 +4,10 @@ import android.content.Context;
 
 import java.lang.reflect.Method;
 
-/** 给 {@code app_process} 取系统上下文。没有界面，也不能走普通应用的 {@code ActivityThread.main}。 */
+/**
+ * 给 {@code app_process} 取系统上下文。没有界面，也不能走普通应用的
+ * {@code ActivityThread.main}。{@code systemMain} 是隐藏接口，公开 SDK 里没有。
+ */
 public final class AndroidContexts {
     private AndroidContexts() {}
 

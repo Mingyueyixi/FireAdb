@@ -84,7 +84,7 @@ Windows 随包文件来自官方 libusb **1.0.29** 的 `libusb-1.0.29.7z`，许�
 
 一次查询写完结果后关闭 TCP 连接，官方 `adb` 要读到对端关闭才会结束命令。属于这一类的有 `host:version`、`host:devices`、`host:devices-l`、`host:connect`、`host:disconnect`，以及 `get-serialno`、`get-state`、`get-devpath`、`features`。
 
-`host:features` 返回这台设备 CNXN banner 里的 `features=`，不是主机自己的功能列表。`adb shell` 靠它决定用 `shell,v2` 还是旧的 `shell:`。接着在同一条连接上发送 `host:tport:`，读完 4 字节小端 transport id 后再发 shell 服务。这条连接保持到 shell 结束。`host:track-devices` 也保持连接。`host-serial:<序列号>:<方法>` 用最后一个冒号切分，这样 `usb:1-3` 和 `192.168.1.5:5555` 都能当序列号。
+`host:features` 返回这台设备 CNXN banner 里的 `features=`，不是主机自己的功能列表。`adb shell` 靠它决定用 `shell,v2` 还是旧的 `shell:`。接着在同一条连接上发送 `host:tport:`，读完 8 字节小端 transport id（`uint64_t`）后再发 shell 服务。这条连接保持到 shell 结束。`host:track-devices` 也保持连接。`host-serial:<序列号>:<方法>` 用最后一个冒号切分，这样 `usb:1-3` 和 `192.168.1.5:5555` 都能当序列号。
 
 ## 先前确认过的问题
 
