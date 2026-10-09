@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -13,6 +15,12 @@ final InternetAddress kMdnsGroupV4 = InternetAddress('224.0.0.251');
 final InternetAddress kMdnsGroupV6 = InternetAddress('ff02::fb');
 const int kMdnsPort = 5353;
 const String kMdnsDomain = 'local';
+
+/// 每块网卡的查询超时。
+///
+/// 同一局域网里的 mDNS 会很快应答。各网卡同时发送，扫描只等这一段，
+/// 不会按网卡数量累加。
+const Duration kMdnsInterfaceTimeout = Duration(seconds: 3);
 
 /// mDNS 发现到的 adb 服务。
 ///
@@ -57,6 +65,85 @@ class MdnsService {
 
   @override
   String toString() => '$instanceName\t$serviceType\t$endpointText';
+}
+
+/// 这些网卡上可以发出局域网组播查询。
+///
+/// 只保留带有该协议、且不是回环或链路本地地址的接口。Windows 不指定
+/// 组播出口时，会从跃点数最小的虚拟网卡把 `224.0.0.251` 送出去。
+List<NetworkInterface> multicastSendInterfaces(
+  Iterable<NetworkInterface> interfaces,
+  InternetAddressType type,
+) {
+  return <NetworkInterface>[
+    for (final iface in interfaces)
+      if (sendsLanMulticast(iface.addresses, type)) iface,
+  ];
+}
+
+/// 有默认路由的网卡才能连上当前局域网里的其他设备。
+///
+/// [defaultRouteKeys] 来自路由表：Windows 用接口 IPv4，Linux / Android 用接口名。
+/// 读不到路由，或路由和网卡对不上时，退回全部可发送的局域网网卡。
+List<NetworkInterface> selectConnectableInterfaces(
+  Iterable<NetworkInterface> interfaces,
+  Set<String> defaultRouteKeys,
+) {
+  final lan = multicastSendInterfaces(interfaces, InternetAddressType.IPv4);
+  if (defaultRouteKeys.isEmpty) return lan;
+  final matched = <NetworkInterface>[
+    for (final iface in lan)
+      if (_matchesDefaultRoute(iface, defaultRouteKeys)) iface,
+  ];
+  return matched.isEmpty ? lan : matched;
+}
+
+bool _matchesDefaultRoute(NetworkInterface iface, Set<String> keys) {
+  if (keys.contains(iface.name)) return true;
+  for (final address in iface.addresses) {
+    if (keys.contains(address.address)) return true;
+  }
+  return false;
+}
+
+/// 从 `route print -4` 里取出默认路由的接口地址。
+Set<String> defaultRouteKeysFromRoutePrint(String text) {
+  final keys = <String>{};
+  final line = RegExp(
+    r'^\s*0\.0\.0\.0\s+0\.0\.0\.0\s+\d+\.\d+\.\d+\.\d+\s+(\d+\.\d+\.\d+\.\d+)\s+\d+\s*$',
+    multiLine: true,
+  );
+  for (final match in line.allMatches(text)) {
+    keys.add(match.group(1)!);
+  }
+  return keys;
+}
+
+/// 从 `/proc/net/route` 里取出默认路由的接口名。
+Set<String> defaultRouteKeysFromProcNetRoute(String text) {
+  final keys = <String>{};
+  for (final raw in text.split(RegExp(r'\r?\n'))) {
+    final parts = raw.trim().split(RegExp(r'\s+'));
+    if (parts.length < 2) continue;
+    if (parts[1].toLowerCase() != '00000000') continue;
+    if (parts[0].toLowerCase() == 'iface') continue;
+    keys.add(parts[0]);
+  }
+  return keys;
+}
+
+/// 这块网卡上有可以发出局域网组播的地址。
+bool sendsLanMulticast(
+  Iterable<InternetAddress> addresses,
+  InternetAddressType type,
+) {
+  return addresses.any(
+    (address) =>
+        address.type == type &&
+        !address.isLoopback &&
+        !address.isLinkLocal &&
+        !address.isMulticast,
+  );
 }
 
 /// 从一组地址里选出适合发起 adb 连接的那个。
@@ -110,9 +197,10 @@ class MdnsException implements Exception {
 
 /// 纯 Dart 的 mDNS 服务浏览器（RFC 6762 / RFC 6763）。
 ///
-/// 向 `224.0.0.251:5353` 和 `ff02::fb:5353` 发送 PTR 查询。查询 TTL 为 255，
-/// 并在每块网卡上发送；同时监听 5353 上的组播应答。收集 PTR / SRV / TXT / A / AAAA
-/// 记录并聚合为 [MdnsService]。
+/// 向 `224.0.0.251:5353` 和 `ff02::fb:5353` 发送 PTR 查询。查询 TTL 为 255。
+/// 只从有默认路由的网卡发出，并指定组播出口。没有默认路由的虚拟网卡
+/// 到不了当前局域网，上面的设备无法连接。
+/// 同时监听 5353 上的组播应答。收集 PTR / SRV / TXT / A / AAAA 记录并聚合为 [MdnsService]。
 ///
 /// ⚠️ 适用场景说明（给上层 UI / 用户文档参考）：
 ///
@@ -136,7 +224,7 @@ class MdnsBrowser {
   MdnsBrowser({
     InternetAddress? group,
     this.port = kMdnsPort,
-    this.timeout = const Duration(seconds: 8),
+    this.timeout = kMdnsInterfaceTimeout,
     this.ttl = 255,
   }) : group = group ?? kMdnsGroupV4;
 
@@ -146,7 +234,7 @@ class MdnsBrowser {
   /// 查询目标端口（默认 5353）。
   final int port;
 
-  /// 采集窗口时长。
+  /// 每块网卡的查询超时。各网卡同时查询，全部无应答时扫描也只等到这里。
   final Duration timeout;
 
   /// 组播 TTL。
@@ -156,33 +244,52 @@ class MdnsBrowser {
   ///
   /// [serviceTypes] 默认查询所有三类 adb 服务（legacy 传输、TLS 配对、
   /// TLS 连接）。返回已解析出地址与端口的服务列表。
+  ///
+  /// [onUpdate] 在窗口结束前就会拿到当时已经解析出的服务，列表会随新应答增长。
   Future<List<MdnsService>> discover({
     Set<String> serviceTypes = const {
       adbServiceTypePairing,
       adbServiceTypeConnect,
       adbServiceTypeTransport,
     },
+    void Function(List<MdnsService> services)? onUpdate,
   }) async {
     if (!_isMdnsMulticast(group)) {
       final bind = group.type == InternetAddressType.IPv6
           ? InternetAddress.anyIPv6
           : InternetAddress.anyIPv4;
-      return _discoverOn(bind, serviceTypes);
+      return _discoverOn(bind, serviceTypes, onUpdate: onUpdate);
     }
-    var sockets = <RawDatagramSocket>[];
+    var sockets = <_QuerySocket>[];
     try {
       sockets = await _openLanSockets();
-    } catch (_) {
-      sockets = <RawDatagramSocket>[];
+    } catch (error, stackTrace) {
+      _mdnsLog('打开局域网套接字失败：$error\n$stackTrace');
+      sockets = <_QuerySocket>[];
     }
     if (sockets.isEmpty) {
-      return _discoverOn(InternetAddress.anyIPv4, serviceTypes);
+      return _discoverOn(
+        InternetAddress.anyIPv4,
+        serviceTypes,
+        onUpdate: onUpdate,
+      );
     }
     try {
-      return await _collect(sockets, serviceTypes, lan: true);
+      final found = await _collect(
+        sockets,
+        serviceTypes,
+        lan: true,
+        onUpdate: onUpdate,
+      );
+      _mdnsLog(
+        found.isEmpty
+            ? 'mDNS 扫描结束，没有发现设备'
+            : 'mDNS 扫描到 ${found.length} 个：${found.map((service) => '${service.serviceType} ${service.endpointText}').join('；')}',
+      );
+      return found;
     } finally {
       for (final socket in sockets) {
-        socket.close();
+        socket.socket.close();
       }
     }
   }
@@ -192,29 +299,62 @@ class MdnsBrowser {
       address.address == kMdnsGroupV4.address ||
       address.address == kMdnsGroupV6.address;
 
-  Future<List<RawDatagramSocket>> _openLanSockets() async {
-    final sockets = <RawDatagramSocket>[];
+  Future<List<_QuerySocket>> _openLanSockets() async {
+    final sockets = <_QuerySocket>[];
     final interfaces = await NetworkInterface.list(
       includeLinkLocal: true,
       type: InternetAddressType.any,
     );
+    final routeKeys = await _readDefaultRouteKeys();
+    final outlets = selectConnectableInterfaces(interfaces, routeKeys);
+    final skipped = multicastSendInterfaces(
+      interfaces,
+      InternetAddressType.IPv4,
+    ).where((iface) => !outlets.contains(iface));
+    final routeMatched = outlets.any(
+      (iface) => _matchesDefaultRoute(iface, routeKeys),
+    );
+    if (routeKeys.isEmpty) {
+      _mdnsLog('mDNS 没有读到默认路由，仍查询全部局域网网卡');
+    } else if (!routeMatched && outlets.isNotEmpty) {
+      _mdnsLog('mDNS 默认路由和网卡对不上，仍查询全部局域网网卡');
+    } else if (skipped.isNotEmpty) {
+      _mdnsLog(
+        'mDNS 跳过网卡：${skipped.map(_ifaceLabel).join('；')}。这些网卡没有默认路由，上面的设备无法连接',
+      );
+    }
+    _mdnsLog(
+      outlets.isEmpty
+          ? 'mDNS 没有可发送的 IPv4 网卡'
+          : 'mDNS 发送网卡：${outlets.map(_ifaceLabel).join('；')}。同时查询，等待 ${timeout.inMilliseconds} 毫秒',
+    );
 
     final v4 = await _tryBind(InternetAddress.anyIPv4, port, shared: true);
     if (v4 != null) {
-      _joinAll(v4, kMdnsGroupV4, interfaces);
-      sockets.add(v4);
+      _joinAll(v4, kMdnsGroupV4, outlets);
+      sockets.add(_QuerySocket(v4, interfaces: outlets));
     }
     final v6 = await _tryBind(InternetAddress.anyIPv6, port, shared: true);
     if (v6 != null) {
-      _joinAll(v6, kMdnsGroupV6, interfaces);
-      sockets.add(v6);
+      _joinAll(v6, kMdnsGroupV6, outlets);
+      sockets.add(
+        _QuerySocket(
+          v6,
+          interfaces: multicastSendInterfaces(
+            outlets,
+            InternetAddressType.IPv6,
+          ),
+        ),
+      );
     }
 
-    for (final iface in interfaces) {
+    for (final iface in outlets) {
       for (final address in iface.addresses) {
         if (address.isLoopback || address.isLinkLocal) continue;
         final sender = await _tryBind(address, 0, shared: false);
-        if (sender != null) sockets.add(sender);
+        if (sender != null) {
+          sockets.add(_QuerySocket(sender, interface: iface));
+        }
       }
     }
     return sockets;
@@ -254,30 +394,36 @@ class MdnsBrowser {
     List<NetworkInterface> interfaces,
   ) {
     var joined = false;
-    for (final iface in interfaces) {
-      final matches = iface.addresses.any(
-        (address) => address.type == groupAddress.type,
-      );
-      if (!matches) continue;
+    final candidates = groupAddress.type == InternetAddressType.IPv4
+        ? multicastSendInterfaces(interfaces, InternetAddressType.IPv4)
+        : interfaces.where(
+            (iface) => iface.addresses.any(
+              (address) => address.type == InternetAddressType.IPv6,
+            ),
+          );
+    for (final iface in candidates) {
       try {
         socket.joinMulticast(groupAddress, iface);
         joined = true;
-      } on SocketException {
-        continue;
+      } catch (error) {
+        if (error is! SocketException && error is! OSError) rethrow;
+        _mdnsLog('加入组播失败：${iface.name}（$error）');
       }
     }
     if (joined) return;
     try {
       socket.joinMulticast(groupAddress);
-    } on SocketException {
-      return;
+    } catch (error) {
+      if (error is! SocketException && error is! OSError) rethrow;
+      _mdnsLog('加入默认组播失败：$error');
     }
   }
 
   Future<List<MdnsService>> _discoverOn(
     InternetAddress bindAddr,
-    Set<String> serviceTypes,
-  ) async {
+    Set<String> serviceTypes, {
+    void Function(List<MdnsService> services)? onUpdate,
+  }) async {
     final socket = await RawDatagramSocket.bind(
       bindAddr,
       0,
@@ -286,9 +432,10 @@ class MdnsBrowser {
     );
     try {
       return await _collect(
-        <RawDatagramSocket>[socket],
+        <_QuerySocket>[_QuerySocket(socket)],
         serviceTypes,
         lan: false,
+        onUpdate: onUpdate,
       );
     } finally {
       socket.close();
@@ -296,43 +443,70 @@ class MdnsBrowser {
   }
 
   Future<List<MdnsService>> _collect(
-    List<RawDatagramSocket> sockets,
+    List<_QuerySocket> sockets,
     Set<String> serviceTypes, {
     required bool lan,
+    void Function(List<MdnsService> services)? onUpdate,
   }) async {
     final resolver = _MdnsResolver(serviceTypes: _queryTypes(serviceTypes));
     final subscriptions = <StreamSubscription<RawSocketEvent>>[];
-    for (final socket in sockets) {
-      subscriptions.add(
-        socket.listen((event) {
-          if (event != RawSocketEvent.read) return;
-          final datagram = socket.receive();
-          if (datagram == null) return;
-          resolver.handleDatagram(datagram.data, datagram.address);
-        }),
-      );
-    }
-
     final completer = Completer<void>();
     final timer = Timer(timeout, () {
       if (!completer.isCompleted) completer.complete();
     });
+    var snapshot = '';
+    void noteProgress() {
+      final services = resolver.services();
+      final next = _serviceSnapshot(services);
+      if (next.isEmpty || next == snapshot) return;
+      snapshot = next;
+      onUpdate?.call(services);
+    }
+
+    for (final entry in sockets) {
+      final socket = entry.socket;
+      subscriptions.add(
+        socket.listen((event) {
+          if (event != RawSocketEvent.read) return;
+          while (true) {
+            final datagram = socket.receive();
+            if (datagram == null) break;
+            resolver.handleDatagram(datagram.data, datagram.address);
+          }
+          noteProgress();
+        }),
+      );
+    }
     try {
-      for (final socket in sockets) {
+      for (final entry in sockets) {
+        final socket = entry.socket;
         final ipv6 = socket.address.type == InternetAddressType.IPv6;
         final destination = lan ? (ipv6 ? kMdnsGroupV6 : kMdnsGroupV4) : group;
         final destinationPort = port;
         final unicastResponse = !lan || socket.port != port;
-        for (final type in serviceTypes) {
-          final qname = _encodeName('$type.$kMdnsDomain');
-          try {
-            socket.send(
-              _buildPtrQuery(qname, unicastResponse: unicastResponse),
-              destination,
-              destinationPort,
-            );
-          } on SocketException {
+        final outlets = lan
+            ? (entry.interface != null
+                  ? <NetworkInterface>[entry.interface!]
+                  : entry.interfaces)
+            : const <NetworkInterface>[];
+        if (lan && outlets.isEmpty) continue;
+        final rounds = lan ? outlets.length : 1;
+        for (var i = 0; i < rounds; i++) {
+          if (lan && !selectMulticastInterface(socket, outlets[i])) {
+            _mdnsLog('指定组播出口失败：${outlets[i].name}');
             continue;
+          }
+          for (final type in serviceTypes) {
+            final qname = _encodeName('$type.$kMdnsDomain');
+            try {
+              socket.send(
+                _buildPtrQuery(qname, unicastResponse: unicastResponse),
+                destination,
+                destinationPort,
+              );
+            } on SocketException {
+              _mdnsLog('发送查询失败：$type ${lan ? outlets[i].name : ''}');
+            }
           }
         }
       }
@@ -345,6 +519,122 @@ class MdnsBrowser {
     }
     return resolver.services();
   }
+}
+
+/// 监听或发送用的一个 UDP 套接字，以及它的组播出口。
+class _QuerySocket {
+  _QuerySocket(this.socket, {this.interface, this.interfaces = const []});
+
+  final RawDatagramSocket socket;
+
+  /// 绑在某个单播地址上时，查询只从这块网卡出去。
+  final NetworkInterface? interface;
+
+  /// 绑在任意地址上的监听套接字：每块网卡各发一次。
+  final List<NetworkInterface> interfaces;
+}
+
+/// `IPPROTO_IP` / `IPPROTO_IPV6`。
+const int _ipprotoIp = 0;
+const int _ipprotoIpv6 = 41;
+
+/// Linux 与 Android 的取值和 Windows、macOS 不同。
+int _multicastIfOption(InternetAddressType type) {
+  final ipv6 = type == InternetAddressType.IPv6;
+  if (Platform.isLinux || Platform.isAndroid) return ipv6 ? 17 : 32;
+  return 9;
+}
+
+/// 把后续组播发送钉在 [iface] 上。失败时返回 false，调用方改试下一块网卡。
+bool selectMulticastInterface(
+  RawDatagramSocket socket,
+  NetworkInterface iface,
+) {
+  final ipv6 = socket.address.type == InternetAddressType.IPv6;
+  try {
+    if (ipv6) {
+      final data = Uint8List(4);
+      ByteData.sublistView(data).setUint32(0, iface.index, Endian.host);
+      socket.setRawOption(
+        RawSocketOption(
+          _ipprotoIpv6,
+          _multicastIfOption(InternetAddressType.IPv6),
+          data,
+        ),
+      );
+    } else {
+      InternetAddress? address;
+      for (final candidate in iface.addresses) {
+        if (candidate.type != InternetAddressType.IPv4 ||
+            candidate.isLoopback ||
+            candidate.isLinkLocal ||
+            candidate.isMulticast) {
+          continue;
+        }
+        address = candidate;
+        break;
+      }
+      if (address == null) return false;
+      socket.setRawOption(
+        RawSocketOption(
+          _ipprotoIp,
+          _multicastIfOption(InternetAddressType.IPv4),
+          address.rawAddress,
+        ),
+      );
+    }
+    return true;
+  } on SocketException {
+    return false;
+  } on OSError {
+    return false;
+  }
+}
+
+void _mdnsLog(String message) {
+  developer.log(message, name: 'fire_adb', level: 1000);
+}
+
+String _ifaceLabel(NetworkInterface iface) {
+  final addresses = iface.addresses
+      .where(
+        (address) =>
+            address.type == InternetAddressType.IPv4 && !address.isLinkLocal,
+      )
+      .map((address) => address.address)
+      .join(',');
+  return '${iface.name} $addresses';
+}
+
+Future<Set<String>> _readDefaultRouteKeys() async {
+  try {
+    if (Platform.isWindows) {
+      final result = await Process.run('route', [
+        'print',
+        '-4',
+      ], stdoutEncoding: latin1);
+      if (result.exitCode != 0) return <String>{};
+      return defaultRouteKeysFromRoutePrint('${result.stdout}');
+    }
+    if (Platform.isLinux || Platform.isAndroid) {
+      final file = File('/proc/net/route');
+      if (!await file.exists()) return <String>{};
+      return defaultRouteKeysFromProcNetRoute(await file.readAsString());
+    }
+  } catch (error) {
+    _mdnsLog('读取默认路由失败：$error');
+  }
+  return <String>{};
+}
+
+/// 用来判断这轮扫描的结果有没有变，避免同一批应答重复通知界面。
+String _serviceSnapshot(List<MdnsService> services) {
+  return services
+      .map(
+        (service) =>
+            '${service.serviceType}\t${service.instanceName}\t${service.endpointText}\t${service.txt.entries.map((entry) => '${entry.key}=${entry.value}').join(',')}',
+      )
+      .join('\n');
 }
 
 /// 便捷函数：发现局域网内的 adb 服务（默认查所有三类 adb 服务）。
@@ -360,9 +650,11 @@ Future<List<MdnsService>> discoverAdbServices({
     adbServiceTypePairing,
     adbServiceTypeConnect,
   },
-  Duration timeout = const Duration(seconds: 8),
+  Duration timeout = kMdnsInterfaceTimeout,
+  void Function(List<MdnsService> services)? onUpdate,
 }) {
-  return MdnsBrowser(timeout: timeout).discover(serviceTypes: serviceTypes);
+  return MdnsBrowser(timeout: timeout)
+      .discover(serviceTypes: serviceTypes, onUpdate: onUpdate);
 }
 
 // ---------------------------------------------------------------------------

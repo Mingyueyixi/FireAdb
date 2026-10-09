@@ -128,15 +128,25 @@ class HomeController extends GetxController {
   Future<void> scan() async {
     scanning.value = true;
     scanError.value = null;
+    logAppLine('开始扫描无线设备');
+    discovered.clear();
     try {
-      discovered.assignAll(
-        await discoverAdbServices(
-          serviceTypes: const <String>{
-            adbServiceTypeTransport,
-            adbServiceTypeConnect,
-            adbServiceTypePairing,
-          },
-        ),
+      final found = await discoverAdbServices(
+        serviceTypes: const <String>{
+          adbServiceTypeTransport,
+          adbServiceTypeConnect,
+          adbServiceTypePairing,
+        },
+        onUpdate: (services) {
+          discovered.assignAll(services);
+          logAppLine(
+            '扫描到 ${services.length} 个：${services.map((service) => service.endpointText).join('，')}',
+          );
+        },
+      );
+      discovered.assignAll(found);
+      logAppLine(
+        found.isEmpty ? '扫描结束，没有发现无线设备' : '扫描结束，共 ${found.length} 个',
       );
     } catch (error, stackTrace) {
       logAppError('mDNS 设备扫描失败', error, stackTrace);

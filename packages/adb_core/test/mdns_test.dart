@@ -107,6 +107,37 @@ void main() {
       );
     });
 
+    test('应答到达时先回调，扫描仍等到采集窗口结束', () async {
+      final responder = await spawnFakeResponder(0);
+      try {
+        final browser = MdnsBrowser(
+          group: InternetAddress.loopbackIPv4,
+          port: responder.port,
+          timeout: const Duration(milliseconds: 700),
+        );
+        final updates = <List<MdnsService>>[];
+        Duration? firstUpdate;
+        final watch = Stopwatch()..start();
+        final services = await browser.discover(
+          serviceTypes: const {adbServiceTypePairing},
+          onUpdate: (found) {
+            firstUpdate ??= watch.elapsed;
+            updates.add(found);
+          },
+        );
+        watch.stop();
+        expect(updates, isNotEmpty);
+        expect(firstUpdate!, lessThan(const Duration(milliseconds: 400)));
+        expect(updates.last.single.port, services.single.port);
+        expect(
+          watch.elapsed,
+          greaterThanOrEqualTo(const Duration(milliseconds: 700)),
+        );
+      } finally {
+        await responder.close();
+      }
+    });
+
     test('只查询 connect 服务时不返回配对结果', () async {
       final responder = await spawnFakeResponder(0);
       try {
@@ -121,6 +152,93 @@ void main() {
         expect(services, isEmpty);
       } finally {
         await responder.close();
+      }
+    });
+
+    test('只把有默认路由的网卡当作可连接网络', () async {
+      expect(
+        defaultRouteKeysFromRoutePrint('''
+          0.0.0.0          0.0.0.0      192.168.3.1     192.168.3.27     35
+        192.168.56.0    255.255.255.0      On-link       192.168.56.1    281
+'''),
+        {'192.168.3.27'},
+      );
+      expect(
+        defaultRouteKeysFromProcNetRoute('''
+Iface Destination Gateway Flags
+wlan0 0003A8C0 0101A8C0 0003
+wlan0 00000000 0101A8C0 0003
+'''),
+        {'wlan0'},
+      );
+
+      final interfaces = await NetworkInterface.list();
+      final selected = selectConnectableInterfaces(interfaces, {
+        '192.168.3.27',
+      });
+      final hasTarget = interfaces.any(
+        (iface) =>
+            iface.addresses.any((address) => address.address == '192.168.3.27'),
+      );
+      if (!hasTarget) return;
+      expect(
+        selected.every(
+          (iface) => iface.addresses.any(
+            (address) => address.address == '192.168.3.27',
+          ),
+        ),
+        isTrue,
+      );
+      expect(
+        selectConnectableInterfaces(interfaces, {}),
+        multicastSendInterfaces(interfaces, InternetAddressType.IPv4),
+      );
+    });
+
+    test('组播出口保留无线网卡和虚拟网卡，跳过回环与链路本地', () {
+      expect(
+        sendsLanMulticast(<InternetAddress>[
+          InternetAddress.loopbackIPv4,
+        ], InternetAddressType.IPv4),
+        isFalse,
+      );
+      expect(
+        sendsLanMulticast(<InternetAddress>[
+          InternetAddress('169.254.128.172'),
+        ], InternetAddressType.IPv4),
+        isFalse,
+      );
+      expect(
+        sendsLanMulticast(<InternetAddress>[
+          InternetAddress('192.168.248.2'),
+        ], InternetAddressType.IPv4),
+        isTrue,
+      );
+      expect(
+        sendsLanMulticast(<InternetAddress>[
+          InternetAddress('192.168.3.27'),
+        ], InternetAddressType.IPv4),
+        isTrue,
+      );
+    });
+
+    test('可以为每块局域网网卡设置组播出口', () async {
+      final interfaces = multicastSendInterfaces(
+        await NetworkInterface.list(),
+        InternetAddressType.IPv4,
+      );
+      expect(interfaces, isNotEmpty);
+      final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      try {
+        for (final iface in interfaces) {
+          expect(
+            selectMulticastInterface(socket, iface),
+            isTrue,
+            reason: iface.name,
+          );
+        }
+      } finally {
+        socket.close();
       }
     });
 
