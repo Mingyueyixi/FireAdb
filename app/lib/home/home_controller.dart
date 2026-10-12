@@ -216,9 +216,29 @@ class HomeController extends GetxController {
     }
   }
 
-  Future<List<MdnsService>> _discover(
+  /// 给二维码配对用。不改首页上的发现列表，也不占用扫描按钮。
+  ///
+  /// [stopWhen] 成立时马上返回，不用等满 [timeout]。
+  Future<List<MdnsService>> discoverServicesOnce({
+    Duration? timeout,
     void Function(List<MdnsService> services)? onUpdate,
-  ) {
+    bool Function(List<MdnsService> services)? stopWhen,
+    bool Function()? isCancelled,
+  }) {
+    return _discover(
+      onUpdate,
+      timeout: timeout,
+      stopWhen: stopWhen,
+      isCancelled: isCancelled,
+    );
+  }
+
+  Future<List<MdnsService>> _discover(
+    void Function(List<MdnsService> services)? onUpdate, {
+    Duration? timeout,
+    bool Function(List<MdnsService> services)? stopWhen,
+    bool Function()? isCancelled,
+  }) {
     final override = discoverServices;
     if (override != null) return override(onUpdate);
     return discoverAdbServices(
@@ -227,7 +247,11 @@ class HomeController extends GetxController {
         adbServiceTypeConnect,
         adbServiceTypePairing,
       },
+      timeout: timeout ?? kMdnsInterfaceTimeout,
       onUpdate: onUpdate,
+      stopWhen: stopWhen,
+      requeryInterval: stopWhen == null ? null : const Duration(seconds: 1),
+      isCancelled: isCancelled,
     );
   }
 

@@ -7,6 +7,8 @@ import '../connection/model/device_profile.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
 import '../settings/app_settings_store.dart';
 import '../widgets/adaptive.dart';
+import 'adb_qr_pairing.dart';
+import 'adb_qr_pairing_dialog.dart';
 import 'home_controller.dart';
 
 /// 连接中心：设备列表 / 手动连接 / mDNS 设备发现 / 历史连接。
@@ -73,6 +75,35 @@ class HomePage extends GetView<HomeController> {
         message: '$error',
         isError: true,
       );
+    }
+  }
+
+  Future<void> _pairWithQr(BuildContext context) async {
+    if (controller.connecting.value) return;
+    final outcome = await showQrPairingDialog(context, controller);
+    if (!context.mounted || outcome == null) return;
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
+    switch (outcome.kind) {
+      case QrPairingOutcomeKind.connected:
+        showAppMessage(
+          messenger,
+          theme,
+          title: l10n.homeConnectionSucceeded,
+          message: l10n.homeConnectedDevice(outcome.serial!),
+        );
+        Get.toNamed<void>('/workspace', arguments: outcome.serial);
+      case QrPairingOutcomeKind.pairedOnly:
+        showAppMessage(
+          messenger,
+          theme,
+          title: l10n.homePairingSucceeded,
+          message: l10n.homePairingSucceededHint,
+        );
+      case QrPairingOutcomeKind.timedOut:
+      case QrPairingOutcomeKind.cancelled:
+        break;
     }
   }
 
@@ -373,14 +404,11 @@ class HomePage extends GetView<HomeController> {
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final actionRow = Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            for (var index = 0; index < actions.length; index++) ...<Widget>[
-              if (index > 0) const SizedBox(width: 4),
-              actions[index],
-            ],
-          ],
+        final actionWrap = Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          alignment: WrapAlignment.end,
+          children: actions,
         );
         if (!constraints.maxWidth.isFinite || constraints.maxWidth < 480) {
           return Column(
@@ -390,16 +418,22 @@ class HomePage extends GetView<HomeController> {
               const SizedBox(height: 8),
               Align(
                 alignment: AlignmentDirectional.centerEnd,
-                child: actionRow,
+                child: actionWrap,
               ),
             ],
           );
         }
         return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Expanded(child: header),
             const SizedBox(width: 8),
-            actionRow,
+            Flexible(
+              child: Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: actionWrap,
+              ),
+            ),
           ],
         );
       },
@@ -576,6 +610,14 @@ class HomePage extends GetView<HomeController> {
                         ? l10n.homeScanning
                         : l10n.homeScan,
                   ),
+                ),
+                FilledButton.tonalIcon(
+                  key: const ValueKey<String>('home-qr-pair'),
+                  onPressed: controller.connecting.value
+                      ? null
+                      : () => _pairWithQr(context),
+                  icon: const Icon(Icons.qr_code_2),
+                  label: Text(l10n.homeQrPair),
                 ),
               ],
             ),

@@ -253,16 +253,26 @@ class MdnsBrowser {
       adbServiceTypeTransport,
     },
     void Function(List<MdnsService> services)? onUpdate,
+    bool Function(List<MdnsService> services)? stopWhen,
+    Duration? requeryInterval,
+    bool Function()? isCancelled,
   }) async {
     if (!_isMdnsMulticast(group)) {
       final bind = group.type == InternetAddressType.IPv6
           ? InternetAddress.anyIPv6
           : InternetAddress.anyIPv4;
-      return _discoverOn(bind, serviceTypes, onUpdate: onUpdate);
+      return _discoverOn(
+        bind,
+        serviceTypes,
+        onUpdate: onUpdate,
+        stopWhen: stopWhen,
+        requeryInterval: requeryInterval,
+        isCancelled: isCancelled,
+      );
     }
     var sockets = <_QuerySocket>[];
     try {
-      sockets = await _openLanSockets();
+      sockets = await _openLanSockets(untilReady: stopWhen != null);
     } catch (error, stackTrace) {
       _mdnsLog('打开局域网套接字失败：$error\n$stackTrace');
       sockets = <_QuerySocket>[];
@@ -272,6 +282,9 @@ class MdnsBrowser {
         InternetAddress.anyIPv4,
         serviceTypes,
         onUpdate: onUpdate,
+        stopWhen: stopWhen,
+        requeryInterval: requeryInterval,
+        isCancelled: isCancelled,
       );
     }
     try {
@@ -280,6 +293,9 @@ class MdnsBrowser {
         serviceTypes,
         lan: true,
         onUpdate: onUpdate,
+        stopWhen: stopWhen,
+        requeryInterval: requeryInterval,
+        isCancelled: isCancelled,
       );
       _mdnsLog(
         found.isEmpty
@@ -299,7 +315,7 @@ class MdnsBrowser {
       address.address == kMdnsGroupV4.address ||
       address.address == kMdnsGroupV6.address;
 
-  Future<List<_QuerySocket>> _openLanSockets() async {
+  Future<List<_QuerySocket>> _openLanSockets({bool untilReady = false}) async {
     final sockets = <_QuerySocket>[];
     final interfaces = await NetworkInterface.list(
       includeLinkLocal: true,
@@ -326,6 +342,8 @@ class MdnsBrowser {
     _mdnsLog(
       outlets.isEmpty
           ? 'mDNS 没有可发送的 IPv4 网卡'
+          : untilReady
+          ? 'mDNS 发送网卡：${outlets.map(_ifaceLabel).join('；')}。持续监听，发现目标后立即返回'
           : 'mDNS 发送网卡：${outlets.map(_ifaceLabel).join('；')}。同时查询，等待 ${timeout.inMilliseconds} 毫秒',
     );
 
@@ -423,6 +441,9 @@ class MdnsBrowser {
     InternetAddress bindAddr,
     Set<String> serviceTypes, {
     void Function(List<MdnsService> services)? onUpdate,
+    bool Function(List<MdnsService> services)? stopWhen,
+    Duration? requeryInterval,
+    bool Function()? isCancelled,
   }) async {
     final socket = await RawDatagramSocket.bind(
       bindAddr,
@@ -436,6 +457,9 @@ class MdnsBrowser {
         serviceTypes,
         lan: false,
         onUpdate: onUpdate,
+        stopWhen: stopWhen,
+        requeryInterval: requeryInterval,
+        isCancelled: isCancelled,
       );
     } finally {
       socket.close();
@@ -447,6 +471,9 @@ class MdnsBrowser {
     Set<String> serviceTypes, {
     required bool lan,
     void Function(List<MdnsService> services)? onUpdate,
+    bool Function(List<MdnsService> services)? stopWhen,
+    Duration? requeryInterval,
+    bool Function()? isCancelled,
   }) async {
     final resolver = _MdnsResolver(serviceTypes: _queryTypes(serviceTypes));
     final subscriptions = <StreamSubscription<RawSocketEvent>>[];
@@ -455,12 +482,19 @@ class MdnsBrowser {
       if (!completer.isCompleted) completer.complete();
     });
     var snapshot = '';
+    void finish() {
+      if (!completer.isCompleted) completer.complete();
+    }
+
     void noteProgress() {
       final services = resolver.services();
       final next = _serviceSnapshot(services);
       if (next.isEmpty || next == snapshot) return;
       snapshot = next;
       onUpdate?.call(services);
+      if (stopWhen?.call(services) ?? false) {
+        scheduleMicrotask(finish);
+      }
     }
 
     for (final entry in sockets) {
@@ -478,39 +512,61 @@ class MdnsBrowser {
       );
     }
     try {
-      for (final entry in sockets) {
-        final socket = entry.socket;
-        final ipv6 = socket.address.type == InternetAddressType.IPv6;
-        final destination = lan ? (ipv6 ? kMdnsGroupV6 : kMdnsGroupV4) : group;
-        final destinationPort = port;
-        final unicastResponse = !lan || socket.port != port;
-        final outlets = lan
-            ? (entry.interface != null
-                  ? <NetworkInterface>[entry.interface!]
-                  : entry.interfaces)
-            : const <NetworkInterface>[];
-        if (lan && outlets.isEmpty) continue;
-        final rounds = lan ? outlets.length : 1;
-        for (var i = 0; i < rounds; i++) {
-          if (lan && !selectMulticastInterface(socket, outlets[i])) {
-            _mdnsLog('指定组播出口失败：${outlets[i].name}');
-            continue;
-          }
-          for (final type in serviceTypes) {
-            final qname = _encodeName('$type.$kMdnsDomain');
-            try {
-              socket.send(
-                _buildPtrQuery(qname, unicastResponse: unicastResponse),
-                destination,
-                destinationPort,
-              );
-            } on SocketException {
-              _mdnsLog('发送查询失败：$type ${lan ? outlets[i].name : ''}');
+      void sendQueries() {
+        for (final entry in sockets) {
+          final socket = entry.socket;
+          final ipv6 = socket.address.type == InternetAddressType.IPv6;
+          final destination = lan
+              ? (ipv6 ? kMdnsGroupV6 : kMdnsGroupV4)
+              : group;
+          final destinationPort = port;
+          final unicastResponse = !lan || socket.port != port;
+          final outlets = lan
+              ? (entry.interface != null
+                    ? <NetworkInterface>[entry.interface!]
+                    : entry.interfaces)
+              : const <NetworkInterface>[];
+          if (lan && outlets.isEmpty) continue;
+          final rounds = lan ? outlets.length : 1;
+          for (var i = 0; i < rounds; i++) {
+            if (lan && !selectMulticastInterface(socket, outlets[i])) {
+              _mdnsLog('指定组播出口失败：${outlets[i].name}');
+              continue;
+            }
+            for (final type in serviceTypes) {
+              final qname = _encodeName('$type.$kMdnsDomain');
+              try {
+                socket.send(
+                  _buildPtrQuery(qname, unicastResponse: unicastResponse),
+                  destination,
+                  destinationPort,
+                );
+              } on SocketException {
+                _mdnsLog('发送查询失败：$type ${lan ? outlets[i].name : ''}');
+              }
             }
           }
         }
       }
-      await completer.future;
+
+      sendQueries();
+      final requery = requeryInterval == null
+          ? null
+          : Timer.periodic(requeryInterval, (_) {
+              if (!completer.isCompleted) sendQueries();
+            });
+      final cancelWatch = isCancelled == null
+          ? null
+          : Timer.periodic(const Duration(milliseconds: 200), (_) {
+              if (isCancelled()) finish();
+            });
+      if (isCancelled?.call() ?? false) finish();
+      try {
+        await completer.future;
+      } finally {
+        requery?.cancel();
+        cancelWatch?.cancel();
+      }
     } finally {
       timer.cancel();
       for (final subscription in subscriptions) {
@@ -652,9 +708,17 @@ Future<List<MdnsService>> discoverAdbServices({
   },
   Duration timeout = kMdnsInterfaceTimeout,
   void Function(List<MdnsService> services)? onUpdate,
+  bool Function(List<MdnsService> services)? stopWhen,
+  Duration? requeryInterval,
+  bool Function()? isCancelled,
 }) {
-  return MdnsBrowser(timeout: timeout)
-      .discover(serviceTypes: serviceTypes, onUpdate: onUpdate);
+  return MdnsBrowser(timeout: timeout).discover(
+    serviceTypes: serviceTypes,
+    onUpdate: onUpdate,
+    stopWhen: stopWhen,
+    requeryInterval: requeryInterval,
+    isCancelled: isCancelled,
+  );
 }
 
 // ---------------------------------------------------------------------------

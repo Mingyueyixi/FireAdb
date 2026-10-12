@@ -299,6 +299,49 @@ void main() {
       Get.reset();
     }
   });
+
+  testWidgets('二维码配对展示二维码，取消后停止等待', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    Get.put<ConnectionManager>(ConnectionManager(), permanent: true);
+    Get.put<AppLocaleController>(AppLocaleController(), permanent: true);
+    Get.put<AppSettingsStore>(AppSettingsStore(), permanent: true);
+    final homeController = HomeController(
+      hostClient: _FakeAdbHostClient(const <AdbDeviceInfo>[]),
+      listUsbDevices: () async => const <UsbAdbDevice>[],
+      discoverServices: (onUpdate) async => const <MdnsService>[],
+    );
+    Get.put<HomeController>(homeController);
+    try {
+      await tester.pumpWidget(const FireAdbApp());
+      await tester.pump();
+
+      final button = find.byKey(const ValueKey<String>('home-qr-pair'));
+      await tester.ensureVisible(button);
+      await tester.pump();
+      await tester.tap(button);
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey<String>('home-qr-pairing-code')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('服务名和配对密码'), findsOneWidget);
+      expect(find.text('等待手机扫描…'), findsOneWidget);
+      expect(find.byType(CustomPaint), findsWidgets);
+
+      await tester.tap(find.text('取消'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(
+        find.byKey(const ValueKey<String>('home-qr-pairing-code')),
+        findsNothing,
+      );
+    } finally {
+      homeController.onClose();
+      Get.reset();
+    }
+  });
 }
 
 class _FakeAdbHostClient extends AdbHostClient {

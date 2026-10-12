@@ -138,6 +138,45 @@ void main() {
       }
     });
 
+    test('目标服务一到就返回，不再等满窗口', () async {
+      final responder = await spawnFakeResponder(0);
+      try {
+        final browser = MdnsBrowser(
+          group: InternetAddress.loopbackIPv4,
+          port: responder.port,
+          timeout: const Duration(seconds: 2),
+        );
+        final watch = Stopwatch()..start();
+        final services = await browser.discover(
+          serviceTypes: const {adbServiceTypePairing},
+          stopWhen: (found) => found.any(
+            (service) => service.serviceType == adbServiceTypePairing,
+          ),
+        );
+        watch.stop();
+        expect(services, isNotEmpty);
+        expect(watch.elapsed, lessThan(const Duration(milliseconds: 900)));
+      } finally {
+        await responder.close();
+      }
+    });
+
+    test('取消后不再等满窗口', () async {
+      final browser = MdnsBrowser(
+        group: InternetAddress.loopbackIPv4,
+        port: 9,
+        timeout: const Duration(seconds: 2),
+      );
+      final watch = Stopwatch()..start();
+      final services = await browser.discover(
+        serviceTypes: const {adbServiceTypePairing},
+        isCancelled: () => true,
+      );
+      watch.stop();
+      expect(services, isEmpty);
+      expect(watch.elapsed, lessThan(const Duration(milliseconds: 500)));
+    });
+
     test('只查询 connect 服务时不返回配对结果', () async {
       final responder = await spawnFakeResponder(0);
       try {

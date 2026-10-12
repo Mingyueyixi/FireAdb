@@ -44,6 +44,7 @@ dependencies:
     path: ../packages/libadb
   get: ^4.7.3
   hooks: 2.0.2
+  qr: ^3.0.2
 
 dev_dependencies:
   flutter_test:

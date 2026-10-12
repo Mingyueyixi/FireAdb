@@ -68,7 +68,7 @@
   "homeScanning": "Scanning…",
   "homeScan": "Scan",
   "homeWifiDebugInfo": "For Android 11+ devices with Wireless debugging enabled",
-  "homeMdnsHelp": "1. Pairing service: open the pairing code screen first. A floating window or split screen is recommended, because leaving that screen closes the service.\n2. Tap Scan on this page. When the pairing service appears, tap Pair.\n3. Enter the wireless debugging pairing code.\n4. Tap the matching wireless debugging port to connect.\nIf already paired, connect directly.",
+  "homeMdnsHelp": "QR pairing: tap QR pairing. On the phone, open Settings → Developer options → Wireless debugging → Pair device with QR code and scan. This computer pairs and connects automatically.\nPairing code: open the pairing code screen first. A floating window or split screen is recommended, because leaving that screen closes the service. Tap Scan, tap Pair on the pairing service, enter the code, then tap the wireless debugging port.\nIf the device is already paired, tap Scan and connect to the wireless debugging port directly.",
   "homeScanFailed": "Scan failed: {error}",
   "@homeScanFailed": {
     "placeholders": {
@@ -84,6 +84,20 @@
   "homePairingCodeHelp": "Enter the pairing code shown on the wireless debugging screen.",
   "homePairingSucceeded": "Pairing succeeded",
   "homePairingSucceededHint": "Tap the matching wireless debugging port to connect.",
+  "homeQrPair": "QR pairing",
+  "homeQrPairingTitle": "QR pairing",
+  "homeQrPairingPrinciple": "The code holds a service name and a pairing password. After the phone scans it, the phone advertises that name. This computer finds the match, pairs with the password, then connects to the wireless debugging port.",
+  "homeQrPairingHelp": "On the phone, open Settings → Developer options → Wireless debugging → Pair device with QR code, then scan this code. The phone and computer must be on the same Wi-Fi.",
+  "homeQrPairingWaiting": "Waiting for the phone to scan…",
+  "homeQrPairingPairing": "Pairing…",
+  "homeQrPairingConnecting": "Paired. Connecting…",
+  "homeQrPairingTimeout": "The phone did not scan the code. Make sure wireless debugging is on, then try again.",
+  "homeQrPairingFailed": "QR pairing failed: {error}",
+  "@homeQrPairingFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "homeDeviceCount": "Devices ({count})",
   "@homeDeviceCount": {
     "placeholders": {

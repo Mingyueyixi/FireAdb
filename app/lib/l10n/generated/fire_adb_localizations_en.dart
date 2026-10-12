@@ -151,7 +151,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get homeMdnsHelp =>
-      '1. Pairing service: open the pairing code screen first. A floating window or split screen is recommended, because leaving that screen closes the service.\n2. Tap Scan on this page. When the pairing service appears, tap Pair.\n3. Enter the wireless debugging pairing code.\n4. Tap the matching wireless debugging port to connect.\nIf already paired, connect directly.';
+      'QR pairing: tap QR pairing. On the phone, open Settings → Developer options → Wireless debugging → Pair device with QR code and scan. This computer pairs and connects automatically.\nPairing code: open the pairing code screen first. A floating window or split screen is recommended, because leaving that screen closes the service. Tap Scan, tap Pair on the pairing service, enter the code, then tap the wireless debugging port.\nIf the device is already paired, tap Scan and connect to the wireless debugging port directly.';
 
   @override
   String homeScanFailed(Object error) {
@@ -187,6 +187,38 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   @override
   String get homePairingSucceededHint =>
       'Tap the matching wireless debugging port to connect.';
+
+  @override
+  String get homeQrPair => 'QR pairing';
+
+  @override
+  String get homeQrPairingTitle => 'QR pairing';
+
+  @override
+  String get homeQrPairingPrinciple =>
+      'The code holds a service name and a pairing password. After the phone scans it, the phone advertises that name. This computer finds the match, pairs with the password, then connects to the wireless debugging port.';
+
+  @override
+  String get homeQrPairingHelp =>
+      'On the phone, open Settings → Developer options → Wireless debugging → Pair device with QR code, then scan this code. The phone and computer must be on the same Wi-Fi.';
+
+  @override
+  String get homeQrPairingWaiting => 'Waiting for the phone to scan…';
+
+  @override
+  String get homeQrPairingPairing => 'Pairing…';
+
+  @override
+  String get homeQrPairingConnecting => 'Paired. Connecting…';
+
+  @override
+  String get homeQrPairingTimeout =>
+      'The phone did not scan the code. Make sure wireless debugging is on, then try again.';
+
+  @override
+  String homeQrPairingFailed(Object error) {
+    return 'QR pairing failed: $error';
+  }
 
   @override
   String homeDeviceCount(int count) {

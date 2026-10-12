@@ -350,7 +350,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @homeMdnsHelp.
   ///
   /// In zh, this message translates to:
-  /// **'1. 配对服务：先打开配对码页面。建议悬浮窗或分屏，离开后系统会关闭该服务。\n2. 点本页「扫描」，扫到配对服务后点「配对」。\n3. 输入无线调试配对码，完成配对。\n4. 点对应的无线调试端口进行连接。\n已配对过的可直接连接。'**
+  /// **'二维码配对：点「二维码配对」。手机打开「设置 → 开发者选项 → 无线调试 → 使用二维码配对设备」并扫描，电脑会自动完成配对并连接。\n配对码：先打开配对码页面。建议悬浮窗或分屏，离开后系统会关闭该服务。点「扫描」，对配对服务点「配对」并输入配对码，再点对应的无线调试端口连接。\n已配对过的设备点「扫描」，直接连接无线调试端口。'**
   String get homeMdnsHelp;
 
   /// No description provided for @homeScanFailed.
@@ -412,6 +412,60 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'请点对应的无线调试端口进行连接。'**
   String get homePairingSucceededHint;
+
+  /// No description provided for @homeQrPair.
+  ///
+  /// In zh, this message translates to:
+  /// **'二维码配对'**
+  String get homeQrPair;
+
+  /// No description provided for @homeQrPairingTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'二维码配对'**
+  String get homeQrPairingTitle;
+
+  /// No description provided for @homeQrPairingPrinciple.
+  ///
+  /// In zh, this message translates to:
+  /// **'二维码里是服务名和配对密码。手机扫码后会用这个名字发布配对服务，电脑找到同名服务后用该密码完成配对，再连接无线调试端口。'**
+  String get homeQrPairingPrinciple;
+
+  /// No description provided for @homeQrPairingHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'在手机上打开「设置 → 开发者选项 → 无线调试 → 使用二维码配对设备」，扫描此二维码。手机和电脑需在同一 Wi-Fi。'**
+  String get homeQrPairingHelp;
+
+  /// No description provided for @homeQrPairingWaiting.
+  ///
+  /// In zh, this message translates to:
+  /// **'等待手机扫描…'**
+  String get homeQrPairingWaiting;
+
+  /// No description provided for @homeQrPairingPairing.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在配对…'**
+  String get homeQrPairingPairing;
+
+  /// No description provided for @homeQrPairingConnecting.
+  ///
+  /// In zh, this message translates to:
+  /// **'配对成功，正在连接…'**
+  String get homeQrPairingConnecting;
+
+  /// No description provided for @homeQrPairingTimeout.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有等到手机扫描。请确认无线调试已打开，然后重试。'**
+  String get homeQrPairingTimeout;
+
+  /// No description provided for @homeQrPairingFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'二维码配对失败：{error}'**
+  String homeQrPairingFailed(Object error);
 
   /// No description provided for @homeDeviceCount.
   ///
