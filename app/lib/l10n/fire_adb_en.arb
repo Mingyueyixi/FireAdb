@@ -42,6 +42,15 @@
   },
   "settingsAutoRefreshInterval": "Refresh interval (seconds)",
   "settingsAutoRefreshIntervalInvalid": "Enter a whole number of seconds from 1 to 3600",
+  "settingsLogDirectory": "Log folder",
+  "settingsOpenLogDirectory": "Open in file manager",
+  "settingsLogDirectoryUnavailable": "The log folder is not available yet",
+  "settingsOpenLogDirectoryFailed": "Could not open the log folder: {error}",
+  "@settingsOpenLogDirectoryFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "homeAutoRefresh": "Auto refresh",
   "homeConnectionSucceeded": "Connected",
   "homeConnectedDevice": "Connected: {serial}",

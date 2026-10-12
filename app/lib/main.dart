@@ -6,6 +6,7 @@ import 'connection/connection_manager.dart';
 import 'home/home_controller.dart';
 import 'home/home_page.dart';
 import 'l10n/generated/fire_adb_localizations.dart';
+import 'log/app_log.dart';
 import 'settings/app_settings_store.dart';
 import 'settings/settings_page.dart';
 import 'workspace/workspace_controller.dart';
@@ -13,6 +14,7 @@ import 'workspace/workspace_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await installAppLogger();
   final manager = ConnectionManager();
   await manager.init();
   await manager.ensureLocalAdbServer();

@@ -4,9 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
-import '../app_feedback.dart';
 import '../connection/connection_manager.dart';
 import '../l10n/generated/fire_adb_localizations.dart';
+import '../log/app_log.dart';
 import 'data/bean/app_freeze.dart';
 import 'data/bean/installed_app.dart';
 import 'data/repo/device_app_repository.dart';
@@ -135,7 +135,7 @@ class AppsController extends GetxController {
     try {
       freezeMethod.value = await AppFreezeSettings.loadMethod();
     } catch (error, stackTrace) {
-      logAppError('读取应用冻结方式失败', error, stackTrace);
+      log.severe('读取应用冻结方式失败', error, stackTrace);
     }
   }
 
@@ -144,7 +144,7 @@ class AppsController extends GetxController {
     try {
       await AppFreezeSettings.saveMethod(method);
     } catch (error, stackTrace) {
-      logAppError('保存应用冻结方式失败', error, stackTrace);
+      log.severe('保存应用冻结方式失败', error, stackTrace);
     }
   }
 
@@ -182,7 +182,7 @@ class AppsController extends GetxController {
       );
       unawaited(_loadCatalog(generation, repo));
     } catch (loadError, stackTrace) {
-      logAppError('读取应用列表失败：$serial', loadError, stackTrace);
+      log.severe('读取应用列表失败：$serial', loadError, stackTrace);
       if (_closed || generation != _generation) return;
       loading.value = false;
       error.value = loadError;
@@ -449,7 +449,7 @@ class AppsController extends GetxController {
         }
         outcome.failed++;
         outcome.firstError ??= exportError;
-        logAppError('计算导出大小失败：${app.packageName}', exportError, stackTrace);
+        log.severe('计算导出大小失败：${app.packageName}', exportError, stackTrace);
       }
     }
     if (current != null) {
@@ -505,7 +505,7 @@ class AppsController extends GetxController {
           }
           outcome.failed++;
           outcome.firstError ??= exportError;
-          logAppError('批量操作失败：${app.packageName}', exportError, stackTrace);
+          log.severe('批量操作失败：${app.packageName}', exportError, stackTrace);
           if (current != null) {
             current.completed = outcome.succeeded + outcome.failed;
             _publish(force: true);
@@ -559,7 +559,7 @@ class AppsController extends GetxController {
           }
           outcome.failed++;
           outcome.firstError ??= batchError;
-          logAppError('批量操作失败：${app.packageName}', batchError, stackTrace);
+          log.severe('批量操作失败：${app.packageName}', batchError, stackTrace);
         }
         if (current != null) {
           current.completed = outcome.succeeded + outcome.failed;
@@ -614,7 +614,7 @@ class AppsController extends GetxController {
     try {
       return await action();
     } catch (taskError, stackTrace) {
-      logAppError('应用管理操作失败：$serial', taskError, stackTrace);
+      log.severe('应用管理操作失败：$serial', taskError, stackTrace);
       if (_closed) return null;
       return AppNotice(
         title: l10n.appsActionFailed,

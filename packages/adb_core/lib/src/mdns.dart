@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:typed_data';
+
+import 'package:logging/logging.dart';
 
 /// AOSP adb mDNS 服务类型（对应 aosp-adb/adb_mdns.h 中的
 /// `ADB_FULL_MDNS_SERVICE_TYPE`，即 `_adb-tls-pairing._tcp` 等）。
@@ -647,8 +648,10 @@ bool selectMulticastInterface(
   }
 }
 
+final Logger _mdnsLogger = Logger('adb_core.mdns');
+
 void _mdnsLog(String message) {
-  developer.log(message, name: 'fire_adb', level: 1000);
+  _mdnsLogger.info(message);
 }
 
 String _ifaceLabel(NetworkInterface iface) {

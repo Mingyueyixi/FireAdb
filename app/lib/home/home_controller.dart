@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:libadb/libadb.dart';
 
-import '../app_feedback.dart';
 import '../connection/connection_manager.dart';
 import '../connection/model/connected_device.dart';
+import '../log/app_log.dart';
 import '../settings/app_settings_store.dart';
 
 class HomeController extends GetxController {
@@ -190,26 +190,24 @@ class HomeController extends GetxController {
     scanning.value = true;
     scanError.value = null;
     if (!automatic) {
-      logAppLine('开始扫描无线设备');
+      log.info('开始扫描无线设备');
       discovered.clear();
     }
     try {
       final found = await _discover((services) {
         discovered.assignAll(services);
         if (!automatic) {
-          logAppLine(
+          log.info(
             '扫描到 ${services.length} 个：${services.map((service) => service.endpointText).join('，')}',
           );
         }
       });
       discovered.assignAll(found);
       if (!automatic) {
-        logAppLine(
-          found.isEmpty ? '扫描结束，没有发现无线设备' : '扫描结束，共 ${found.length} 个',
-        );
+        log.info(found.isEmpty ? '扫描结束，没有发现无线设备' : '扫描结束，共 ${found.length} 个');
       }
     } catch (error, stackTrace) {
-      logAppError('mDNS 设备扫描失败', error, stackTrace);
+      log.severe('mDNS 设备扫描失败', error, stackTrace);
       scanError.value = '$error';
     } finally {
       scanning.value = false;
@@ -266,7 +264,7 @@ class HomeController extends GetxController {
       final message = '$error';
       if (message != _loggedUsbError) {
         _loggedUsbError = message;
-        logAppError('刷新 USB 设备列表失败', error, stackTrace);
+        log.severe('刷新 USB 设备列表失败', error, stackTrace);
       }
       usbDevicesError.value = message;
     } finally {
@@ -294,7 +292,7 @@ class HomeController extends GetxController {
       final message = '$error';
       if (message != _loggedAdbError) {
         _loggedAdbError = message;
-        logAppError('刷新 ADB 设备列表失败', error, stackTrace);
+        log.severe('刷新 ADB 设备列表失败', error, stackTrace);
       }
       adbDevicesError.value = message;
     } finally {
@@ -306,7 +304,7 @@ class HomeController extends GetxController {
     try {
       await manager.ensureLocalAdbServer(restart: true);
     } catch (error, stackTrace) {
-      logAppError('启动本机 ADB Server 失败', error, stackTrace);
+      log.severe('启动本机 ADB Server 失败', error, stackTrace);
       return false;
     }
     if (!manager.ownsLocalAdbServer.value && !manager.usingSdkAdbServer.value) {

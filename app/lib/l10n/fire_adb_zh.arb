@@ -42,6 +42,15 @@
   },
   "settingsAutoRefreshInterval": "刷新间隔（秒）",
   "settingsAutoRefreshIntervalInvalid": "请输入 1 到 3600 之间的整数",
+  "settingsLogDirectory": "日志目录",
+  "settingsOpenLogDirectory": "在文件管理器中打开",
+  "settingsLogDirectoryUnavailable": "日志目录还不可用",
+  "settingsOpenLogDirectoryFailed": "无法打开日志目录：{error}",
+  "@settingsOpenLogDirectoryFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "homeAutoRefresh": "自动刷新",
   "homeConnectionSucceeded": "连接成功",
   "homeConnectedDevice": "已连接：{serial}",

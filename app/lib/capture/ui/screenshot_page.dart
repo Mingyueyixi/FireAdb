@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../app_feedback.dart';
 import '../../files/android_storage_access.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../log/app_log.dart';
 import '../capture_notice.dart';
 import '../data/capture_store.dart';
 import '../data/local_opener.dart';
@@ -77,7 +77,7 @@ class _ScreenshotPageState extends State<ScreenshotPage> {
     try {
       await openLocalPath(path, openFile: openFile);
     } catch (error, stackTrace) {
-      logAppError('打开截图路径失败：$path', error, stackTrace);
+      log.severe('打开截图路径失败：$path', error, stackTrace);
       if (!mounted) return;
       showCaptureNotice(
         context,

@@ -4,8 +4,8 @@ import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../app_feedback.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
+import '../log/app_log.dart';
 
 /// 设备基本信息面板（连接后按需读取 getprop）。
 class DeviceOverviewPage extends StatefulWidget {
@@ -62,7 +62,7 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
         _loaded = true;
       });
     } catch (error, stackTrace) {
-      logAppError('读取设备信息失败：${widget.serial}', error, stackTrace);
+      log.severe('读取设备信息失败：${widget.serial}', error, stackTrace);
       if (!mounted) return;
       setState(() => _error = '$error');
     }

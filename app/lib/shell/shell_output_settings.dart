@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_feedback.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
+import '../log/app_log.dart';
 
 class ShellOutputSettings {
   ShellOutputSettings._();
@@ -70,7 +71,7 @@ class ShellOutputSettings {
       if (!saved) throw StateError('SharedPreferences 未能保存 Shell 输出设置');
       if (context.mounted) onSaved(newLimit);
     } catch (error, stackTrace) {
-      logAppError('保存 Shell 输出设置失败', error, stackTrace);
+      log.severe('保存 Shell 输出设置失败', error, stackTrace);
       if (context.mounted) {
         showAppMessage(
           ScaffoldMessenger.of(context),

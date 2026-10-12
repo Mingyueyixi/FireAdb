@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
+
 class LocalOpenRequest {
   const LocalOpenRequest(
     this.executable,
@@ -30,6 +32,28 @@ LocalOpenRequest localOpenRequest(
     return LocalOpenRequest('open', <String>[path]);
   }
   return LocalOpenRequest('xdg-open', <String>[path]);
+}
+
+const MethodChannel _storageChannel = MethodChannel('fire_adb/storage');
+
+/// 应用外部文件目录。调用后系统会建好 `Android/data/<包名>/files`。
+Future<String> androidExternalFilesDirectory() async {
+  final path = await _storageChannel.invokeMethod<String>(
+    'externalFilesDirectory',
+  );
+  if (path == null || path.isEmpty) {
+    throw StateError('没有可写入的日志目录');
+  }
+  return path;
+}
+
+/// 用系统默认文件管理器打开目录。
+Future<void> openSystemDirectory(String path) async {
+  if (Platform.isAndroid) {
+    await _storageChannel.invokeMethod<void>('openDirectory', path);
+    return;
+  }
+  await openLocalPath(path, openFile: false);
 }
 
 Future<void> openLocalPath(String path, {required bool openFile}) async {

@@ -4,12 +4,12 @@ import 'dart:io';
 
 import 'package:get/get.dart';
 
-import '../app_feedback.dart';
 import '../apps/data/source/fire_app_service.dart';
 import '../connection/connection_manager.dart';
 import '../connection/model/connected_device.dart';
 import '../files/data/source/remote_file_commands.dart';
 import '../l10n/generated/fire_adb_localizations.dart';
+import '../log/app_log.dart';
 import 'capture_notice.dart';
 import 'data/capture_paths.dart';
 import 'data/capture_store.dart';
@@ -131,7 +131,7 @@ class ScreenrecordController extends GetxController {
       _useShellRecorder = probe.needsShellCopy;
       _clampTimeLimit();
     } catch (error, stackTrace) {
-      logAppError('检查录屏程序标签失败：$serial', error, stackTrace);
+      log.severe('检查录屏程序标签失败：$serial', error, stackTrace);
     }
   }
 
@@ -160,7 +160,7 @@ class ScreenrecordController extends GetxController {
       }
       loadError.value = null;
     } catch (error, stackTrace) {
-      logAppError('读取录像列表失败：$serial', error, stackTrace);
+      log.severe('读取录像列表失败：$serial', error, stackTrace);
       if (!isClosed) loadError.value = error;
     } finally {
       if (!isClosed) loading.value = false;
@@ -255,7 +255,7 @@ class ScreenrecordController extends GetxController {
             : await device.openShell(command);
         _beginSession(device, shell, remote: remote, name: name, l10n: l10n);
       } catch (error, stackTrace) {
-        logAppError('开始录屏失败：$serial', error, stackTrace);
+        log.severe('开始录屏失败：$serial', error, stackTrace);
         return RecordingStart.failed(captureFailure(l10n, '$error'));
       }
       if (_stopRequested || isClosed) {
@@ -354,7 +354,7 @@ class ScreenrecordController extends GetxController {
         message: l10n.captureDeleted(file.name),
       );
     } catch (error, stackTrace) {
-      logAppError('删除录像失败：${file.path}', error, stackTrace);
+      log.severe('删除录像失败：${file.path}', error, stackTrace);
       return captureFailure(l10n, '$error');
     }
   }
@@ -397,7 +397,7 @@ class ScreenrecordController extends GetxController {
       _addChunk,
       onDone: _markShellDone,
       onError: (Object error, StackTrace stackTrace) {
-        logAppError('录屏输出中断：$remote', error, stackTrace);
+        log.severe('录屏输出中断：$remote', error, stackTrace);
         _addText('$error');
         _markShellDone();
       },
@@ -436,7 +436,7 @@ class ScreenrecordController extends GetxController {
       if (_shellDone.isCompleted) return;
       await device.shell(_stopCommand);
     } catch (error, stackTrace) {
-      logAppError('发送录屏停止信号失败：${_remotePath ?? serial}', error, stackTrace);
+      log.severe('发送录屏停止信号失败：${_remotePath ?? serial}', error, stackTrace);
     }
   }
 
@@ -466,7 +466,7 @@ class ScreenrecordController extends GetxController {
       await _waitForShell();
       notice = await _pullAndStore(l10n);
     } catch (error, stackTrace) {
-      logAppError('保存录像失败：${_remotePath ?? serial}', error, stackTrace);
+      log.severe('保存录像失败：${_remotePath ?? serial}', error, stackTrace);
       if (l10n != null) {
         final remote = _remotePath;
         notice = remote == null
@@ -545,7 +545,7 @@ class ScreenrecordController extends GetxController {
     try {
       await device.shell(removeRemoteFileCommand(remote));
     } catch (error, stackTrace) {
-      logAppError('删除设备上的临时录像失败：$remote', error, stackTrace);
+      log.severe('删除设备上的临时录像失败：$remote', error, stackTrace);
     }
     return captureSavedNotice(
       l10n,
@@ -594,7 +594,7 @@ class ScreenrecordController extends GetxController {
       try {
         await subscription.cancel();
       } catch (error, stackTrace) {
-        logAppError('取消录屏输出订阅失败：$serial', error, stackTrace);
+        log.severe('取消录屏输出订阅失败：$serial', error, stackTrace);
       }
     }
     final shell = _shell;
@@ -603,7 +603,7 @@ class ScreenrecordController extends GetxController {
     try {
       await shell.close();
     } catch (error, stackTrace) {
-      logAppError('关闭录屏命令流失败：$serial', error, stackTrace);
+      log.severe('关闭录屏命令流失败：$serial', error, stackTrace);
     }
   }
 }

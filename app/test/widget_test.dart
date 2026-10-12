@@ -259,9 +259,15 @@ void main() {
       expect(settings.autoRefreshIntervalSeconds.value, 5);
       expect(find.text('勾选后每 5 秒刷新一次'), findsWidgets);
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('settings-auto-refresh-mdns')),
+      final mdnsSetting = find.byKey(
+        const ValueKey<String>('settings-auto-refresh-mdns'),
       );
+      await Scrollable.ensureVisible(
+        tester.element(mdnsSetting),
+        alignment: 0.5,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(mdnsSetting);
       await tester.pump();
       expect(settings.autoRefreshMdns.value, isTrue);
       final preferences = await SharedPreferences.getInstance();

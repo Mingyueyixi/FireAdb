@@ -5,6 +5,7 @@ import 'package:libadb/libadb.dart';
 import '../app_feedback.dart';
 import '../connection/model/device_profile.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
+import '../log/app_log.dart';
 import '../settings/app_settings_store.dart';
 import '../widgets/adaptive.dart';
 import 'adb_qr_pairing.dart';
@@ -31,7 +32,7 @@ class HomePage extends GetView<HomeController> {
       );
       Get.toNamed<void>('/workspace', arguments: device.serial);
     } catch (error, stackTrace) {
-      logAppError('连接设备失败：$host:$port', error, stackTrace);
+      log.severe('连接设备失败：$host:$port', error, stackTrace);
       showAppMessage(
         messenger,
         theme,
@@ -62,7 +63,7 @@ class HomePage extends GetView<HomeController> {
         message: l10n.homePairingSucceededHint,
       );
     } catch (error, stackTrace) {
-      logAppError(
+      log.severe(
         '无线配对失败：${service.addressText}:${service.port}',
         error,
         stackTrace,
@@ -138,7 +139,7 @@ class HomePage extends GetView<HomeController> {
       );
       Get.toNamed<void>('/workspace', arguments: connected.serial);
     } catch (error, stackTrace) {
-      logAppError('连接 USB 设备失败：${device.address}', error, stackTrace);
+      log.severe('连接 USB 设备失败：${device.address}', error, stackTrace);
       showAppMessage(
         messenger,
         theme,
@@ -166,7 +167,7 @@ class HomePage extends GetView<HomeController> {
       );
       Get.toNamed<void>('/workspace', arguments: device.serial);
     } catch (error, stackTrace) {
-      logAppError('连接设备失败：${info.serial}', error, stackTrace);
+      log.severe('连接设备失败：${info.serial}', error, stackTrace);
       showAppMessage(
         messenger,
         theme,
@@ -241,7 +242,7 @@ class HomePage extends GetView<HomeController> {
         message: l10n.homeDisconnectSucceeded,
       );
     } catch (error, stackTrace) {
-      logAppError('断开设备失败：$serial', error, stackTrace);
+      log.severe('断开设备失败：$serial', error, stackTrace);
       showAppMessage(
         messenger,
         theme,
@@ -358,7 +359,7 @@ class HomePage extends GetView<HomeController> {
         await store.setAutoRefreshDevices(value);
       }
     } catch (error, stackTrace) {
-      logAppError('保存自动刷新设置失败', error, stackTrace);
+      log.severe('保存自动刷新设置失败', error, stackTrace);
       if (!context.mounted) return;
       final l10n = context.l10n;
       showAppMessage(

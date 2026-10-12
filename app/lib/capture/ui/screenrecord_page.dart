@@ -4,11 +4,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../app_feedback.dart';
 import '../../files/android_storage_access.dart';
 import '../../files/data/source/remote_file_commands.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../l10n/generated/fire_adb_localizations.dart';
+import '../../log/app_log.dart';
 import '../capture_notice.dart';
 import '../data/capture_paths.dart';
 import '../data/capture_store.dart';
@@ -88,7 +88,7 @@ class _ScreenrecordPageState extends State<ScreenrecordPage> {
     try {
       await openLocalPath(path, openFile: openFile);
     } catch (error, stackTrace) {
-      logAppError('打开录像路径失败：$path', error, stackTrace);
+      log.severe('打开录像路径失败：$path', error, stackTrace);
       if (!mounted) return;
       showCaptureNotice(
         context,

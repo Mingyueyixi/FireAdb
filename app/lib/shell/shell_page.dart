@@ -6,9 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
-import '../app_feedback.dart';
 import '../connection/model/connected_device.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
+import '../log/app_log.dart';
 import 'shell_output.dart';
 import 'shell_output_settings.dart';
 
@@ -70,7 +70,7 @@ class _ShellPageState extends State<ShellPage> {
       final limit = await ShellOutputSettings.loadLimitMiB();
       if (mounted && !_disposing) _output.setLimitMiB(limit);
     } catch (error, stackTrace) {
-      logAppError('读取 Shell 输出设置失败', error, stackTrace);
+      log.severe('读取 Shell 输出设置失败', error, stackTrace);
     }
   }
 
@@ -86,7 +86,7 @@ class _ShellPageState extends State<ShellPage> {
     try {
       await stream.close();
     } catch (error, stackTrace) {
-      logAppError('关闭 Shell 命令流失败：${widget.serial}', error, stackTrace);
+      log.severe('关闭 Shell 命令流失败：${widget.serial}', error, stackTrace);
     }
   }
 
@@ -96,7 +96,7 @@ class _ShellPageState extends State<ShellPage> {
     try {
       await subscription.cancel();
     } catch (error, stackTrace) {
-      logAppError('取消 Shell 命令订阅失败：${widget.serial}', error, stackTrace);
+      log.severe('取消 Shell 命令订阅失败：${widget.serial}', error, stackTrace);
     }
   }
 
@@ -144,7 +144,7 @@ class _ShellPageState extends State<ShellPage> {
               _finishCommand();
             },
             onError: (Object error, StackTrace stackTrace) {
-              logAppError('Shell 命令流失败：$cmd', error, stackTrace);
+              log.severe('Shell 命令流失败：$cmd', error, stackTrace);
               if (!mounted || _disposing) return;
               _output.appendLine(
                 ShellOutputType.error,
@@ -154,7 +154,7 @@ class _ShellPageState extends State<ShellPage> {
             },
           );
     } catch (error, stackTrace) {
-      logAppError('执行 Shell 命令失败：$cmd', error, stackTrace);
+      log.severe('执行 Shell 命令失败：$cmd', error, stackTrace);
       if (mounted && !_disposing) {
         _output.appendLine(
           ShellOutputType.error,
@@ -232,7 +232,7 @@ class _ShellPageState extends State<ShellPage> {
     try {
       await stream.write(utf8.encode('$input\n'));
     } catch (error, stackTrace) {
-      logAppError('向 Shell 发送输入失败：${widget.serial}', error, stackTrace);
+      log.severe('向 Shell 发送输入失败：${widget.serial}', error, stackTrace);
       if (mounted && !_disposing) {
         _output.appendLine(
           ShellOutputType.error,
@@ -299,7 +299,7 @@ class _ShellPageState extends State<ShellPage> {
         _output.appendLine(ShellOutputType.hint, '^C');
       }
     } catch (error, stackTrace) {
-      logAppError('中断 Shell 命令失败：${widget.serial}', error, stackTrace);
+      log.severe('中断 Shell 命令失败：${widget.serial}', error, stackTrace);
     }
   }
 

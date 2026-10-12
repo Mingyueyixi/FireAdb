@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import '../../app_feedback.dart';
 import '../../common/object_loader.dart';
 import '../../connection/model/connected_device.dart';
+import '../../log/app_log.dart';
 import '../data/bean/installed_app.dart';
 import '../data/repo/device_app_repository.dart';
 import '../data/source/fire_app_service.dart';
@@ -120,10 +120,10 @@ class AppDisplayLoader {
       if (generation != _generation) return null;
       return shown;
     } on TimeoutException catch (error, stackTrace) {
-      logAppError('读取应用信息超时：$packageName', error, stackTrace);
+      log.severe('读取应用信息超时：$packageName', error, stackTrace);
       return null;
     } catch (error, stackTrace) {
-      logAppError('读取应用信息失败：$packageName', error, stackTrace);
+      log.severe('读取应用信息失败：$packageName', error, stackTrace);
       return null;
     }
   }
@@ -140,7 +140,7 @@ class AppDisplayLoader {
       }
       return null;
     } catch (error, stackTrace) {
-      logAppError('读取应用体积失败：$packageName', error, stackTrace);
+      log.severe('读取应用体积失败：$packageName', error, stackTrace);
       return null;
     }
   }

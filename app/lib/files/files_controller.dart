@@ -5,9 +5,9 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
-import '../app_feedback.dart';
 import '../connection/connection_manager.dart';
 import '../l10n/generated/fire_adb_localizations.dart';
+import '../log/app_log.dart';
 import 'data/bean/remote_file.dart';
 import 'data/repo/device_file_repository.dart';
 import 'data/source/remote_file_commands.dart';
@@ -181,7 +181,7 @@ class FilesController extends GetxController {
       selected.removeWhere((item) => !loaded.any((file) => file.path == item));
       loading.value = false;
     } catch (loadError, stackTrace) {
-      logAppError('读取目录失败：$directory', loadError, stackTrace);
+      log.severe('读取目录失败：$directory', loadError, stackTrace);
       if (_closed || generation != _generation) return;
       loading.value = false;
       if (loadError is! FileOperationCancelled) error.value = loadError;
@@ -643,7 +643,7 @@ class FilesController extends GetxController {
       if (_closed) return null;
       return FileNotice(title: label, message: l10n.appsTaskCancelled);
     } catch (taskError, stackTrace) {
-      logAppError('文件管理操作失败：$serial', taskError, stackTrace);
+      log.severe('文件管理操作失败：$serial', taskError, stackTrace);
       if (_closed) return null;
       return FileNotice(
         title: l10n.filesActionFailed,

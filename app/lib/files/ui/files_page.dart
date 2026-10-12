@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import '../../app_feedback.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../l10n/generated/fire_adb_localizations.dart';
+import '../../log/app_log.dart';
 import '../data/bean/remote_file.dart';
 import '../data/source/remote_file_commands.dart';
 import '../files_controller.dart';
@@ -76,7 +77,7 @@ class _FilesPageState extends State<FilesPage> {
     try {
       directory = await pickExportDirectory(context, prompt);
     } catch (error, stackTrace) {
-      logAppError('选择导出目录失败', error, stackTrace);
+      log.severe('选择导出目录失败', error, stackTrace);
       if (!mounted) return;
       _show(
         FileNotice(title: l10n.filesExport, message: '$error', isError: true),
@@ -94,7 +95,7 @@ class _FilesPageState extends State<FilesPage> {
     try {
       paths = await pickLocalFiles(context);
     } catch (error, stackTrace) {
-      logAppError('选择上传文件失败', error, stackTrace);
+      log.severe('选择上传文件失败', error, stackTrace);
       if (!mounted) return;
       _show(
         FileNotice(title: l10n.filesUpload, message: '$error', isError: true),

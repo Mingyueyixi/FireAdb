@@ -4,9 +4,9 @@ import 'dart:io';
 
 import 'package:get/get.dart';
 
-import '../app_feedback.dart';
 import '../connection/connection_manager.dart';
 import '../l10n/generated/fire_adb_localizations.dart';
+import '../log/app_log.dart';
 import 'capture_notice.dart';
 import 'data/capture_paths.dart';
 import 'data/capture_store.dart';
@@ -51,7 +51,7 @@ class ScreenshotController extends GetxController {
       _syncSelection(own, prefer: prefer, selectNewest: prefer == null);
       loadError.value = null;
     } catch (error, stackTrace) {
-      logAppError('读取截图列表失败：$serial', error, stackTrace);
+      log.severe('读取截图列表失败：$serial', error, stackTrace);
       if (!isClosed) loadError.value = error;
     } finally {
       if (!isClosed) loading.value = false;
@@ -94,7 +94,7 @@ class ScreenshotController extends GetxController {
         title: l10n.workspaceScreenshotTitle,
       );
     } catch (error, stackTrace) {
-      logAppError('截图失败：$serial', error, stackTrace);
+      log.severe('截图失败：$serial', error, stackTrace);
       return captureFailure(l10n, '$error');
     } finally {
       if (!isClosed) busy.value = false;
@@ -117,7 +117,7 @@ class ScreenshotController extends GetxController {
         message: l10n.captureDeleted(file.name),
       );
     } catch (error, stackTrace) {
-      logAppError('删除截图失败：${file.path}', error, stackTrace);
+      log.severe('删除截图失败：${file.path}', error, stackTrace);
       return captureFailure(l10n, '$error');
     }
   }

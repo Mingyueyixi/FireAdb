@@ -1,11 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-
 import 'package:libadb/libadb.dart';
 
-import '../app_feedback.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
+import '../log/app_log.dart';
 import 'adb_qr_code.dart';
 import 'adb_qr_pairing.dart';
 import 'home_controller.dart';
@@ -40,7 +39,7 @@ class _QrPairingDialogState extends State<_QrPairingDialog> {
   void initState() {
     super.initState();
     _session = AdbQrPairing.generate();
-    logAppLine('开始二维码配对，等待服务 ${_session.serviceName}');
+    log.info('开始二维码配对，等待服务 ${_session.serviceName}');
     unawaited(_watch());
   }
 
@@ -54,14 +53,14 @@ class _QrPairingDialogState extends State<_QrPairingDialog> {
       stopWhen: stopWhen,
       isCancelled: isCancelled,
       onUpdate: (found) {
-        logAppLine(
+        log.info(
           '二维码配对发现 ${found.length} 个：'
           '${found.map((service) => '${service.instanceName}\t${service.serviceType}\t${service.endpointText}').join('；')}',
         );
       },
     );
     if (services.isEmpty) {
-      logAppLine('二维码配对结束，没有发现服务');
+      log.info('二维码配对结束，没有发现服务');
     }
     return services;
   }
@@ -78,7 +77,7 @@ class _QrPairingDialogState extends State<_QrPairingDialog> {
         },
         isCancelled: () => !mounted,
         onPhase: (phase) {
-          logAppLine(switch (phase) {
+          log.info(switch (phase) {
             QrPairingPhase.waiting => '二维码配对仍在等待手机扫描',
             QrPairingPhase.pairing => '已匹配 ${_session.serviceName}，开始无线配对',
             QrPairingPhase.connecting => '无线配对完成，开始连接',
@@ -98,7 +97,7 @@ class _QrPairingDialogState extends State<_QrPairingDialog> {
           break;
       }
     } catch (error, stackTrace) {
-      logAppError('二维码配对失败', error, stackTrace);
+      log.severe('二维码配对失败', error, stackTrace);
       if (!mounted) return;
       setState(() => _failure = context.l10n.homeQrPairingFailed('$error'));
     }

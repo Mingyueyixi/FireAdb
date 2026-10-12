@@ -221,6 +221,30 @@ abstract class FireAdbLocalizations {
   /// **'请输入 1 到 3600 之间的整数'**
   String get settingsAutoRefreshIntervalInvalid;
 
+  /// No description provided for @settingsLogDirectory.
+  ///
+  /// In zh, this message translates to:
+  /// **'日志目录'**
+  String get settingsLogDirectory;
+
+  /// No description provided for @settingsOpenLogDirectory.
+  ///
+  /// In zh, this message translates to:
+  /// **'在文件管理器中打开'**
+  String get settingsOpenLogDirectory;
+
+  /// No description provided for @settingsLogDirectoryUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'日志目录还不可用'**
+  String get settingsLogDirectoryUnavailable;
+
+  /// No description provided for @settingsOpenLogDirectoryFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法打开日志目录：{error}'**
+  String settingsOpenLogDirectoryFailed(Object error);
+
   /// No description provided for @homeAutoRefresh.
   ///
   /// In zh, this message translates to:

@@ -79,6 +79,20 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get settingsAutoRefreshIntervalInvalid => '请输入 1 到 3600 之间的整数';
 
   @override
+  String get settingsLogDirectory => '日志目录';
+
+  @override
+  String get settingsOpenLogDirectory => '在文件管理器中打开';
+
+  @override
+  String get settingsLogDirectoryUnavailable => '日志目录还不可用';
+
+  @override
+  String settingsOpenLogDirectoryFailed(Object error) {
+    return '无法打开日志目录：$error';
+  }
+
+  @override
   String get homeAutoRefresh => '自动刷新';
 
   @override

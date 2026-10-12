@@ -82,6 +82,21 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
       'Enter a whole number of seconds from 1 to 3600';
 
   @override
+  String get settingsLogDirectory => 'Log folder';
+
+  @override
+  String get settingsOpenLogDirectory => 'Open in file manager';
+
+  @override
+  String get settingsLogDirectoryUnavailable =>
+      'The log folder is not available yet';
+
+  @override
+  String settingsOpenLogDirectoryFailed(Object error) {
+    return 'Could not open the log folder: $error';
+  }
+
+  @override
   String get homeAutoRefresh => 'Auto refresh';
 
   @override

@@ -3,13 +3,14 @@ import 'package:flutter/material.dart';
 import '../../app_feedback.dart';
 import '../../files/data/source/remote_file_commands.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../log/app_log.dart';
 import '../capture_notice.dart';
 import '../data/capture_store.dart';
 
 void showCaptureNotice(BuildContext context, CaptureNotice? notice) {
   if (notice == null) return;
   if (notice.isError) {
-    logAppLine('${notice.title}\n${notice.message}');
+    log.info('${notice.title}\n${notice.message}');
   }
   if (!context.mounted) return;
   if (notice.isError) {

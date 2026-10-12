@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:get/get.dart';
 import 'package:libadb/libadb.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../app_feedback.dart';
+import '../log/app_log.dart';
 import 'adb_key_path.dart';
 import 'model/connected_device.dart';
 import 'model/device_profile.dart';
@@ -143,7 +142,7 @@ class ConnectionManager extends GetxService {
         try {
           await killSdkAdbServer(adb, port: previous);
         } catch (error, stackTrace) {
-          logAppError('关闭 SDK adb server 失败', error, stackTrace);
+          log.severe('关闭 SDK adb server 失败', error, stackTrace);
         }
       }
       usingSdkAdbServer.value = false;
@@ -184,13 +183,10 @@ class ConnectionManager extends GetxService {
           await startSdkAdbServer(adb, port: adbServerPort.value);
           usingSdkAdbServer.value = true;
           sdkAdbError.value = null;
-          developer.log(
-            '已使用 SDK adb server：$adb，端口 ${adbServerPort.value}',
-            name: 'fire_adb',
-          );
+          log.info('已使用 SDK adb server：$adb，端口 ${adbServerPort.value}');
           return;
         } catch (error, stackTrace) {
-          logAppError('启动 SDK adb server 失败', error, stackTrace);
+          log.severe('启动 SDK adb server 失败', error, stackTrace);
           sdkAdbError.value = '$error';
           usingSdkAdbServer.value = false;
         }
@@ -207,7 +203,7 @@ class ConnectionManager extends GetxService {
           try {
             await killSdkAdbServer(adb, port: adbServerPort.value);
           } catch (error, stackTrace) {
-            logAppError('关闭 SDK adb server 失败', error, stackTrace);
+            log.severe('关闭 SDK adb server 失败', error, stackTrace);
           }
         }
       }
@@ -235,15 +231,12 @@ class ConnectionManager extends GetxService {
       onUsbError: _onLocalUsbError,
     );
     if (local == null) {
-      developer.log(
-        '127.0.0.1:$port 已有 ADB Server，直接使用它列出的设备',
-        name: 'fire_adb',
-      );
+      log.info('127.0.0.1:$port 已有 ADB Server，直接使用它列出的设备');
       return;
     }
     _localAdb = local;
     ownsLocalAdbServer.value = true;
-    developer.log('已启动本机 ADB Server 127.0.0.1:$port', name: 'fire_adb');
+    log.info('已启动本机 ADB Server 127.0.0.1:$port');
   }
 
   void _onLocalUsbError(Object? error, StackTrace? stackTrace) {
@@ -256,7 +249,7 @@ class ConnectionManager extends GetxService {
     localUsbError.value = message;
     if (message == _loggedLocalUsbError) return;
     _loggedLocalUsbError = message;
-    logAppError('读取 USB 设备失败', error, stackTrace ?? StackTrace.current);
+    log.severe('读取 USB 设备失败', error, stackTrace ?? StackTrace.current);
   }
 
   void _onLocalServerKilled() {
@@ -276,7 +269,7 @@ class ConnectionManager extends GetxService {
       _signerError = null;
       _signerResolved = true;
     } catch (error, stackTrace) {
-      logAppError('加载 ADB RSA 签名密钥失败', error, stackTrace);
+      log.severe('加载 ADB RSA 签名密钥失败', error, stackTrace);
       _signers = const <AdbRsaKeyPair>[];
       _signerError = error;
     }
@@ -389,7 +382,7 @@ class ConnectionManager extends GetxService {
         throw StateError('SharedPreferences 未能保存手动连接');
       }
     } catch (error, stackTrace) {
-      logAppError('保存手动连接失败', error, stackTrace);
+      log.severe('保存手动连接失败', error, stackTrace);
     }
   }
 
@@ -453,7 +446,7 @@ class ConnectionManager extends GetxService {
       try {
         await device.close();
       } catch (error, stackTrace) {
-        logAppError('关闭 ADB 设备连接失败：$serial', error, stackTrace);
+        log.severe('关闭 ADB 设备连接失败：$serial', error, stackTrace);
       }
     }
   }
@@ -511,7 +504,7 @@ class ConnectionManager extends GetxService {
       if (model.isEmpty) return null;
       return model;
     } catch (error, stackTrace) {
-      logAppError('读取设备名称失败', error, stackTrace);
+      log.severe('读取设备名称失败', error, stackTrace);
       return null;
     }
   }
@@ -625,7 +618,7 @@ class ConnectionManager extends GetxService {
       final saved = await preferences.setStringList(_historyPrefsKey, encoded);
       if (!saved) throw StateError('SharedPreferences 未能保存连接历史');
     } catch (error, stackTrace) {
-      logAppError('保存连接历史失败', error, stackTrace);
+      log.severe('保存连接历史失败', error, stackTrace);
     }
   }
 

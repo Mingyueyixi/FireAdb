@@ -6,10 +6,13 @@ import 'package:get/get.dart';
 
 import '../app_feedback.dart';
 import '../app_locale_controller.dart';
+import '../capture/data/local_opener.dart';
 import '../connection/connection_manager.dart';
+import '../files/android_storage_access.dart';
 import '../home/home_controller.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
 import '../l10n/generated/fire_adb_localizations.dart';
+import '../log/app_log.dart';
 import 'app_settings_store.dart';
 
 /// 独立设置页。语言、端口和自动刷新都在这一页修改。
@@ -26,6 +29,7 @@ class _SettingsPageState extends State<SettingsPage> {
   var _applyingServer = false;
   String? _portError;
   String? _intervalError;
+  String? _logDirectory;
 
   @override
   void initState() {
@@ -36,6 +40,39 @@ class _SettingsPageState extends State<SettingsPage> {
     _intervalController = TextEditingController(
       text: '${Get.find<AppSettingsStore>().autoRefreshIntervalSeconds.value}',
     );
+    unawaited(_loadLogDirectory());
+  }
+
+  Future<void> _loadLogDirectory() async {
+    final path = await resolveLogDirectory();
+    if (!mounted) return;
+    setState(() => _logDirectory = path);
+  }
+
+  Future<void> _openLogDirectory() async {
+    final path = _logDirectory;
+    if (path == null) return;
+    try {
+      if (Platform.isAndroid) {
+        final granted = await ensureAllFilesAccess(context);
+        if (!granted || !mounted) return;
+      }
+      final directory = await ensureLogDirectory(create: true);
+      if (!mounted || directory == null) return;
+      setState(() => _logDirectory = directory);
+      await attachFileLogStore();
+      await openSystemDirectory(directory);
+    } catch (error, stackTrace) {
+      log.severe('打开日志目录失败：$path', error, stackTrace);
+      if (!mounted) return;
+      showAppMessage(
+        ScaffoldMessenger.of(context),
+        Theme.of(context),
+        title: context.l10n.settingsLogDirectory,
+        message: context.l10n.settingsOpenLogDirectoryFailed('$error'),
+        isError: true,
+      );
+    }
   }
 
   @override
@@ -49,7 +86,7 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       await Get.find<AppLocaleController>().setLocale(locale);
     } catch (error, stackTrace) {
-      logAppError('Could not save application language', error, stackTrace);
+      log.severe('Could not save application language', error, stackTrace);
       if (!mounted) return;
       final l10n = context.l10n;
       showAppMessage(
@@ -110,7 +147,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       Get.find<HomeController>().refreshListedDevices();
     } catch (error, stackTrace) {
-      logAppError('保存 adb server 端口失败', error, stackTrace);
+      log.severe('保存 adb server 端口失败', error, stackTrace);
       if (!mounted) return;
       showAppMessage(
         ScaffoldMessenger.of(context),
@@ -131,7 +168,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!mounted) return;
       Get.find<HomeController>().refreshListedDevices();
     } catch (error, stackTrace) {
-      logAppError('保存 adb server 设置失败', error, stackTrace);
+      log.severe('保存 adb server 设置失败', error, stackTrace);
       if (!mounted) return;
       showAppMessage(
         ScaffoldMessenger.of(context),
@@ -158,7 +195,7 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       await Get.find<AppSettingsStore>().setAutoRefreshIntervalSeconds(seconds);
     } catch (error, stackTrace) {
-      logAppError('保存自动刷新间隔失败', error, stackTrace);
+      log.severe('保存自动刷新间隔失败', error, stackTrace);
       if (!mounted) return;
       showAppMessage(
         ScaffoldMessenger.of(context),
@@ -182,7 +219,7 @@ class _SettingsPageState extends State<SettingsPage> {
         await store.setAutoRefreshDevices(value);
       }
     } catch (error, stackTrace) {
-      logAppError('保存自动刷新设置失败', error, stackTrace);
+      log.severe('保存自动刷新设置失败', error, stackTrace);
       if (!mounted) return;
       showAppMessage(
         ScaffoldMessenger.of(context),
@@ -329,6 +366,26 @@ class _SettingsPageState extends State<SettingsPage> {
                     onChanged: _applyingServer ? null : _setPreferSdk,
                   ),
                 ],
+                const Divider(),
+                Text(
+                  l10n.settingsLogDirectory,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 4),
+                SelectableText(
+                  _logDirectory ?? l10n.settingsLogDirectoryUnavailable,
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: const ValueKey<String>('settings-open-log-directory'),
+                    onPressed: _logDirectory == null
+                        ? null
+                        : () => unawaited(_openLogDirectory()),
+                    icon: const Icon(Icons.folder_open),
+                    label: Text(l10n.settingsOpenLogDirectory),
+                  ),
+                ),
               ],
             ),
           ),

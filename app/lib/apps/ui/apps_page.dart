@@ -7,6 +7,7 @@ import '../../app_feedback.dart';
 import '../../files/local_file_picker.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../l10n/generated/fire_adb_localizations.dart';
+import '../../log/app_log.dart';
 import '../apps_controller.dart';
 import '../data/bean/installed_app.dart';
 import 'app_dialogs.dart';
@@ -120,7 +121,7 @@ class _AppsPageState extends State<AppsPage> {
     try {
       directory = await pickExportDirectory(context, prompt);
     } catch (error, stackTrace) {
-      logAppError('选择导出目录失败', error, stackTrace);
+      log.severe('选择导出目录失败', error, stackTrace);
       if (!mounted) return;
       _show(
         AppNotice(

@@ -1,4 +1,4 @@
-import '../../app_feedback.dart';
+import '../../log/app_log.dart';
 import '../data/bean/installed_app.dart';
 import '../data/repo/device_app_repository.dart';
 
@@ -79,7 +79,7 @@ class AppCatalog {
     try {
       return await repo.loadPackageFlags();
     } catch (error, stackTrace) {
-      logAppError('读取应用标记失败：$serial', error, stackTrace);
+      log.severe('读取应用标记失败：$serial', error, stackTrace);
       return null;
     }
   }
@@ -88,7 +88,7 @@ class AppCatalog {
     try {
       return await repo.listAmFrozenPackages();
     } catch (error, stackTrace) {
-      logAppError('读取 AM 冻结列表失败：$serial', error, stackTrace);
+      log.severe('读取 AM 冻结列表失败：$serial', error, stackTrace);
       return const <String>{};
     }
   }
