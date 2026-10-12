@@ -13,6 +13,9 @@ import '../settings/app_settings_store.dart';
 class HomeController extends GetxController {
   static const Duration adbDeviceRefreshInterval = Duration(seconds: 3);
 
+  /// 列表查询往往几十毫秒就结束，图标来不及转完一圈。
+  static const Duration _refreshIndicatorHold = Duration(milliseconds: 900);
+
   HomeController({
     AdbHostClient? hostClient,
     Future<List<UsbAdbDevice>> Function()? listUsbDevices,
@@ -256,6 +259,7 @@ class HomeController extends GetxController {
   Future<void> refreshUsbDevices() async {
     if (!showDirectUsbList || loadingUsbDevices.value) return;
     loadingUsbDevices.value = true;
+    final started = DateTime.now();
     usbDevicesError.value = null;
     try {
       usbDevices.assignAll(await _listUsbDevices());
@@ -268,6 +272,7 @@ class HomeController extends GetxController {
       }
       usbDevicesError.value = message;
     } finally {
+      await _keepRefreshIndicator(started);
       loadingUsbDevices.value = false;
     }
   }
@@ -275,6 +280,7 @@ class HomeController extends GetxController {
   Future<void> refreshAdbDevices() async {
     if (!adbServerSupported.value || loadingAdbDevices.value) return;
     loadingAdbDevices.value = true;
+    final started = DateTime.now();
     adbDevicesError.value = null;
     try {
       adbDevices.assignAll(await _hostClient.devices(long: true));
@@ -296,7 +302,16 @@ class HomeController extends GetxController {
       }
       adbDevicesError.value = message;
     } finally {
+      await _keepRefreshIndicator(started);
       loadingAdbDevices.value = false;
+    }
+  }
+
+  Future<void> _keepRefreshIndicator(DateTime started) async {
+    final remaining =
+        _refreshIndicatorHold - DateTime.now().difference(started);
+    if (remaining > Duration.zero) {
+      await Future<void>.delayed(remaining);
     }
   }
 

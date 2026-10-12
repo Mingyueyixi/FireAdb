@@ -380,6 +380,7 @@ class HomePage extends GetView<HomeController> {
   }) {
     return Row(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
         Checkbox(
           key: checkboxKey,
@@ -409,6 +410,7 @@ class HomePage extends GetView<HomeController> {
           spacing: 4,
           runSpacing: 4,
           alignment: WrapAlignment.end,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: actions,
         );
         if (!constraints.maxWidth.isFinite || constraints.maxWidth < 480) {
@@ -596,21 +598,14 @@ class HomePage extends GetView<HomeController> {
                       _setAutoRefresh(context, mdns: true, value: value),
                 ),
                 FilledButton.tonalIcon(
-                  onPressed: controller.scanning.value
-                      ? null
-                      : () => controller.scan(),
-                  icon: controller.scanning.value
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.search),
-                  label: Text(
-                    controller.scanning.value
-                        ? l10n.homeScanning
-                        : l10n.homeScan,
+                  onPressed: () => controller.scan(),
+                  icon: _SpinningIcon(
+                    icon: controller.scanning.value
+                        ? Icons.refresh
+                        : Icons.search,
+                    spinning: controller.scanning.value,
                   ),
+                  label: Text(l10n.homeScan),
                 ),
                 FilledButton.tonalIcon(
                   key: const ValueKey<String>('home-qr-pair'),
@@ -789,22 +784,19 @@ class HomePage extends GetView<HomeController> {
                 ),
                 IconButton(
                   tooltip: l10n.homeRefreshAdbDevices,
+                  visualDensity: VisualDensity.compact,
+                  style: IconButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   onPressed:
-                      (!controller.adbServerSupported.value &&
-                              !controller.usbSupported) ||
-                          loading
+                      !controller.adbServerSupported.value &&
+                          !controller.usbSupported
                       ? null
                       : () {
                           controller.refreshAdbDevices();
                           controller.refreshUsbDevices();
                         },
-                  icon: loading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh),
+                  icon: _SpinningIcon(icon: Icons.refresh, spinning: loading),
                 ),
               ],
             ),
@@ -1069,5 +1061,53 @@ class _PairingCodeDialogState extends State<_PairingCodeDialog> {
         TextButton(onPressed: _submit, child: Text(l10n.homePair)),
       ],
     );
+  }
+}
+
+class _SpinningIcon extends StatefulWidget {
+  const _SpinningIcon({required this.icon, required this.spinning});
+
+  final IconData icon;
+  final bool spinning;
+
+  @override
+  State<_SpinningIcon> createState() => _SpinningIconState();
+}
+
+class _SpinningIconState extends State<_SpinningIcon>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _turns;
+
+  @override
+  void initState() {
+    super.initState();
+    _turns = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    if (widget.spinning) _turns.repeat();
+  }
+
+  @override
+  void didUpdateWidget(_SpinningIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.spinning == widget.spinning) return;
+    if (widget.spinning) {
+      _turns.repeat();
+    } else {
+      _turns.stop();
+      _turns.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _turns.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RotationTransition(turns: _turns, child: Icon(widget.icon));
   }
 }
