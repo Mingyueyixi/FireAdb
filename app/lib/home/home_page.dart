@@ -655,7 +655,31 @@ class HomePage extends GetView<HomeController> {
                   ),
                   const SizedBox(height: 8),
                   Text(
+                    l10n.homePairingCodeGuideTitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface,
+                      fontWeight: FontWeight.w700,
+                      height: 1.4,
+                    ),
+                  ),
+                  Text(
                     l10n.homeMdnsHelp,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    l10n.homeQrPairingGuideTitle,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface,
+                      fontWeight: FontWeight.w700,
+                      height: 1.4,
+                    ),
+                  ),
+                  Text(
+                    l10n.homeQrPairingGuide,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                       height: 1.4,
@@ -813,15 +837,16 @@ class HomePage extends GetView<HomeController> {
                 l10n.homeAdbDevicesReadError(error),
                 style: TextStyle(color: theme.colorScheme.error),
               )
-            else if (loading && total == 0)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
-              )
             else if (total == 0)
-              Text(
-                l10n.homeNoAdbDevices,
-                style: TextStyle(color: theme.colorScheme.outline),
+              Visibility(
+                visible: !loading,
+                maintainSize: true,
+                maintainAnimation: true,
+                maintainState: true,
+                child: Text(
+                  l10n.homeNoAdbDevices,
+                  style: TextStyle(color: theme.colorScheme.outline),
+                ),
               )
             else
               for (final device in devices)

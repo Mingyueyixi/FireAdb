@@ -68,7 +68,10 @@
   "homeScanning": "Scanning…",
   "homeScan": "Scan",
   "homeWifiDebugInfo": "For Android 11+ devices with Wireless debugging enabled",
-  "homeMdnsHelp": "QR pairing: tap QR pairing. On the phone, open Settings → Developer options → Wireless debugging → Pair device with QR code and scan. This computer pairs and connects automatically.\nPairing code: open the pairing code screen first. A floating window or split screen is recommended, because leaving that screen closes the service. Tap Scan, tap Pair on the pairing service, enter the code, then tap the wireless debugging port.\nIf the device is already paired, tap Scan and connect to the wireless debugging port directly.",
+  "homeMdnsHelp": "On the phone, open Settings → Developer options → Wireless debugging → Pair device with pairing code, and keep that screen open. When the Android app connects to the same device, you may be unable to stay on the numeric pairing code screen. Use a floating window or split screen so the pairing service does not close and block the connection.\nOn this page, tap Scan, tap Pair on the pairing service and enter the code shown on the phone, then tap the wireless debugging port listed here. If the device is already paired, tap Scan on this page and connect.",
+  "homePairingCodeGuideTitle": "Pairing code:",
+  "homeQrPairingGuideTitle": "QR pairing:",
+  "homeQrPairingGuide": "On this page, tap QR pairing. On the phone, open Settings → Developer options → Wireless debugging → Pair device with QR code, and scan the code shown here. This app pairs and connects automatically.",
   "homeScanFailed": "Scan failed: {error}",
   "@homeScanFailed": {
     "placeholders": {
@@ -86,8 +89,8 @@
   "homePairingSucceededHint": "Tap the matching wireless debugging port to connect.",
   "homeQrPair": "QR pairing",
   "homeQrPairingTitle": "QR pairing",
-  "homeQrPairingPrinciple": "The code holds a service name and a pairing password. After the phone scans it, the phone advertises that name. This computer finds the match, pairs with the password, then connects to the wireless debugging port.",
-  "homeQrPairingHelp": "On the phone, open Settings → Developer options → Wireless debugging → Pair device with QR code, then scan this code. The phone and computer must be on the same Wi-Fi.",
+  "homeQrPairingPrinciple": "The code holds a service name and a pairing password. After the phone scans it, the phone advertises that name. This app finds the match, pairs with the password, then connects to the wireless debugging port.",
+  "homeQrPairingHelp": "On the phone, open Settings → Developer options → Wireless debugging → Pair device with QR code, then scan this code. The phone and this app must be on the same Wi-Fi.",
   "homeQrPairingWaiting": "Waiting for the phone to scan…",
   "homeQrPairingPairing": "Pairing…",
   "homeQrPairingConnecting": "Paired. Connecting…",

@@ -145,7 +145,17 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get homeMdnsHelp =>
-      '二维码配对：点「二维码配对」。手机打开「设置 → 开发者选项 → 无线调试 → 使用二维码配对设备」并扫描，电脑会自动完成配对并连接。\n配对码：先打开配对码页面。建议悬浮窗或分屏，离开后系统会关闭该服务。点「扫描」，对配对服务点「配对」并输入配对码，再点对应的无线调试端口连接。\n已配对过的设备点「扫描」，直接连接无线调试端口。';
+      '在手机上打开系统「设置 → 开发者选项 → 无线调试 → 使用配对码配对设备」，并保持该页面打开。在安卓端连接本机时，可能无法停留在数字配对码页面，请使用悬浮窗或分屏，避免配对服务关闭导致无法连接。\n在本页点「扫描」，对出现的配对服务点「配对」并输入手机上的配对码，再点本页列出的无线调试端口连接。已配对过的设备只需在本页点「扫描」后连接。';
+
+  @override
+  String get homePairingCodeGuideTitle => '配对码配对：';
+
+  @override
+  String get homeQrPairingGuideTitle => '二维码配对：';
+
+  @override
+  String get homeQrPairingGuide =>
+      '在本页点「二维码配对」。手机打开系统「设置 → 开发者选项 → 无线调试 → 使用二维码配对设备」，扫描本页弹出的二维码。本应用会自动完成配对并连接。';
 
   @override
   String homeScanFailed(Object error) {
@@ -187,11 +197,11 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get homeQrPairingPrinciple =>
-      '二维码里是服务名和配对密码。手机扫码后会用这个名字发布配对服务，电脑找到同名服务后用该密码完成配对，再连接无线调试端口。';
+      '二维码里是服务名和配对密码。手机扫码后会用这个名字发布配对服务，本应用找到同名服务后用该密码完成配对，再连接无线调试端口。';
 
   @override
   String get homeQrPairingHelp =>
-      '在手机上打开「设置 → 开发者选项 → 无线调试 → 使用二维码配对设备」，扫描此二维码。手机和电脑需在同一 Wi-Fi。';
+      '在手机上打开「设置 → 开发者选项 → 无线调试 → 使用二维码配对设备」，扫描此二维码。手机与本应用需在同一 Wi-Fi。';
 
   @override
   String get homeQrPairingWaiting => '等待手机扫描…';

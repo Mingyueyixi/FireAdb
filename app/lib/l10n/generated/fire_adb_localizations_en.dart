@@ -151,7 +151,17 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get homeMdnsHelp =>
-      'QR pairing: tap QR pairing. On the phone, open Settings → Developer options → Wireless debugging → Pair device with QR code and scan. This computer pairs and connects automatically.\nPairing code: open the pairing code screen first. A floating window or split screen is recommended, because leaving that screen closes the service. Tap Scan, tap Pair on the pairing service, enter the code, then tap the wireless debugging port.\nIf the device is already paired, tap Scan and connect to the wireless debugging port directly.';
+      'On the phone, open Settings → Developer options → Wireless debugging → Pair device with pairing code, and keep that screen open. When the Android app connects to the same device, you may be unable to stay on the numeric pairing code screen. Use a floating window or split screen so the pairing service does not close and block the connection.\nOn this page, tap Scan, tap Pair on the pairing service and enter the code shown on the phone, then tap the wireless debugging port listed here. If the device is already paired, tap Scan on this page and connect.';
+
+  @override
+  String get homePairingCodeGuideTitle => 'Pairing code:';
+
+  @override
+  String get homeQrPairingGuideTitle => 'QR pairing:';
+
+  @override
+  String get homeQrPairingGuide =>
+      'On this page, tap QR pairing. On the phone, open Settings → Developer options → Wireless debugging → Pair device with QR code, and scan the code shown here. This app pairs and connects automatically.';
 
   @override
   String homeScanFailed(Object error) {
@@ -196,11 +206,11 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get homeQrPairingPrinciple =>
-      'The code holds a service name and a pairing password. After the phone scans it, the phone advertises that name. This computer finds the match, pairs with the password, then connects to the wireless debugging port.';
+      'The code holds a service name and a pairing password. After the phone scans it, the phone advertises that name. This app finds the match, pairs with the password, then connects to the wireless debugging port.';
 
   @override
   String get homeQrPairingHelp =>
-      'On the phone, open Settings → Developer options → Wireless debugging → Pair device with QR code, then scan this code. The phone and computer must be on the same Wi-Fi.';
+      'On the phone, open Settings → Developer options → Wireless debugging → Pair device with QR code, then scan this code. The phone and this app must be on the same Wi-Fi.';
 
   @override
   String get homeQrPairingWaiting => 'Waiting for the phone to scan…';
