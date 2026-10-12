@@ -64,6 +64,27 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   }
 
   @override
+  String get settingsAutoRefreshMdns => 'Auto-refresh mDNS';
+
+  @override
+  String get settingsAutoRefreshDevices => 'Auto-refresh device list';
+
+  @override
+  String settingsAutoRefreshHelp(int seconds) {
+    return 'When checked, refresh every $seconds seconds';
+  }
+
+  @override
+  String get settingsAutoRefreshInterval => 'Refresh interval (seconds)';
+
+  @override
+  String get settingsAutoRefreshIntervalInvalid =>
+      'Enter a whole number of seconds from 1 to 3600';
+
+  @override
+  String get homeAutoRefresh => 'Auto refresh';
+
+  @override
   String get homeConnectionSucceeded => 'Connected';
 
   @override

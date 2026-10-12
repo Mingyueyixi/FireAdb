@@ -2,6 +2,7 @@ import 'package:fire_adb/app_locale_controller.dart';
 import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:fire_adb/home/home_controller.dart';
 import 'package:fire_adb/main.dart';
+import 'package:fire_adb/settings/app_settings_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -15,6 +16,7 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     Get.put<ConnectionManager>(ConnectionManager(), permanent: true);
     Get.put<AppLocaleController>(AppLocaleController(), permanent: true);
+    Get.put<AppSettingsStore>(AppSettingsStore(), permanent: true);
     final controller = HomeController(
       hostClient: _FakeAdbHostClient(),
       listUsbDevices: () async => const <UsbAdbDevice>[],

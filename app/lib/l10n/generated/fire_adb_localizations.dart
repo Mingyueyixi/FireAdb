@@ -191,6 +191,42 @@ abstract class FireAdbLocalizations {
   /// **'保存语言设置失败：{error}'**
   String settingsLanguageSaveFailed(Object error);
 
+  /// No description provided for @settingsAutoRefreshMdns.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动刷新 mDNS'**
+  String get settingsAutoRefreshMdns;
+
+  /// No description provided for @settingsAutoRefreshDevices.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动刷新设备列表'**
+  String get settingsAutoRefreshDevices;
+
+  /// No description provided for @settingsAutoRefreshHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'勾选后每 {seconds} 秒刷新一次'**
+  String settingsAutoRefreshHelp(int seconds);
+
+  /// No description provided for @settingsAutoRefreshInterval.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新间隔（秒）'**
+  String get settingsAutoRefreshInterval;
+
+  /// No description provided for @settingsAutoRefreshIntervalInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 1 到 3600 之间的整数'**
+  String get settingsAutoRefreshIntervalInvalid;
+
+  /// No description provided for @homeAutoRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动刷新'**
+  String get homeAutoRefresh;
+
   /// No description provided for @homeConnectionSucceeded.
   ///
   /// In zh, this message translates to:

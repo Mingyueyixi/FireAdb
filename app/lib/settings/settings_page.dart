@@ -7,28 +7,25 @@ import 'package:get/get.dart';
 import '../app_feedback.dart';
 import '../app_locale_controller.dart';
 import '../connection/connection_manager.dart';
+import '../home/home_controller.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
 import '../l10n/generated/fire_adb_localizations.dart';
-import 'home_controller.dart';
+import 'app_settings_store.dart';
 
-Future<void> showHomeSettings(BuildContext context) {
-  return showDialog<void>(
-    context: context,
-    builder: (context) => const _HomeSettingsDialog(),
-  );
-}
-
-class _HomeSettingsDialog extends StatefulWidget {
-  const _HomeSettingsDialog();
+/// 独立设置页。语言、端口和自动刷新都在这一页修改。
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({super.key});
 
   @override
-  State<_HomeSettingsDialog> createState() => _HomeSettingsDialogState();
+  State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _HomeSettingsDialogState extends State<_HomeSettingsDialog> {
+class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController _portController;
+  late final TextEditingController _intervalController;
   var _applyingServer = false;
   String? _portError;
+  String? _intervalError;
 
   @override
   void initState() {
@@ -36,11 +33,15 @@ class _HomeSettingsDialogState extends State<_HomeSettingsDialog> {
     _portController = TextEditingController(
       text: '${Get.find<ConnectionManager>().adbServerPort.value}',
     );
+    _intervalController = TextEditingController(
+      text: '${Get.find<AppSettingsStore>().autoRefreshIntervalSeconds.value}',
+    );
   }
 
   @override
   void dispose() {
     _portController.dispose();
+    _intervalController.dispose();
     super.dispose();
   }
 
@@ -144,24 +145,77 @@ class _HomeSettingsDialogState extends State<_HomeSettingsDialog> {
     }
   }
 
+  Future<void> _applyInterval() async {
+    final l10n = context.l10n;
+    final seconds = int.tryParse(_intervalController.text.trim());
+    if (seconds == null ||
+        seconds < AppSettingsStore.minAutoRefreshSeconds ||
+        seconds > AppSettingsStore.maxAutoRefreshSeconds) {
+      setState(() => _intervalError = l10n.settingsAutoRefreshIntervalInvalid);
+      return;
+    }
+    setState(() => _intervalError = null);
+    try {
+      await Get.find<AppSettingsStore>().setAutoRefreshIntervalSeconds(seconds);
+    } catch (error, stackTrace) {
+      logAppError('保存自动刷新间隔失败', error, stackTrace);
+      if (!mounted) return;
+      showAppMessage(
+        ScaffoldMessenger.of(context),
+        Theme.of(context),
+        title: context.l10n.commonSettingsSaveFailed,
+        message: '$error',
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _setAutoRefresh({
+    required bool mdns,
+    required bool value,
+  }) async {
+    final store = Get.find<AppSettingsStore>();
+    try {
+      if (mdns) {
+        await store.setAutoRefreshMdns(value);
+      } else {
+        await store.setAutoRefreshDevices(value);
+      }
+    } catch (error, stackTrace) {
+      logAppError('保存自动刷新设置失败', error, stackTrace);
+      if (!mounted) return;
+      showAppMessage(
+        ScaffoldMessenger.of(context),
+        Theme.of(context),
+        title: context.l10n.commonSettingsSaveFailed,
+        message: '$error',
+        isError: true,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final localeController = Get.find<AppLocaleController>();
     final manager = Get.find<ConnectionManager>();
-    return AlertDialog(
-      title: Text(l10n.settingsTitle),
-      content: SizedBox(
-        width: 420,
-        child: Obx(() {
-          final locale = localeController.locale.value;
-          final prefer = manager.preferSdkAdbServer.value;
-          final adbPath = manager.sdkAdbPath.value;
-          final adbError = manager.sdkAdbError.value;
-          return SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    final settings = Get.find<AppSettingsStore>();
+    return Scaffold(
+      appBar: AppBar(title: Text(l10n.settingsTitle)),
+      body: Obx(() {
+        final locale = localeController.locale.value;
+        final prefer = manager.preferSdkAdbServer.value;
+        final adbPath = manager.sdkAdbPath.value;
+        final adbError = manager.sdkAdbError.value;
+        final autoRefreshMdns = settings.autoRefreshMdns.value;
+        final autoRefreshDevices = settings.autoRefreshDevices.value;
+        final intervalSeconds = settings.autoRefreshIntervalSeconds.value;
+        return Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
               children: <Widget>[
                 ListTile(
                   contentPadding: EdgeInsets.zero,
@@ -171,6 +225,63 @@ class _HomeSettingsDialogState extends State<_HomeSettingsDialog> {
                   onTap: _applyingServer
                       ? null
                       : () => unawaited(_pickLanguage()),
+                ),
+                const Divider(),
+                CheckboxListTile(
+                  key: const ValueKey<String>('settings-auto-refresh-mdns'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(l10n.settingsAutoRefreshMdns),
+                  subtitle: Text(l10n.settingsAutoRefreshHelp(intervalSeconds)),
+                  value: autoRefreshMdns,
+                  onChanged: (value) {
+                    if (value == null) return;
+                    unawaited(_setAutoRefresh(mdns: true, value: value));
+                  },
+                ),
+                CheckboxListTile(
+                  key: const ValueKey<String>('settings-auto-refresh-devices'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(l10n.settingsAutoRefreshDevices),
+                  subtitle: Text(l10n.settingsAutoRefreshHelp(intervalSeconds)),
+                  value: autoRefreshDevices,
+                  onChanged: (value) {
+                    if (value == null) return;
+                    unawaited(_setAutoRefresh(mdns: false, value: value));
+                  },
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.settingsAutoRefreshInterval,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(
+                      child: TextField(
+                        key: const ValueKey<String>(
+                          'settings-auto-refresh-interval',
+                        ),
+                        controller: _intervalController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          isDense: true,
+                          errorText: _intervalError,
+                          border: const OutlineInputBorder(),
+                        ),
+                        onSubmitted: (_) => unawaited(_applyInterval()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      key: const ValueKey<String>(
+                        'settings-auto-refresh-interval-apply',
+                      ),
+                      onPressed: () => unawaited(_applyInterval()),
+                      child: Text(l10n.settingsApply),
+                    ),
+                  ],
                 ),
                 const Divider(),
                 Text(
@@ -220,15 +331,9 @@ class _HomeSettingsDialogState extends State<_HomeSettingsDialog> {
                 ],
               ],
             ),
-          );
-        }),
-      ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(l10n.commonClose),
-        ),
-      ],
+          ),
+        );
+      }),
     );
   }
 

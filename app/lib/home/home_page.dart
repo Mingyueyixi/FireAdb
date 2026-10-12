@@ -5,9 +5,9 @@ import 'package:libadb/libadb.dart';
 import '../app_feedback.dart';
 import '../connection/model/device_profile.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
+import '../settings/app_settings_store.dart';
 import '../widgets/adaptive.dart';
 import 'home_controller.dart';
-import 'home_settings_dialog.dart';
 
 /// 连接中心：设备列表 / 手动连接 / mDNS 设备发现 / 历史连接。
 class HomePage extends GetView<HomeController> {
@@ -258,7 +258,7 @@ class HomePage extends GetView<HomeController> {
         actions: <Widget>[
           IconButton(
             tooltip: context.l10n.settingsTitle,
-            onPressed: () => showHomeSettings(context),
+            onPressed: () => Get.toNamed<void>('/settings'),
             icon: const Icon(Icons.settings_outlined),
           ),
         ],
@@ -311,6 +311,98 @@ class HomePage extends GetView<HomeController> {
         const SizedBox(height: 16),
         history,
       ],
+    );
+  }
+
+  Future<void> _setAutoRefresh(
+    BuildContext context, {
+    required bool mdns,
+    required bool value,
+  }) async {
+    final store = Get.find<AppSettingsStore>();
+    try {
+      if (mdns) {
+        await store.setAutoRefreshMdns(value);
+      } else {
+        await store.setAutoRefreshDevices(value);
+      }
+    } catch (error, stackTrace) {
+      logAppError('保存自动刷新设置失败', error, stackTrace);
+      if (!context.mounted) return;
+      final l10n = context.l10n;
+      showAppMessage(
+        ScaffoldMessenger.of(context),
+        Theme.of(context),
+        title: l10n.commonSettingsSaveFailed,
+        message: '$error',
+        isError: true,
+      );
+    }
+  }
+
+  Widget _autoRefreshControl(
+    BuildContext context, {
+    required Key checkboxKey,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Checkbox(
+          key: checkboxKey,
+          value: value,
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          onChanged: (next) {
+            if (next != null) onChanged(next);
+          },
+        ),
+        GestureDetector(
+          onTap: () => onChanged(!value),
+          child: Text(context.l10n.homeAutoRefresh),
+        ),
+      ],
+    );
+  }
+
+  /// 标题和右侧操作放在一行；窄宽度时操作换到下一行，避免把标题挤出屏幕。
+  Widget _sectionWithActions({
+    required Widget header,
+    required List<Widget> actions,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final actionRow = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            for (var index = 0; index < actions.length; index++) ...<Widget>[
+              if (index > 0) const SizedBox(width: 4),
+              actions[index],
+            ],
+          ],
+        );
+        if (!constraints.maxWidth.isFinite || constraints.maxWidth < 480) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              header,
+              const SizedBox(height: 8),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: actionRow,
+              ),
+            ],
+          );
+        }
+        return Row(
+          children: <Widget>[
+            Expanded(child: header),
+            const SizedBox(width: 8),
+            actionRow,
+          ],
+        );
+      },
     );
   }
 
@@ -454,10 +546,24 @@ class HomePage extends GetView<HomeController> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final scanButton = FilledButton.tonalIcon(
-                  onPressed: controller.scanning.value ? null : controller.scan,
+            _sectionWithActions(
+              header: _sectionHeader(
+                context,
+                Icons.radar,
+                l10n.homeDeviceDiscovery,
+              ),
+              actions: <Widget>[
+                _autoRefreshControl(
+                  context,
+                  checkboxKey: const ValueKey<String>('home-auto-refresh-mdns'),
+                  value: Get.find<AppSettingsStore>().autoRefreshMdns.value,
+                  onChanged: (value) =>
+                      _setAutoRefresh(context, mdns: true, value: value),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: controller.scanning.value
+                      ? null
+                      : () => controller.scan(),
                   icon: controller.scanning.value
                       ? const SizedBox(
                           width: 16,
@@ -470,34 +576,8 @@ class HomePage extends GetView<HomeController> {
                         ? l10n.homeScanning
                         : l10n.homeScan,
                   ),
-                );
-                final header = _sectionHeader(
-                  context,
-                  Icons.radar,
-                  l10n.homeDeviceDiscovery,
-                );
-                // 英文标题加「Scanning…」大约要 380。更窄时按钮换到下一行。
-                if (constraints.maxWidth < 400) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      header,
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: AlignmentDirectional.centerEnd,
-                        child: scanButton,
-                      ),
-                    ],
-                  );
-                }
-                return Row(
-                  children: <Widget>[
-                    Expanded(child: header),
-                    const SizedBox(width: 8),
-                    scanButton,
-                  ],
-                );
-              },
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             Container(
@@ -624,14 +704,21 @@ class HomePage extends GetView<HomeController> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: _sectionHeader(
-                    context,
-                    Icons.devices,
-                    l10n.homeDeviceCount(total),
+            _sectionWithActions(
+              header: _sectionHeader(
+                context,
+                Icons.devices,
+                l10n.homeDeviceCount(total),
+              ),
+              actions: <Widget>[
+                _autoRefreshControl(
+                  context,
+                  checkboxKey: const ValueKey<String>(
+                    'home-auto-refresh-devices',
                   ),
+                  value: Get.find<AppSettingsStore>().autoRefreshDevices.value,
+                  onChanged: (value) =>
+                      _setAutoRefresh(context, mdns: false, value: value),
                 ),
                 IconButton(
                   tooltip: l10n.homeRefreshAdbDevices,

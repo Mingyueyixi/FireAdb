@@ -62,6 +62,26 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   }
 
   @override
+  String get settingsAutoRefreshMdns => '自动刷新 mDNS';
+
+  @override
+  String get settingsAutoRefreshDevices => '自动刷新设备列表';
+
+  @override
+  String settingsAutoRefreshHelp(int seconds) {
+    return '勾选后每 $seconds 秒刷新一次';
+  }
+
+  @override
+  String get settingsAutoRefreshInterval => '刷新间隔（秒）';
+
+  @override
+  String get settingsAutoRefreshIntervalInvalid => '请输入 1 到 3600 之间的整数';
+
+  @override
+  String get homeAutoRefresh => '自动刷新';
+
+  @override
   String get homeConnectionSucceeded => '连接成功';
 
   @override

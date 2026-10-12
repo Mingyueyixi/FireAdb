@@ -8,6 +8,7 @@ import 'package:libadb/libadb.dart';
 import '../app_feedback.dart';
 import '../connection/connection_manager.dart';
 import '../connection/model/connected_device.dart';
+import '../settings/app_settings_store.dart';
 
 class HomeController extends GetxController {
   static const Duration adbDeviceRefreshInterval = Duration(seconds: 3);
@@ -16,6 +17,7 @@ class HomeController extends GetxController {
     AdbHostClient? hostClient,
     Future<List<UsbAdbDevice>> Function()? listUsbDevices,
     bool? usbSupported,
+    this.discoverServices,
   }) : _injectedHostClient = hostClient,
        _listUsbDevices = listUsbDevices ?? listUsbAdbDevices,
        usbSupported = usbSupported ?? libadbUsbSupported;
@@ -27,6 +29,12 @@ class HomeController extends GetxController {
       manager.hostClient(connectTimeout: const Duration(milliseconds: 400));
   final Future<List<UsbAdbDevice>> Function() _listUsbDevices;
   final bool usbSupported;
+
+  /// 测试可替换 mDNS 发现。为空时走真实扫描。
+  final Future<List<MdnsService>> Function(
+    void Function(List<MdnsService> services)? onUpdate,
+  )?
+  discoverServices;
 
   final TextEditingController hostController = TextEditingController();
   final TextEditingController portController = TextEditingController(
@@ -51,20 +59,72 @@ class HomeController extends GetxController {
   String? _loggedUsbError;
   String? _loggedAdbError;
   Timer? _adbDeviceRefreshTimer;
+  Timer? _mdnsRefreshTimer;
+  Worker? _devicesRefreshWorker;
+  Worker? _mdnsRefreshWorker;
+  Worker? _intervalWorker;
+  var _mdnsRefreshGeneration = 0;
 
   ConnectionManager get manager => Get.find<ConnectionManager>();
+
+  AppSettingsStore get _settings => Get.find<AppSettingsStore>();
 
   @override
   void onInit() {
     super.onInit();
     _restoreManualConnection();
+    final canListDevices = adbServerSupported.value || usbSupported;
+    if (canListDevices) {
+      _applyDeviceAutoRefresh(_settings.autoRefreshDevices.value);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (isClosed) return;
+        refreshListedDevices();
+      });
+    }
+    _applyMdnsAutoRefresh(_settings.autoRefreshMdns.value);
+    _devicesRefreshWorker = ever<bool>(
+      _settings.autoRefreshDevices,
+      _applyDeviceAutoRefresh,
+    );
+    _mdnsRefreshWorker = ever<bool>(
+      _settings.autoRefreshMdns,
+      _applyMdnsAutoRefresh,
+    );
+    _intervalWorker = ever<int>(_settings.autoRefreshIntervalSeconds, (_) {
+      _applyDeviceAutoRefresh(_settings.autoRefreshDevices.value);
+      _applyMdnsAutoRefresh(_settings.autoRefreshMdns.value);
+    });
+  }
+
+  Duration get _refreshInterval =>
+      Duration(seconds: _settings.autoRefreshIntervalSeconds.value);
+
+  void _applyDeviceAutoRefresh(bool enabled) {
+    _adbDeviceRefreshTimer?.cancel();
+    _adbDeviceRefreshTimer = null;
+    if (!enabled || isClosed) return;
     if (!adbServerSupported.value && !usbSupported) return;
-    _adbDeviceRefreshTimer = Timer.periodic(adbDeviceRefreshInterval, (_) {
+    _adbDeviceRefreshTimer = Timer.periodic(_refreshInterval, (_) {
       refreshListedDevices();
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (isClosed) return;
-      refreshListedDevices();
+  }
+
+  /// 上一次扫描结束后再等设定的秒数。扫描本身大约要数秒，固定周期会和它叠在一起。
+  void _applyMdnsAutoRefresh(bool enabled) {
+    _mdnsRefreshTimer?.cancel();
+    _mdnsRefreshTimer = null;
+    _mdnsRefreshGeneration++;
+    if (!enabled || isClosed) return;
+    _scheduleMdnsRefresh(_mdnsRefreshGeneration);
+  }
+
+  void _scheduleMdnsRefresh(int generation) {
+    _mdnsRefreshTimer = Timer(_refreshInterval, () async {
+      if (generation != _mdnsRefreshGeneration || isClosed) return;
+      await scan(automatic: true);
+      if (generation != _mdnsRefreshGeneration || isClosed) return;
+      if (!_settings.autoRefreshMdns.value) return;
+      _scheduleMdnsRefresh(generation);
     });
   }
 
@@ -125,35 +185,50 @@ class HomeController extends GetxController {
     }
   }
 
-  Future<void> scan() async {
+  Future<void> scan({bool automatic = false}) async {
+    if (scanning.value) return;
     scanning.value = true;
     scanError.value = null;
-    logAppLine('开始扫描无线设备');
-    discovered.clear();
+    if (!automatic) {
+      logAppLine('开始扫描无线设备');
+      discovered.clear();
+    }
     try {
-      final found = await discoverAdbServices(
-        serviceTypes: const <String>{
-          adbServiceTypeTransport,
-          adbServiceTypeConnect,
-          adbServiceTypePairing,
-        },
-        onUpdate: (services) {
-          discovered.assignAll(services);
+      final found = await _discover((services) {
+        discovered.assignAll(services);
+        if (!automatic) {
           logAppLine(
             '扫描到 ${services.length} 个：${services.map((service) => service.endpointText).join('，')}',
           );
-        },
-      );
+        }
+      });
       discovered.assignAll(found);
-      logAppLine(
-        found.isEmpty ? '扫描结束，没有发现无线设备' : '扫描结束，共 ${found.length} 个',
-      );
+      if (!automatic) {
+        logAppLine(
+          found.isEmpty ? '扫描结束，没有发现无线设备' : '扫描结束，共 ${found.length} 个',
+        );
+      }
     } catch (error, stackTrace) {
       logAppError('mDNS 设备扫描失败', error, stackTrace);
       scanError.value = '$error';
     } finally {
       scanning.value = false;
     }
+  }
+
+  Future<List<MdnsService>> _discover(
+    void Function(List<MdnsService> services)? onUpdate,
+  ) {
+    final override = discoverServices;
+    if (override != null) return override(onUpdate);
+    return discoverAdbServices(
+      serviceTypes: const <String>{
+        adbServiceTypeTransport,
+        adbServiceTypeConnect,
+        adbServiceTypePairing,
+      },
+      onUpdate: onUpdate,
+    );
   }
 
   Future<void> refreshUsbDevices() async {
@@ -243,7 +318,12 @@ class HomeController extends GetxController {
 
   @override
   void onClose() {
+    _devicesRefreshWorker?.dispose();
+    _mdnsRefreshWorker?.dispose();
+    _intervalWorker?.dispose();
     _adbDeviceRefreshTimer?.cancel();
+    _mdnsRefreshGeneration++;
+    _mdnsRefreshTimer?.cancel();
     hostController.dispose();
     portController.dispose();
     super.onClose();

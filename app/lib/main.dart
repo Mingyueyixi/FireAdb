@@ -6,6 +6,8 @@ import 'connection/connection_manager.dart';
 import 'home/home_controller.dart';
 import 'home/home_page.dart';
 import 'l10n/generated/fire_adb_localizations.dart';
+import 'settings/app_settings_store.dart';
+import 'settings/settings_page.dart';
 import 'workspace/workspace_controller.dart';
 import 'workspace/workspace_page.dart';
 
@@ -18,6 +20,9 @@ Future<void> main() async {
   final localeController = AppLocaleController();
   await localeController.load();
   Get.put<AppLocaleController>(localeController, permanent: true);
+  final settings = AppSettingsStore();
+  await settings.load();
+  Get.put<AppSettingsStore>(settings, permanent: true);
   Get.put<HomeController>(HomeController(), permanent: true);
   runApp(const FireAdbApp());
 }
@@ -48,10 +53,8 @@ class FireAdbApp extends StatelessWidget {
       ),
       initialRoute: '/',
       getPages: <GetPage<void>>[
-        GetPage<void>(
-          name: '/',
-          page: () => const HomePage(),
-        ),
+        GetPage<void>(name: '/', page: () => const HomePage()),
+        GetPage<void>(name: '/settings', page: () => const SettingsPage()),
         GetPage<void>(
           name: '/workspace',
           page: () => const WorkspacePage(),

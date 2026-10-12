@@ -30,6 +30,19 @@
       "error": {}
     }
   },
+  "settingsAutoRefreshMdns": "Auto-refresh mDNS",
+  "settingsAutoRefreshDevices": "Auto-refresh device list",
+  "settingsAutoRefreshHelp": "When checked, refresh every {seconds} seconds",
+  "@settingsAutoRefreshHelp": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsAutoRefreshInterval": "Refresh interval (seconds)",
+  "settingsAutoRefreshIntervalInvalid": "Enter a whole number of seconds from 1 to 3600",
+  "homeAutoRefresh": "Auto refresh",
   "homeConnectionSucceeded": "Connected",
   "homeConnectedDevice": "Connected: {serial}",
   "@homeConnectedDevice": {

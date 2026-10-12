@@ -5,6 +5,8 @@ import 'package:fire_adb/app_locale_controller.dart';
 import 'package:fire_adb/connection/connection_manager.dart';
 import 'package:fire_adb/home/home_controller.dart';
 import 'package:fire_adb/main.dart';
+import 'package:fire_adb/settings/app_settings_store.dart';
+import 'package:fire_adb/settings/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -16,6 +18,7 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     Get.put<ConnectionManager>(ConnectionManager(), permanent: true);
     Get.put<AppLocaleController>(AppLocaleController(), permanent: true);
+    Get.put<AppSettingsStore>(AppSettingsStore(), permanent: true);
     final hostClient = _FakeAdbHostClient(const <AdbDeviceInfo>[
       AdbDeviceInfo(
         'R5CT123456A',
@@ -82,6 +85,7 @@ void main() {
   testWidgets('语言可以在中文和英文之间切换并保存', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     Get.put<ConnectionManager>(ConnectionManager(), permanent: true);
+    Get.put<AppSettingsStore>(AppSettingsStore(), permanent: true);
     final localeController = AppLocaleController();
     await localeController.load();
     expect(localeController.locale.value.languageCode, 'zh');
@@ -103,7 +107,7 @@ void main() {
       await tester.tap(find.text('English'));
       await tester.pumpAndSettle();
       expect(localeController.locale.value.languageCode, 'en');
-      expect(find.text('Manual connection'), findsOneWidget);
+      expect(find.text('Settings'), findsOneWidget);
       expect(
         (await SharedPreferences.getInstance()).getString('appLocale'),
         'en',
@@ -115,6 +119,9 @@ void main() {
       await tester.tap(find.text('Language'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('中文'));
+      await tester.pumpAndSettle();
+      expect(find.text('设置'), findsOneWidget);
+      Get.back<void>();
       await tester.pumpAndSettle();
       expect(find.text('手动连接'), findsOneWidget);
     } finally {
@@ -145,6 +152,7 @@ void main() {
     await manager.init();
     Get.put<ConnectionManager>(manager, permanent: true);
     Get.put<AppLocaleController>(AppLocaleController(), permanent: true);
+    Get.put<AppSettingsStore>(AppSettingsStore(), permanent: true);
     final homeController = HomeController(
       hostClient: _FakeAdbHostClient(const <AdbDeviceInfo>[]),
       listUsbDevices: () async => const <UsbAdbDevice>[],
@@ -159,6 +167,133 @@ void main() {
       expect(find.text('USB999'), findsOneWidget);
       expect(homeController.hostController.text, '192.0.2.10');
       expect(homeController.portController.text, '6666');
+    } finally {
+      homeController.onClose();
+      Get.reset();
+    }
+  });
+
+  testWidgets('自动刷新在首页和设置页共用，并按勾选启停', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final settings = AppSettingsStore();
+    await settings.load();
+    Get.put<ConnectionManager>(ConnectionManager(), permanent: true);
+    Get.put<AppLocaleController>(AppLocaleController(), permanent: true);
+    Get.put<AppSettingsStore>(settings, permanent: true);
+    var scans = 0;
+    final hostClient = _FakeAdbHostClient(const <AdbDeviceInfo>[]);
+    final homeController = HomeController(
+      hostClient: hostClient,
+      listUsbDevices: () async => const <UsbAdbDevice>[],
+      discoverServices: (onUpdate) async {
+        scans++;
+        return const <MdnsService>[];
+      },
+    );
+    Get.put<HomeController>(homeController);
+    try {
+      await tester.pumpWidget(const FireAdbApp());
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<Checkbox>(
+              find.byKey(const ValueKey<String>('home-auto-refresh-devices')),
+            )
+            .value,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<Checkbox>(
+              find.byKey(const ValueKey<String>('home-auto-refresh-mdns')),
+            )
+            .value,
+        isFalse,
+      );
+      expect(hostClient.deviceListRequests, 1);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('home-auto-refresh-devices')),
+      );
+      await tester.pump();
+      await tester.pump(HomeController.adbDeviceRefreshInterval * 2);
+      expect(hostClient.deviceListRequests, 1);
+      expect(scans, 0);
+
+      await tester.tap(find.byIcon(Icons.settings_outlined));
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsPage), findsOneWidget);
+      expect(
+        tester
+            .widget<CheckboxListTile>(
+              find.byKey(
+                const ValueKey<String>('settings-auto-refresh-devices'),
+              ),
+            )
+            .value,
+        isFalse,
+      );
+
+      final intervalField = find.byKey(
+        const ValueKey<String>('settings-auto-refresh-interval'),
+      );
+      await tester.ensureVisible(intervalField);
+      await tester.enterText(intervalField, '0');
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('settings-auto-refresh-interval-apply'),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('请输入 1 到 3600 之间的整数'), findsOneWidget);
+      expect(settings.autoRefreshIntervalSeconds.value, 3);
+
+      await tester.enterText(intervalField, '5');
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('settings-auto-refresh-interval-apply'),
+        ),
+      );
+      await tester.pump();
+      expect(settings.autoRefreshIntervalSeconds.value, 5);
+      expect(find.text('勾选后每 5 秒刷新一次'), findsWidgets);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('settings-auto-refresh-mdns')),
+      );
+      await tester.pump();
+      expect(settings.autoRefreshMdns.value, isTrue);
+      final preferences = await SharedPreferences.getInstance();
+      expect(preferences.getBool(AppSettingsStore.autoRefreshMdnsKey), isTrue);
+      expect(
+        preferences.getBool(AppSettingsStore.autoRefreshDevicesKey),
+        isFalse,
+      );
+      expect(preferences.getInt(AppSettingsStore.autoRefreshIntervalKey), 5);
+      final restored = AppSettingsStore();
+      await restored.load();
+      expect(restored.autoRefreshMdns.value, isTrue);
+      expect(restored.autoRefreshDevices.value, isFalse);
+      expect(restored.autoRefreshIntervalSeconds.value, 5);
+
+      Get.back<void>();
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<Checkbox>(
+              find.byKey(const ValueKey<String>('home-auto-refresh-mdns')),
+            )
+            .value,
+        isTrue,
+      );
+      expect(scans, 0);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+      expect(scans, 0);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+      expect(scans, 1);
     } finally {
       homeController.onClose();
       Get.reset();
