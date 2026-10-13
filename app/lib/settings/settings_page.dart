@@ -321,17 +321,10 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  Future<void> _setAutoRefresh({
-    required bool mdns,
-    required bool value,
-  }) async {
+  Future<void> _setDeviceAutoRefresh(bool value) async {
     final store = Get.find<AppSettingsStore>();
     try {
-      if (mdns) {
-        await store.setAutoRefreshMdns(value);
-      } else {
-        await store.setAutoRefreshDevices(value);
-      }
+      await store.setAutoRefreshDevices(value);
     } catch (error, stackTrace) {
       log.severe('保存自动刷新设置失败', error, stackTrace);
       if (!mounted) return;
@@ -358,7 +351,6 @@ class _SettingsPageState extends State<SettingsPage> {
         final prefer = manager.preferSdkAdbServer.value;
         final adbPath = manager.sdkAdbPath.value;
         final adbError = manager.sdkAdbError.value;
-        final autoRefreshMdns = settings.autoRefreshMdns.value;
         final autoRefreshDevices = settings.autoRefreshDevices.value;
         final refreshInBackground = settings.refreshInBackground.value;
         final intervalSeconds = settings.autoRefreshIntervalSeconds.value;
@@ -380,17 +372,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const Divider(),
                 CheckboxListTile(
-                  key: const ValueKey<String>('settings-auto-refresh-mdns'),
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(l10n.settingsAutoRefreshMdns),
-                  subtitle: Text(l10n.settingsAutoRefreshHelp(intervalSeconds)),
-                  value: autoRefreshMdns,
-                  onChanged: (value) {
-                    if (value == null) return;
-                    unawaited(_setAutoRefresh(mdns: true, value: value));
-                  },
-                ),
-                CheckboxListTile(
                   key: const ValueKey<String>('settings-auto-refresh-devices'),
                   contentPadding: EdgeInsets.zero,
                   title: Text(l10n.settingsAutoRefreshDevices),
@@ -398,7 +379,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   value: autoRefreshDevices,
                   onChanged: (value) {
                     if (value == null) return;
-                    unawaited(_setAutoRefresh(mdns: false, value: value));
+                    unawaited(_setDeviceAutoRefresh(value));
                   },
                 ),
                 CheckboxListTile(

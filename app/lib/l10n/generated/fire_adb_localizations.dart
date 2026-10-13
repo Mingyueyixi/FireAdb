@@ -446,7 +446,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @homeMdnsHelp.
   ///
   /// In zh, this message translates to:
-  /// **'在手机上打开系统「设置 → 开发者选项 → 无线调试 → 使用配对码配对设备」，并保持该页面打开。在安卓端连接本机时，可能无法停留在数字配对码页面，请使用悬浮窗或分屏，避免配对服务关闭导致无法连接。\n在本页点「扫描」，对出现的配对服务点「配对」并输入手机上的配对码，再点本页列出的无线调试端口连接。已配对过的设备只需在本页点「扫描」后连接。'**
+  /// **'在手机上打开系统「设置 → 开发者选项 → 无线调试 → 使用配对码配对设备」，并保持该页面打开。在安卓端连接本机时，可能无法停留在数字配对码页面，请使用悬浮窗或分屏，避免配对服务关闭导致无法连接。\n设备列表刷新时会扫描无线服务。对这里出现的配对服务点「配对」并输入手机上的配对码。能连接的无线设备会出现在设备列表中，在那里连接。'**
   String get homeMdnsHelp;
 
   /// No description provided for @homePairingCodeGuideTitle.
@@ -478,6 +478,12 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'未扫描到当前设备，请确认当前设备'**
   String get homeNoDevicesFound;
+
+  /// No description provided for @homeDiscoveredDevicesInList.
+  ///
+  /// In zh, this message translates to:
+  /// **'能连接的无线设备已放在设备列表中。'**
+  String get homeDiscoveredDevicesInList;
 
   /// No description provided for @homeServiceAdbTransport.
   ///
@@ -524,7 +530,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @homePairingSucceededHint.
   ///
   /// In zh, this message translates to:
-  /// **'请点对应的无线调试端口进行连接。'**
+  /// **'能连接的无线设备会出现在设备列表中，在那里连接。'**
   String get homePairingSucceededHint;
 
   /// No description provided for @homeQrPair.
@@ -590,7 +596,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @homeRefreshAdbDevices.
   ///
   /// In zh, this message translates to:
-  /// **'刷新 ADB 设备列表'**
+  /// **'刷新设备列表'**
   String get homeRefreshAdbDevices;
 
   /// No description provided for @homeAdbDevicesReadError.
@@ -730,6 +736,42 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'返回连接页'**
   String get workspaceBackToConnections;
+
+  /// No description provided for @workspaceDevices.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备'**
+  String get workspaceDevices;
+
+  /// No description provided for @workspaceConnectDevice.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接设备'**
+  String get workspaceConnectDevice;
+
+  /// No description provided for @workspaceConnectedDevices.
+  ///
+  /// In zh, this message translates to:
+  /// **'已连接'**
+  String get workspaceConnectedDevices;
+
+  /// No description provided for @workspaceAvailableDevices.
+  ///
+  /// In zh, this message translates to:
+  /// **'可连接'**
+  String get workspaceAvailableDevices;
+
+  /// No description provided for @workspaceNoAvailableDevices.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有其他可连接的设备'**
+  String get workspaceNoAvailableDevices;
+
+  /// No description provided for @workspaceOtherConnections.
+  ///
+  /// In zh, this message translates to:
+  /// **'其他连接方式'**
+  String get workspaceOtherConnections;
 
   /// No description provided for @workspaceOverviewTitle.
   ///

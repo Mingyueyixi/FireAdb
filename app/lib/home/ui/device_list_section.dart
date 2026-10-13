@@ -5,6 +5,7 @@ import 'package:libadb/libadb.dart';
 import '../../connection/model/device_profile.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../settings/app_settings_store.dart';
+import '../discovered_devices.dart';
 import '../home_actions.dart';
 import '../home_controller.dart';
 import 'home_section.dart';
@@ -36,13 +37,20 @@ class DeviceListSection extends GetView<HomeController> {
                 ),
           )
           .toList();
+      final wireless = connectableDiscoveredServices(
+        discovered: controller.discovered,
+        adbDevices: devices,
+        profiles: manager.profiles,
+      );
       final total =
           devices.length +
           usbDevices.length +
-          additionalConnectedProfiles.length;
+          additionalConnectedProfiles.length +
+          wireless.length;
       final loading =
           controller.loadingAdbDevices.value ||
-          controller.loadingUsbDevices.value;
+          controller.loadingUsbDevices.value ||
+          controller.scanning.value;
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -71,14 +79,7 @@ class DeviceListSection extends GetView<HomeController> {
                     style: IconButton.styleFrom(
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    onPressed:
-                        !controller.adbServerSupported.value &&
-                            !controller.usbSupported
-                        ? null
-                        : () {
-                            controller.refreshAdbDevices();
-                            controller.refreshUsbDevices();
-                          },
+                    onPressed: controller.refreshDeviceList,
                     icon: HomeSpinningIcon(
                       icon: Icons.refresh,
                       spinning: loading,
@@ -144,6 +145,8 @@ class DeviceListSection extends GetView<HomeController> {
                   ),
                   onTap: () => openWorkspace(profile.serial),
                 ),
+              for (final service in wireless)
+                _DiscoveredDeviceTile(service: service),
             ],
           ),
         ),
@@ -207,6 +210,46 @@ class _UsbDeviceTile extends GetView<HomeController> {
           : connecting
           ? null
           : () => connectUsbDevice(context, controller, device),
+    );
+  }
+}
+
+class _DiscoveredDeviceTile extends GetView<HomeController> {
+  const _DiscoveredDeviceTile({required this.service});
+
+  final MdnsService service;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final connecting = controller.connecting.value;
+    final type = service.serviceType == adbServiceTypeTransport
+        ? l10n.homeServiceAdbTransport
+        : l10n.homeServiceTlsConnection;
+    return HomeListTile(
+      dense: true,
+      leading: const Icon(Icons.router),
+      title: Text(discoveredServiceTitle(service)),
+      subtitle: Text('$type · ${service.endpointText}', maxLines: 2),
+      trailing: TextButton(
+        onPressed: connecting
+            ? null
+            : () => connectToHost(
+                context,
+                controller,
+                service.addressText,
+                service.port,
+              ),
+        child: Text(connecting ? l10n.homeConnecting : l10n.commonConnect),
+      ),
+      onTap: connecting
+          ? null
+          : () => connectToHost(
+              context,
+              controller,
+              service.addressText,
+              service.port,
+            ),
     );
   }
 }

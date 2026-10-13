@@ -198,7 +198,7 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get homeMdnsHelp =>
-      '在手机上打开系统「设置 → 开发者选项 → 无线调试 → 使用配对码配对设备」，并保持该页面打开。在安卓端连接本机时，可能无法停留在数字配对码页面，请使用悬浮窗或分屏，避免配对服务关闭导致无法连接。\n在本页点「扫描」，对出现的配对服务点「配对」并输入手机上的配对码，再点本页列出的无线调试端口连接。已配对过的设备只需在本页点「扫描」后连接。';
+      '在手机上打开系统「设置 → 开发者选项 → 无线调试 → 使用配对码配对设备」，并保持该页面打开。在安卓端连接本机时，可能无法停留在数字配对码页面，请使用悬浮窗或分屏，避免配对服务关闭导致无法连接。\n设备列表刷新时会扫描无线服务。对这里出现的配对服务点「配对」并输入手机上的配对码。能连接的无线设备会出现在设备列表中，在那里连接。';
 
   @override
   String get homePairingCodeGuideTitle => '配对码配对：';
@@ -217,6 +217,9 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get homeNoDevicesFound => '未扫描到当前设备，请确认当前设备';
+
+  @override
+  String get homeDiscoveredDevicesInList => '能连接的无线设备已放在设备列表中。';
 
   @override
   String get homeServiceAdbTransport => 'ADB 传输';
@@ -240,7 +243,7 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get homePairingSucceeded => '配对成功';
 
   @override
-  String get homePairingSucceededHint => '请点对应的无线调试端口进行连接。';
+  String get homePairingSucceededHint => '能连接的无线设备会出现在设备列表中，在那里连接。';
 
   @override
   String get homeQrPair => '二维码配对';
@@ -279,7 +282,7 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   }
 
   @override
-  String get homeRefreshAdbDevices => '刷新 ADB 设备列表';
+  String get homeRefreshAdbDevices => '刷新设备列表';
 
   @override
   String homeAdbDevicesReadError(Object error) {
@@ -355,6 +358,24 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get workspaceBackToConnections => '返回连接页';
+
+  @override
+  String get workspaceDevices => '设备';
+
+  @override
+  String get workspaceConnectDevice => '连接设备';
+
+  @override
+  String get workspaceConnectedDevices => '已连接';
+
+  @override
+  String get workspaceAvailableDevices => '可连接';
+
+  @override
+  String get workspaceNoAvailableDevices => '没有其他可连接的设备';
+
+  @override
+  String get workspaceOtherConnections => '其他连接方式';
 
   @override
   String get workspaceOverviewTitle => '设备总览';

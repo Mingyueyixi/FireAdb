@@ -32,6 +32,7 @@ void main() {
       HomeController(
         hostClient: hostClient,
         listUsbDevices: () async => const <UsbAdbDevice>[],
+        discoverServices: (onUpdate) async => const <MdnsService>[],
       ),
     );
     tester.view.physicalSize = const Size(1200, 900);
@@ -107,6 +108,7 @@ void main() {
     final homeController = HomeController(
       hostClient: _FakeAdbHostClient(const <AdbDeviceInfo>[]),
       listUsbDevices: () async => const <UsbAdbDevice>[],
+      discoverServices: (onUpdate) async => const <MdnsService>[],
     );
     Get.put<HomeController>(homeController);
     try {
@@ -170,6 +172,7 @@ void main() {
     final homeController = HomeController(
       hostClient: _FakeAdbHostClient(const <AdbDeviceInfo>[]),
       listUsbDevices: () async => const <UsbAdbDevice>[],
+      discoverServices: (onUpdate) async => const <MdnsService>[],
     );
     Get.put<HomeController>(homeController);
     try {
@@ -218,13 +221,10 @@ void main() {
         isTrue,
       );
       expect(
-        tester
-            .widget<Checkbox>(
-              find.byKey(const ValueKey<String>('home-auto-refresh-mdns')),
-            )
-            .value,
-        isFalse,
+        find.byKey(const ValueKey<String>('home-auto-refresh-mdns')),
+        findsNothing,
       );
+      expect(find.widgetWithText(FilledButton, '扫描'), findsNothing);
       expect(hostClient.deviceListRequests, 1);
 
       await tester.tap(
@@ -233,7 +233,7 @@ void main() {
       await tester.pump();
       await tester.pump(HomeController.adbDeviceRefreshInterval * 2);
       expect(hostClient.deviceListRequests, 1);
-      expect(scans, 0);
+      expect(scans, 1);
 
       await tester.tap(find.byIcon(Icons.settings_outlined));
       await tester.pumpAndSettle();
@@ -272,20 +272,12 @@ void main() {
       await tester.pump();
       expect(settings.autoRefreshIntervalSeconds.value, 5);
       expect(find.text('勾选后每 5 秒刷新一次'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey<String>('settings-auto-refresh-mdns')),
+        findsNothing,
+      );
 
-      final mdnsSetting = find.byKey(
-        const ValueKey<String>('settings-auto-refresh-mdns'),
-      );
-      await Scrollable.ensureVisible(
-        tester.element(mdnsSetting),
-        alignment: 0.5,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(mdnsSetting);
-      await tester.pump();
-      expect(settings.autoRefreshMdns.value, isTrue);
       final preferences = await SharedPreferences.getInstance();
-      expect(preferences.getBool(AppSettingsStore.autoRefreshMdnsKey), isTrue);
       expect(
         preferences.getBool(AppSettingsStore.autoRefreshDevicesKey),
         isFalse,
@@ -293,25 +285,13 @@ void main() {
       expect(preferences.getInt(AppSettingsStore.autoRefreshIntervalKey), 5);
       final restored = AppSettingsStore();
       await restored.load();
-      expect(restored.autoRefreshMdns.value, isTrue);
       expect(restored.autoRefreshDevices.value, isFalse);
       expect(restored.autoRefreshIntervalSeconds.value, 5);
 
       Get.back<void>();
       await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<Checkbox>(
-              find.byKey(const ValueKey<String>('home-auto-refresh-mdns')),
-            )
-            .value,
-        isTrue,
-      );
-      expect(scans, 0);
-      await tester.pump(const Duration(seconds: 3));
-      await tester.pump();
-      expect(scans, 0);
-      await tester.pump(const Duration(seconds: 2));
+      expect(scans, 1);
+      await tester.pump(const Duration(seconds: 5));
       await tester.pump();
       expect(scans, 1);
     } finally {
@@ -349,6 +329,7 @@ void main() {
       await tester.tap(find.widgetWithText(NavigationDestination, '连接'));
       await tester.pump();
       expect(hostClient.deviceListRequests, 2);
+      await tester.pump(const Duration(seconds: 1));
       await tester.pump(const Duration(seconds: 3));
       expect(hostClient.deviceListRequests, 3);
 
@@ -374,6 +355,7 @@ void main() {
       expect(tester.widget<CheckboxListTile>(background).value, isFalse);
       await tester.tap(background);
       await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
       expect(settings.refreshInBackground.value, isTrue);
       final whileAway = hostClient.deviceListRequests;
 

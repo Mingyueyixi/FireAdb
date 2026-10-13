@@ -241,6 +241,14 @@ class MdnsBrowser {
   /// 组播 TTL。
   final int ttl;
 
+  List<_QuerySocket>? _cachedLanSockets;
+  String? _cachedLanKey;
+
+  /// 上一轮因为采集时间到而结束，并且没有解析出服务。
+  ///
+  /// 这是监听被定时停掉，不是网络确认没有设备。
+  bool lastRoundExpiredEmpty = false;
+
   /// 发现局域网内的 adb 服务。
   ///
   /// [serviceTypes] 默认查询所有三类 adb 服务（legacy 传输、TLS 配对、
@@ -257,6 +265,7 @@ class MdnsBrowser {
     bool Function(List<MdnsService> services)? stopWhen,
     Duration? requeryInterval,
     bool Function()? isCancelled,
+    bool reuseLanSockets = false,
   }) async {
     if (!_isMdnsMulticast(group)) {
       final bind = group.type == InternetAddressType.IPv6
@@ -271,9 +280,12 @@ class MdnsBrowser {
         isCancelled: isCancelled,
       );
     }
-    var sockets = <_QuerySocket>[];
+    List<_QuerySocket> sockets;
     try {
-      sockets = await _openLanSockets(untilReady: stopWhen != null);
+      sockets = await _lanSockets(
+        untilReady: stopWhen != null,
+        reuse: reuseLanSockets,
+      );
     } catch (error, stackTrace) {
       _mdnsLog('打开局域网套接字失败：$error\n$stackTrace');
       sockets = <_QuerySocket>[];
@@ -288,27 +300,74 @@ class MdnsBrowser {
         isCancelled: isCancelled,
       );
     }
+    var cancelled = false;
     try {
-      final found = await _collect(
+      final collected = await _collect(
         sockets,
         serviceTypes,
         lan: true,
+        retainListener: reuseLanSockets,
         onUpdate: onUpdate,
         stopWhen: stopWhen,
         requeryInterval: requeryInterval,
-        isCancelled: isCancelled,
+        isCancelled: isCancelled == null
+            ? null
+            : () {
+                final stop = isCancelled();
+                if (stop) cancelled = true;
+                return stop;
+              },
       );
-      _mdnsLog(
-        found.isEmpty
-            ? 'mDNS 扫描结束，没有发现设备'
-            : 'mDNS 扫描到 ${found.length} 个：${found.map((service) => '${service.serviceType} ${service.endpointText}').join('；')}',
+      return _finishDiscover(
+        found: collected.services,
+        expired: collected.expired,
+        cancelled: cancelled,
       );
-      return found;
     } finally {
-      for (final socket in sockets) {
-        socket.socket.close();
+      if (!reuseLanSockets) {
+        for (final socket in sockets) {
+          socket.socket.close();
+        }
       }
     }
+  }
+
+  /// 关掉复用的局域网套接字。页面关闭时调用。
+  void close() {
+    final sockets = _cachedLanSockets;
+    _cachedLanSockets = null;
+    _cachedLanKey = null;
+    if (sockets == null) return;
+    for (final socket in sockets) {
+      socket.detach();
+    }
+  }
+
+  Future<List<_QuerySocket>> _lanSockets({
+    required bool untilReady,
+    required bool reuse,
+  }) async {
+    if (!reuse) {
+      return _openLanSockets(untilReady: untilReady);
+    }
+    final interfaces = await NetworkInterface.list(
+      includeLinkLocal: true,
+      type: InternetAddressType.any,
+    );
+    final routeKeys = await _readDefaultRouteKeys();
+    final outlets = selectConnectableInterfaces(interfaces, routeKeys);
+    final key = outlets.map(_ifaceLabel).join('|');
+    final cached = _cachedLanSockets;
+    if (cached != null && cached.isNotEmpty && _cachedLanKey == key) {
+      return cached;
+    }
+    close();
+    final sockets = await _openLanSockets(untilReady: untilReady);
+    if (sockets.isNotEmpty) {
+      _cachedLanSockets = sockets;
+      _cachedLanKey = key;
+    }
+    return sockets;
   }
 
   /// 测试里会把查询发到 loopback 的假应答方，不走局域网组播。
@@ -452,25 +511,59 @@ class MdnsBrowser {
       reuseAddress: true,
       ttl: ttl,
     );
+    var cancelled = false;
     try {
-      return await _collect(
+      final collected = await _collect(
         <_QuerySocket>[_QuerySocket(socket)],
         serviceTypes,
         lan: false,
         onUpdate: onUpdate,
         stopWhen: stopWhen,
         requeryInterval: requeryInterval,
-        isCancelled: isCancelled,
+        isCancelled: isCancelled == null
+            ? null
+            : () {
+                final stop = isCancelled();
+                if (stop) cancelled = true;
+                return stop;
+              },
+      );
+      return _finishDiscover(
+        found: collected.services,
+        expired: collected.expired,
+        cancelled: cancelled,
       );
     } finally {
       socket.close();
     }
   }
 
-  Future<List<MdnsService>> _collect(
+  List<MdnsService> _finishDiscover({
+    required List<MdnsService> found,
+    required bool expired,
+    required bool cancelled,
+  }) {
+    final expiredEmpty = expired && found.isEmpty && !cancelled;
+    lastRoundExpiredEmpty = expiredEmpty;
+    if (cancelled && found.isEmpty) {
+      _mdnsLog('mDNS 扫描已取消');
+    } else if (expiredEmpty) {
+      _mdnsLog('mDNS 扫描时间到，本轮没有新应答');
+    } else {
+      _mdnsLog(
+        found.isEmpty
+            ? 'mDNS 扫描结束，没有发现设备'
+            : 'mDNS 扫描到 ${found.length} 个：${found.map((service) => '${service.serviceType} ${service.endpointText}').join('；')}',
+      );
+    }
+    return found;
+  }
+
+  Future<({List<MdnsService> services, bool expired})> _collect(
     List<_QuerySocket> sockets,
     Set<String> serviceTypes, {
     required bool lan,
+    bool retainListener = false,
     void Function(List<MdnsService> services)? onUpdate,
     bool Function(List<MdnsService> services)? stopWhen,
     Duration? requeryInterval,
@@ -479,7 +572,9 @@ class MdnsBrowser {
     final resolver = _MdnsResolver(serviceTypes: _queryTypes(serviceTypes));
     final subscriptions = <StreamSubscription<RawSocketEvent>>[];
     final completer = Completer<void>();
+    var expired = false;
     final timer = Timer(timeout, () {
+      expired = true;
       if (!completer.isCompleted) completer.complete();
     });
     var snapshot = '';
@@ -498,17 +593,27 @@ class MdnsBrowser {
       }
     }
 
+    void take(Datagram datagram) {
+      resolver.handleDatagram(datagram.data, datagram.address);
+      noteProgress();
+    }
+
     for (final entry in sockets) {
+      if (retainListener) {
+        entry.ensureListening();
+        entry.onDatagram = take;
+        continue;
+      }
       final socket = entry.socket;
+      socket.readEventsEnabled = true;
       subscriptions.add(
         socket.listen((event) {
           if (event != RawSocketEvent.read) return;
           while (true) {
             final datagram = socket.receive();
             if (datagram == null) break;
-            resolver.handleDatagram(datagram.data, datagram.address);
+            take(datagram);
           }
-          noteProgress();
         }),
       );
     }
@@ -521,7 +626,6 @@ class MdnsBrowser {
               ? (ipv6 ? kMdnsGroupV6 : kMdnsGroupV4)
               : group;
           final destinationPort = port;
-          final unicastResponse = !lan || socket.port != port;
           final outlets = lan
               ? (entry.interface != null
                     ? <NetworkInterface>[entry.interface!]
@@ -536,14 +640,22 @@ class MdnsBrowser {
             }
             for (final type in serviceTypes) {
               final qname = _encodeName('$type.$kMdnsDomain');
-              try {
-                socket.send(
-                  _buildPtrQuery(qname, unicastResponse: unicastResponse),
-                  destination,
-                  destinationPort,
-                );
-              } on SocketException {
-                _mdnsLog('发送查询失败：$type ${lan ? outlets[i].name : ''}');
+              final fromServicePort = lan && socket.port == port;
+              // 5353 上再发一包 QU。只发组播查询时，应答也走组播，
+              // Windows 上经常被系统的 5353 套接字抢走，于是这次扫描是空的。
+              final modes = fromServicePort
+                  ? const <bool>[false, true]
+                  : <bool>[!lan || socket.port != port];
+              for (final unicastResponse in modes) {
+                try {
+                  socket.send(
+                    _buildPtrQuery(qname, unicastResponse: unicastResponse),
+                    destination,
+                    destinationPort,
+                  );
+                } on SocketException {
+                  _mdnsLog('发送查询失败：$type ${lan ? outlets[i].name : ''}');
+                }
               }
             }
           }
@@ -570,11 +682,16 @@ class MdnsBrowser {
       }
     } finally {
       timer.cancel();
+      if (retainListener) {
+        for (final entry in sockets) {
+          if (entry.onDatagram == take) entry.onDatagram = null;
+        }
+      }
       for (final subscription in subscriptions) {
         await subscription.cancel();
       }
     }
-    return resolver.services();
+    return (services: resolver.services(), expired: expired);
   }
 }
 
@@ -589,6 +706,31 @@ class _QuerySocket {
 
   /// 绑在任意地址上的监听套接字：每块网卡各发一次。
   final List<NetworkInterface> interfaces;
+
+  /// RawDatagramSocket 只能 listen 一次。复用套接字时监听留着，扫描只换回调。
+  StreamSubscription<RawSocketEvent>? _subscription;
+  void Function(Datagram datagram)? onDatagram;
+
+  void ensureListening() {
+    if (_subscription != null) return;
+    socket.readEventsEnabled = true;
+    _subscription = socket.listen((event) {
+      if (event != RawSocketEvent.read) return;
+      while (true) {
+        final datagram = socket.receive();
+        if (datagram == null) break;
+        onDatagram?.call(datagram);
+      }
+    });
+  }
+
+  void detach() {
+    final subscription = _subscription;
+    _subscription = null;
+    onDatagram = null;
+    subscription?.cancel();
+    socket.close();
+  }
 }
 
 /// `IPPROTO_IP` / `IPPROTO_IPV6`。
@@ -744,8 +886,9 @@ List<int> _encodeName(String name) {
 
 /// PTR 查询（ID=0，QDCOUNT=1，QTYPE=PTR）。
 ///
-/// [unicastResponse] 置位 QU，请应答方单播回源端口。从 5353 发出的查询不置位，
-/// 应答走组播，由监听 5353 的 socket 接收。
+/// [unicastResponse] 置位 QU，请应答方单播回源端口。
+/// 5353 上两种都发：组播应答给还在听组播的机器，单播应答避开 Windows
+/// 把 5353 组播包交给系统套接字的情况。
 List<int> _buildPtrQuery(List<int> qname, {bool unicastResponse = true}) {
   final out = <int>[];
   out.addAll([0, 0]); // ID

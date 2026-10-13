@@ -209,7 +209,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get homeMdnsHelp =>
-      'On the phone, open Settings → Developer options → Wireless debugging → Pair device with pairing code, and keep that screen open. When the Android app connects to the same device, you may be unable to stay on the numeric pairing code screen. Use a floating window or split screen so the pairing service does not close and block the connection.\nOn this page, tap Scan, tap Pair on the pairing service and enter the code shown on the phone, then tap the wireless debugging port listed here. If the device is already paired, tap Scan on this page and connect.';
+      'On the phone, open Settings → Developer options → Wireless debugging → Pair device with pairing code, and keep that screen open. When the Android app connects to the same device, you may be unable to stay on the numeric pairing code screen. Use a floating window or split screen so the pairing service does not close and block the connection.\nRefreshing the device list also scans for wireless services. Tap Pair on a pairing service here and enter the code shown on the phone. Connectable wireless devices appear in the device list; connect them there.';
 
   @override
   String get homePairingCodeGuideTitle => 'Pairing code:';
@@ -229,6 +229,10 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   @override
   String get homeNoDevicesFound =>
       'The current device was not found. Please check the current device.';
+
+  @override
+  String get homeDiscoveredDevicesInList =>
+      'Connectable wireless devices are in the device list.';
 
   @override
   String get homeServiceAdbTransport => 'ADB transport';
@@ -254,7 +258,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get homePairingSucceededHint =>
-      'Tap the matching wireless debugging port to connect.';
+      'The connectable wireless device appears in the device list. Connect it there.';
 
   @override
   String get homeQrPair => 'QR pairing';
@@ -294,7 +298,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   }
 
   @override
-  String get homeRefreshAdbDevices => 'Refresh ADB device list';
+  String get homeRefreshAdbDevices => 'Refresh the device list';
 
   @override
   String homeAdbDevicesReadError(Object error) {
@@ -371,6 +375,24 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get workspaceBackToConnections => 'Back to connections';
+
+  @override
+  String get workspaceDevices => 'Devices';
+
+  @override
+  String get workspaceConnectDevice => 'Connect a device';
+
+  @override
+  String get workspaceConnectedDevices => 'Connected';
+
+  @override
+  String get workspaceAvailableDevices => 'Available';
+
+  @override
+  String get workspaceNoAvailableDevices => 'No other devices to connect';
+
+  @override
+  String get workspaceOtherConnections => 'Other ways to connect';
 
   @override
   String get workspaceOverviewTitle => 'Device overview';

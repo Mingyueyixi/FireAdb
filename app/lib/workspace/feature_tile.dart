@@ -19,51 +19,76 @@ class FeatureTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Icon(spec.icon, size: 32, color: scheme.primary),
-                  const Spacer(),
-                  if (!spec.implemented)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 1 || constraints.maxHeight < 1) {
+              return const SizedBox.expand();
+            }
+            if (constraints.maxWidth < 72 || constraints.maxHeight < 72) {
+              return Center(
+                child: Icon(spec.icon, size: 24, color: scheme.primary),
+              );
+            }
+            return SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Icon(spec.icon, size: 32, color: scheme.primary),
+                          const Spacer(),
+                          if (!spec.implemented)
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: scheme.surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  l10n.workspacePlanned,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: scheme.outline,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                      decoration: BoxDecoration(
-                        color: scheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(8),
+                      const SizedBox(height: 12),
+                      Text(
+                        featureTitle(context, spec),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium,
                       ),
-                      child: Text(
-                        l10n.workspacePlanned,
-                        style: theme.textTheme.labelSmall?.copyWith(
+                      const SizedBox(height: 4),
+                      Text(
+                        featureDescription(context, spec),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
                           color: scheme.outline,
                         ),
                       ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                featureTitle(context, spec),
-                style: theme.textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                featureDescription(context, spec),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.outline,
+                    ],
+                  ),
                 ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -107,34 +132,47 @@ class PlaceholderFeatureBody extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = context.l10n;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Icon(spec.icon, size: 72, color: scheme.outline),
-            const SizedBox(height: 16),
-            Text(
-              featureTitle(context, spec),
-              style: theme.textTheme.headlineSmall,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight.isFinite
+                  ? constraints.maxHeight
+                  : 0,
             ),
-            const SizedBox(height: 8),
-            Text(
-              featureDescription(context, spec),
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: scheme.outline,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(spec.icon, size: 72, color: scheme.outline),
+                    const SizedBox(height: 16),
+                    Text(
+                      featureTitle(context, spec),
+                      style: theme.textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      featureDescription(context, spec),
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.outline,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      l10n.workspaceFeaturePlannedDescription,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              l10n.workspaceFeaturePlannedDescription,
-              style: theme.textTheme.bodySmall,
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

@@ -94,7 +94,7 @@
   "homeScanning": "Scanning…",
   "homeScan": "Scan",
   "homeWifiDebugInfo": "For Android 11+ devices with Wireless debugging enabled",
-  "homeMdnsHelp": "On the phone, open Settings → Developer options → Wireless debugging → Pair device with pairing code, and keep that screen open. When the Android app connects to the same device, you may be unable to stay on the numeric pairing code screen. Use a floating window or split screen so the pairing service does not close and block the connection.\nOn this page, tap Scan, tap Pair on the pairing service and enter the code shown on the phone, then tap the wireless debugging port listed here. If the device is already paired, tap Scan on this page and connect.",
+  "homeMdnsHelp": "On the phone, open Settings → Developer options → Wireless debugging → Pair device with pairing code, and keep that screen open. When the Android app connects to the same device, you may be unable to stay on the numeric pairing code screen. Use a floating window or split screen so the pairing service does not close and block the connection.\nRefreshing the device list also scans for wireless services. Tap Pair on a pairing service here and enter the code shown on the phone. Connectable wireless devices appear in the device list; connect them there.",
   "homePairingCodeGuideTitle": "Pairing code:",
   "homeQrPairingGuideTitle": "QR pairing:",
   "homeQrPairingGuide": "On this page, tap QR pairing. On the phone, open Settings → Developer options → Wireless debugging → Pair device with QR code, and scan the code shown here. This app pairs and connects automatically.",
@@ -105,6 +105,7 @@
     }
   },
   "homeNoDevicesFound": "The current device was not found. Please check the current device.",
+  "homeDiscoveredDevicesInList": "Connectable wireless devices are in the device list.",
   "homeServiceAdbTransport": "ADB transport",
   "homeServiceTlsConnection": "TLS connection",
   "homeServicePairing": "Pairing service",
@@ -112,7 +113,7 @@
   "homePairingTitle": "Wireless pairing",
   "homePairingCodeHelp": "Enter the pairing code shown on the wireless debugging screen.",
   "homePairingSucceeded": "Pairing succeeded",
-  "homePairingSucceededHint": "Tap the matching wireless debugging port to connect.",
+  "homePairingSucceededHint": "The connectable wireless device appears in the device list. Connect it there.",
   "homeQrPair": "QR pairing",
   "homeQrPairingTitle": "QR pairing",
   "homeQrPairingPrinciple": "The code holds a service name and a pairing password. After the phone scans it, the phone advertises that name. This app finds the match, pairs with the password, then connects to the wireless debugging port.",
@@ -135,7 +136,7 @@
       }
     }
   },
-  "homeRefreshAdbDevices": "Refresh ADB device list",
+  "homeRefreshAdbDevices": "Refresh the device list",
   "homeAdbDevicesReadError": "Could not read the ADB device list: {error}",
   "homeUsbDevicesReadError": "Could not read USB devices: {error}",
   "@homeAdbDevicesReadError": {
@@ -174,6 +175,12 @@
   "workspaceDeviceDisconnectedTitle": "Device disconnected",
   "workspaceSwitchToOtherDevice": "Switch to another device",
   "workspaceBackToConnections": "Back to connections",
+  "workspaceDevices": "Devices",
+  "workspaceConnectDevice": "Connect a device",
+  "workspaceConnectedDevices": "Connected",
+  "workspaceAvailableDevices": "Available",
+  "workspaceNoAvailableDevices": "No other devices to connect",
+  "workspaceOtherConnections": "Other ways to connect",
   "workspaceOverviewTitle": "Device overview",
   "workspaceOverviewDescription": "Device model, brand, Android version, and other details",
   "workspaceAppsTitle": "Device apps",

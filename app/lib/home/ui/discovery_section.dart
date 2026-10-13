@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:libadb/libadb.dart';
 
 import '../../l10n/fire_adb_localizations_ext.dart';
-import '../../settings/app_settings_store.dart';
+import '../discovered_devices.dart';
 import '../home_actions.dart';
 import '../home_controller.dart';
 import 'home_section.dart';
@@ -16,8 +16,13 @@ class DiscoverySection extends GetView<HomeController> {
     return Obx(() {
       final theme = Theme.of(context);
       final l10n = context.l10n;
-      final scanning = controller.scanning.value;
       final connecting = controller.connecting.value;
+      final pairing = controller.discovered
+          .where((service) => service.serviceType == adbServiceTypePairing)
+          .toList();
+      final movedToDeviceList = controller.discovered.any(
+        isConnectableAdbService,
+      );
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -30,22 +35,6 @@ class DiscoverySection extends GetView<HomeController> {
                   title: l10n.homeDeviceDiscovery,
                 ),
                 actions: <Widget>[
-                  HomeAutoRefreshToggle(
-                    checkboxKey: const ValueKey<String>(
-                      'home-auto-refresh-mdns',
-                    ),
-                    value: Get.find<AppSettingsStore>().autoRefreshMdns.value,
-                    onChanged: (value) =>
-                        setHomeAutoRefresh(context, mdns: true, value: value),
-                  ),
-                  FilledButton.tonalIcon(
-                    onPressed: () => controller.scan(),
-                    icon: HomeSpinningIcon(
-                      icon: scanning ? Icons.refresh : Icons.search,
-                      spinning: scanning,
-                    ),
-                    label: Text(l10n.homeScan),
-                  ),
                   FilledButton.tonalIcon(
                     key: const ValueKey<String>('home-qr-pair'),
                     onPressed: connecting
@@ -129,67 +118,45 @@ class DiscoverySection extends GetView<HomeController> {
                   l10n.homeScanFailed('${controller.scanError.value}'),
                   style: TextStyle(color: theme.colorScheme.error),
                 )
-              else if (controller.discovered.isEmpty)
-                // 扫描中列表仍为空时也留着这句。卸掉再装上会让卡片高度来回变。
-                Text(
-                  l10n.homeNoDevicesFound,
-                  style: TextStyle(color: theme.colorScheme.outline),
-                )
-              else
-                for (final service in controller.discovered)
+              else ...<Widget>[
+                if (movedToDeviceList)
+                  Text(
+                    l10n.homeDiscoveredDevicesInList,
+                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                  )
+                else if (pairing.isEmpty)
+                  // 扫描中列表仍为空时也留着这句。卸掉再装上会让卡片高度来回变。
+                  Text(
+                    l10n.homeNoDevicesFound,
+                    style: TextStyle(color: theme.colorScheme.outline),
+                  ),
+                for (final service in pairing)
                   HomeListTile(
                     dense: true,
-                    leading: Icon(
-                      _connectable(service) ? Icons.router : Icons.vpn_key,
-                    ),
+                    leading: const Icon(Icons.vpn_key),
                     title: Text(service.instanceName),
                     subtitle: Text(
                       // IPv6 端点（如 [fe80::…%wlan0]:5555）可能很长，限制行数
                       // 与其他 tile 的 subtitle（maxLines: 2）保持一致。
-                      '${_serviceTypeLabel(context, service.serviceType)} · '
-                      '${service.endpointText}',
+                      '${l10n.homeServicePairing} · ${service.endpointText}',
                       maxLines: 2,
                     ),
-                    trailing: service.serviceType == adbServiceTypePairing
-                        ? TextButton(
-                            onPressed: connecting
-                                ? null
-                                : () => pairDiscoveredService(
-                                    context,
-                                    controller,
-                                    service,
-                                  ),
-                            child: Text(l10n.homePair),
-                          )
-                        : _connectable(service)
-                        ? TextButton(
-                            onPressed: connecting
-                                ? null
-                                : () => connectToHost(
-                                    context,
-                                    controller,
-                                    service.addressText,
-                                    service.port,
-                                  ),
-                            child: Text(l10n.commonConnect),
-                          )
-                        : null,
+                    trailing: TextButton(
+                      onPressed: connecting
+                          ? null
+                          : () => pairDiscoveredService(
+                              context,
+                              controller,
+                              service,
+                            ),
+                      child: Text(l10n.homePair),
+                    ),
                   ),
+              ],
             ],
           ),
         ),
       );
     });
   }
-}
-
-bool _connectable(MdnsService service) =>
-    service.serviceType != adbServiceTypePairing;
-
-String _serviceTypeLabel(BuildContext context, String type) {
-  final l10n = context.l10n;
-  if (type == adbServiceTypeTransport) return l10n.homeServiceAdbTransport;
-  if (type == adbServiceTypeConnect) return l10n.homeServiceTlsConnection;
-  if (type == adbServiceTypePairing) return l10n.homeServicePairing;
-  return type;
 }

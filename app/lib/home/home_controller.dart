@@ -9,6 +9,7 @@ import '../connection/connection_manager.dart';
 import '../connection/model/connected_device.dart';
 import '../log/app_log.dart';
 import '../settings/app_settings_store.dart';
+import 'discovered_devices.dart';
 
 class HomeController extends GetxController with WidgetsBindingObserver {
   static const Duration adbDeviceRefreshInterval = Duration(seconds: 3);
@@ -64,12 +65,12 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   String? _loggedUsbError;
   String? _loggedAdbError;
   Timer? _adbDeviceRefreshTimer;
-  Timer? _mdnsRefreshTimer;
   Worker? _devicesRefreshWorker;
-  Worker? _mdnsRefreshWorker;
   Worker? _intervalWorker;
   Worker? _backgroundRefreshWorker;
-  var _mdnsRefreshGeneration = 0;
+  var _deviceRefreshGeneration = 0;
+  final Map<String, DateTime> _discoveredSeenAt = <String, DateTime>{};
+  final MdnsBrowser _wirelessBrowser = MdnsBrowser();
   var _pageVisible = true;
   var _appResumed = true;
   var _refreshing = true;
@@ -88,21 +89,15 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       _applyDeviceAutoRefresh(_settings.autoRefreshDevices.value);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (isClosed) return;
-        refreshListedDevices();
+        unawaited(_refreshNowAndReschedule());
       });
     }
-    _applyMdnsAutoRefresh(_settings.autoRefreshMdns.value);
     _devicesRefreshWorker = ever<bool>(
       _settings.autoRefreshDevices,
       _applyDeviceAutoRefresh,
     );
-    _mdnsRefreshWorker = ever<bool>(
-      _settings.autoRefreshMdns,
-      _applyMdnsAutoRefresh,
-    );
     _intervalWorker = ever<int>(_settings.autoRefreshIntervalSeconds, (_) {
       _applyDeviceAutoRefresh(_settings.autoRefreshDevices.value);
-      _applyMdnsAutoRefresh(_settings.autoRefreshMdns.value);
     });
     _backgroundRefreshWorker = ever<bool>(
       _settings.refreshInBackground,
@@ -133,11 +128,10 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     if (allow == _refreshing) return;
     _refreshing = allow;
     _applyDeviceAutoRefresh(_settings.autoRefreshDevices.value);
-    _applyMdnsAutoRefresh(_settings.autoRefreshMdns.value);
     if (!allow || !_settings.autoRefreshDevices.value || isClosed) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (isClosed || !_allowsAutoRefresh) return;
-      refreshListedDevices();
+      unawaited(_refreshNowAndReschedule());
     });
   }
 
@@ -147,30 +141,43 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   void _applyDeviceAutoRefresh(bool enabled) {
     _adbDeviceRefreshTimer?.cancel();
     _adbDeviceRefreshTimer = null;
+    _deviceRefreshGeneration++;
     if (!enabled || !_allowsAutoRefresh || isClosed) return;
     if (!adbServerSupported.value && !usbSupported) return;
-    _adbDeviceRefreshTimer = Timer.periodic(_refreshInterval, (_) {
-      refreshListedDevices();
+    // 固定周期会从本轮开始计时。扫描要数秒，转圈一停下一轮就到了。
+    // 这里改成上一轮结束后再等设定的间隔。
+    _scheduleDeviceRefresh(_deviceRefreshGeneration);
+  }
+
+  void _scheduleDeviceRefresh(int generation) {
+    _adbDeviceRefreshTimer?.cancel();
+    _adbDeviceRefreshTimer = Timer(_refreshInterval, () {
+      unawaited(_runScheduledRefresh(generation));
     });
   }
 
-  /// 上一次扫描结束后再等设定的秒数。扫描本身大约要数秒，固定周期会和它叠在一起。
-  void _applyMdnsAutoRefresh(bool enabled) {
-    _mdnsRefreshTimer?.cancel();
-    _mdnsRefreshTimer = null;
-    _mdnsRefreshGeneration++;
-    if (!enabled || !_allowsAutoRefresh || isClosed) return;
-    _scheduleMdnsRefresh(_mdnsRefreshGeneration);
+  Future<void> _runScheduledRefresh(int generation) async {
+    if (!_deviceRefreshCurrent(generation)) return;
+    await refreshListedDevices(includeWirelessScan: true);
+    if (!_deviceRefreshCurrent(generation)) return;
+    _scheduleDeviceRefresh(generation);
   }
 
-  void _scheduleMdnsRefresh(int generation) {
-    _mdnsRefreshTimer = Timer(_refreshInterval, () async {
-      if (generation != _mdnsRefreshGeneration || isClosed) return;
-      await scan(automatic: true);
-      if (generation != _mdnsRefreshGeneration || isClosed) return;
-      if (!_settings.autoRefreshMdns.value || !_allowsAutoRefresh) return;
-      _scheduleMdnsRefresh(generation);
-    });
+  Future<void> _refreshNowAndReschedule() async {
+    final generation = _deviceRefreshGeneration;
+    _adbDeviceRefreshTimer?.cancel();
+    _adbDeviceRefreshTimer = null;
+    await refreshListedDevices(includeWirelessScan: true);
+    if (!_deviceRefreshCurrent(generation)) return;
+    _scheduleDeviceRefresh(generation);
+  }
+
+  bool _deviceRefreshCurrent(int generation) {
+    return generation == _deviceRefreshGeneration &&
+        !isClosed &&
+        _settings.autoRefreshDevices.value &&
+        _allowsAutoRefresh &&
+        (adbServerSupported.value || usbSupported);
   }
 
   bool get showDirectUsbList =>
@@ -185,13 +192,29 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     portController.text = '${endpoint.$2}';
   }
 
-  void refreshListedDevices() {
-    if (adbServerSupported.value) unawaited(refreshAdbDevices());
+  Future<void> refreshListedDevices({bool includeWirelessScan = false}) {
+    final pending = <Future<void>>[];
+    if (adbServerSupported.value) pending.add(refreshAdbDevices());
     if (showDirectUsbList) {
-      unawaited(refreshUsbDevices());
+      pending.add(refreshUsbDevices());
     } else {
       usbDevices.clear();
     }
+    if (includeWirelessScan && !scanning.value) {
+      pending.add(scan(automatic: true));
+    }
+    return Future.wait(pending);
+  }
+
+  /// 手动刷新设备列表：adb server、USB，以及无线服务。
+  Future<void> refreshDeviceList() async {
+    final generation = _deviceRefreshGeneration;
+    _adbDeviceRefreshTimer?.cancel();
+    _adbDeviceRefreshTimer = null;
+    await refreshListedDevices();
+    await scan();
+    if (!_deviceRefreshCurrent(generation)) return;
+    _scheduleDeviceRefresh(generation);
   }
 
   Future<AdbDevice> connectUsb(UsbAdbDevice device) async {
@@ -234,26 +257,48 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     if (scanning.value) return;
     scanning.value = true;
     scanError.value = null;
-    if (!automatic) {
-      log.info('开始扫描无线设备');
-      discovered.clear();
-    }
+    final kept = List<MdnsService>.of(discovered);
+    var cancelled = false;
+    if (!automatic) log.info('开始扫描无线设备');
     try {
-      final found = await _discover((services) {
-        discovered.assignAll(services);
-        if (!automatic) {
-          log.info(
-            '扫描到 ${services.length} 个：${services.map((service) => service.endpointText).join('，')}',
-          );
-        }
-      }, isCancelled: automatic ? () => isClosed || !_allowsAutoRefresh : null);
-      discovered.assignAll(found);
-      if (!automatic) {
+      final found = await _discover(
+        (services) {
+          discovered.assignAll(mergeDiscoveredServices(kept, services));
+          if (!automatic) {
+            log.info(
+              '扫描到 ${services.length} 个：${services.map((service) => service.endpointText).join('，')}',
+            );
+          }
+        },
+        isCancelled: automatic
+            ? () {
+                final stop = isClosed || !_allowsAutoRefresh;
+                if (stop) cancelled = true;
+                return stop;
+              }
+            : null,
+      );
+      final expiredEmpty =
+          discoverServices == null && _wirelessBrowser.lastRoundExpiredEmpty;
+      if (cancelled || isClosed || expiredEmpty) {
+        discovered.assignAll(kept);
+      } else {
+        discovered.assignAll(
+          retainRecentDiscoveries(
+            previous: kept,
+            found: found,
+            seenAt: _discoveredSeenAt,
+            now: DateTime.now(),
+          ),
+        );
+      }
+      if (!automatic && !cancelled && !expiredEmpty) {
         log.info(found.isEmpty ? '扫描结束，没有发现无线设备' : '扫描结束，共 ${found.length} 个');
       }
     } catch (error, stackTrace) {
       log.severe('mDNS 设备扫描失败', error, stackTrace);
       scanError.value = '$error';
+      discovered.assignAll(kept);
     } finally {
       scanning.value = false;
     }
@@ -284,17 +329,20 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   }) {
     final override = discoverServices;
     if (override != null) return override(onUpdate);
-    return discoverAdbServices(
+    final browser = stopWhen == null
+        ? _wirelessBrowser
+        : MdnsBrowser(timeout: timeout ?? kMdnsInterfaceTimeout);
+    return browser.discover(
       serviceTypes: const <String>{
         adbServiceTypeTransport,
         adbServiceTypeConnect,
         adbServiceTypePairing,
       },
-      timeout: timeout ?? kMdnsInterfaceTimeout,
       onUpdate: onUpdate,
       stopWhen: stopWhen,
-      requeryInterval: stopWhen == null ? null : const Duration(seconds: 1),
+      requeryInterval: const Duration(seconds: 1),
       isCancelled: isCancelled,
+      reuseLanSockets: stopWhen == null,
     );
   }
 
@@ -416,12 +464,11 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   void onClose() {
     WidgetsBinding.instance.removeObserver(this);
     _devicesRefreshWorker?.dispose();
-    _mdnsRefreshWorker?.dispose();
     _intervalWorker?.dispose();
     _backgroundRefreshWorker?.dispose();
+    _deviceRefreshGeneration++;
     _adbDeviceRefreshTimer?.cancel();
-    _mdnsRefreshGeneration++;
-    _mdnsRefreshTimer?.cancel();
+    _wirelessBrowser.close();
     hostController.dispose();
     portController.dispose();
     super.onClose();

@@ -60,6 +60,8 @@ class _AppShellState extends State<AppShell> {
                     selectedIndex: _index,
                     onDestinationSelected: _select,
                     labelType: NavigationRailLabelType.all,
+                    scrollable: true,
+                    trailingAtBottom: true,
                     leading: Padding(
                       padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
                       child: Text(

@@ -174,7 +174,21 @@ void main() {
       );
       watch.stop();
       expect(services, isEmpty);
+      expect(browser.lastRoundExpiredEmpty, isFalse);
       expect(watch.elapsed, lessThan(const Duration(milliseconds: 500)));
+    });
+
+    test('采集时间到且没有应答时，不算没有设备', () async {
+      final browser = MdnsBrowser(
+        group: InternetAddress.loopbackIPv4,
+        port: 9,
+        timeout: const Duration(milliseconds: 200),
+      );
+      final services = await browser.discover(
+        serviceTypes: const {adbServiceTypePairing},
+      );
+      expect(services, isEmpty);
+      expect(browser.lastRoundExpiredEmpty, isTrue);
     });
 
     test('只查询 connect 服务时不返回配对结果', () async {

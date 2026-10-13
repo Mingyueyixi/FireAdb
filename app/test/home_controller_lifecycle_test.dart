@@ -20,6 +20,7 @@ void main() {
     final controller = HomeController(
       hostClient: _FakeAdbHostClient(),
       listUsbDevices: () async => const <UsbAdbDevice>[],
+      discoverServices: (onUpdate) async => const <MdnsService>[],
     );
     Get.put<HomeController>(controller, permanent: true);
     try {

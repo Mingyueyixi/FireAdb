@@ -5,14 +5,16 @@ import 'package:get/get.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
 import '../widgets/adaptive.dart' show isWide, isAtLeastTablet;
 import 'data/feature_spec.dart';
+import 'device_switcher.dart';
 import 'feature_cache.dart';
 import 'feature_tile.dart';
 import 'workspace_controller.dart';
 
 /// 设备工作区：切换设备 + 选择功能。
 ///
-/// 桌面（宽屏）：左侧设备栏 + 功能栏 + 内容面板（三栏分栏）。
-/// 移动端（窄屏）：顶部下拉切换设备，功能九宫格，点进功能后全屏显示同一份页面。
+/// 桌面（宽屏）：左侧已连接设备栏，栏底和标题栏都能打开设备列表。
+/// 移动端（窄屏）：点标题栏里的设备名打开同一份列表。
+/// 列表里已连接的用来切换，未连接的点一下就连接并切过去。
 class WorkspacePage extends GetView<WorkspaceController> {
   const WorkspacePage({super.key});
 
@@ -26,6 +28,46 @@ class WorkspacePage extends GetView<WorkspaceController> {
       tooltip: context.l10n.workspaceBackToHome,
       onPressed: () => Get.offAllNamed<void>('/'),
       icon: const Icon(Icons.arrow_back),
+    );
+  }
+
+  Widget _deviceTitle(BuildContext context) {
+    final serial = controller.selectedSerial.value;
+    final profile = Get.find<ConnectionManager>().profileOf(serial);
+    final name = profile?.displayName ?? _shortName(serial);
+    return TextButton.icon(
+      onPressed: () => showWorkspaceDeviceSwitcher(context),
+      iconAlignment: IconAlignment.end,
+      icon: const Icon(Icons.arrow_drop_down),
+      label: Text(name, overflow: TextOverflow.ellipsis),
+    );
+  }
+
+  Widget _connectDeviceButton(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+      child: InkWell(
+        onTap: () => showWorkspaceDeviceSwitcher(context),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(Icons.add, color: theme.colorScheme.primary),
+              const SizedBox(height: 4),
+              Text(
+                context.l10n.workspaceConnectDevice,
+                style: theme.textTheme.labelSmall,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -56,6 +98,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
       appBar: AppBar(
         leading: _homeButton(context),
         title: const Text('FireAdb'),
+        actions: <Widget>[_deviceTitle(context)],
       ),
       body: Row(
         children: <Widget>[
@@ -63,6 +106,9 @@ class WorkspacePage extends GetView<WorkspaceController> {
             selectedIndex: selectedIndex,
             onDestinationSelected: (i) => controller.selectSerial(serials[i]),
             labelType: NavigationRailLabelType.all,
+            scrollable: true,
+            trailingAtBottom: true,
+            trailing: _connectDeviceButton(context),
             destinations: <NavigationRailDestination>[
               for (final s in serials)
                 NavigationRailDestination(
@@ -114,37 +160,35 @@ class WorkspacePage extends GetView<WorkspaceController> {
         appBar: AppBar(
           leading: BackButton(onPressed: controller.closeFeature),
           title: Text(featureTitle(context, spec)),
+          actions: <Widget>[
+            IconButton(
+              tooltip: context.l10n.workspaceDevices,
+              onPressed: () => showWorkspaceDeviceSwitcher(context),
+              icon: const Icon(Icons.devices),
+            ),
+          ],
         ),
         body: cache,
       ),
     );
   }
 
-  Widget _buildNarrow(BuildContext context, List<String> serials) {
+  Widget _buildNarrow(BuildContext context) {
     final gridCount = isAtLeastTablet(context) ? 4 : 2;
     return Scaffold(
       appBar: AppBar(
         leading: _homeButton(context),
-        title: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: controller.selectedSerial.value,
-            isDense: true,
-            items: <DropdownMenuItem<String>>[
-              for (final s in serials)
-                DropdownMenuItem<String>(value: s, child: Text(_shortName(s))),
-            ],
-            onChanged: (s) {
-              if (s != null) controller.selectSerial(s);
-            },
-          ),
-        ),
+        title: _deviceTitle(context),
       ),
       body: SafeArea(
-        child: GridView.count(
+        child: GridView(
           padding: const EdgeInsets.all(16),
-          crossAxisCount: gridCount,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: gridCount,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            mainAxisExtent: 148,
+          ),
           children: <Widget>[
             for (final spec in kDeviceFeatures)
               FeatureTile(spec: spec, onTap: () => _openFeature(spec)),
@@ -171,13 +215,11 @@ class WorkspacePage extends GetView<WorkspaceController> {
             Text(context.l10n.workspaceDeviceDisconnectedTitle),
             const SizedBox(height: 12),
             FilledButton(
-              onPressed: hasAny
-                  ? () => controller.selectSerial(serials.first)
-                  : () => Get.back<void>(),
+              onPressed: () => showWorkspaceDeviceSwitcher(context),
               child: Text(
                 hasAny
                     ? context.l10n.workspaceSwitchToOtherDevice
-                    : context.l10n.workspaceBackToConnections,
+                    : context.l10n.workspaceConnectDevice,
               ),
             ),
           ],
@@ -201,7 +243,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
       if (controller.narrowFeatureOpen.value) {
         return _buildNarrowFeature(context, cache);
       }
-      return _keepCache(_buildNarrow(context, serials), cache);
+      return _keepCache(_buildNarrow(context), cache);
     });
   }
 }

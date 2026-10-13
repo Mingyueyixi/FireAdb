@@ -8,7 +8,7 @@ import 'ui/discovery_section.dart';
 import 'ui/history_section.dart';
 import 'ui/manual_connect_section.dart';
 
-/// 连接页：设备列表 / 手动连接 / mDNS 设备发现 / 历史连接。
+/// 连接页：设备列表（含可连接的无线服务）/ 手动连接 / 配对发现 / 历史连接。
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
