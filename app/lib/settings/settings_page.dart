@@ -6,9 +6,7 @@ import 'package:get/get.dart';
 
 import '../app_feedback.dart';
 import '../app_locale_controller.dart';
-import '../capture/data/local_opener.dart';
 import '../connection/connection_manager.dart';
-import '../files/android_storage_access.dart';
 import '../home/home_controller.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
 import '../l10n/generated/fire_adb_localizations.dart';
@@ -26,10 +24,15 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController _portController;
   late final TextEditingController _intervalController;
+  late final TextEditingController _logBufferController;
+  late final TextEditingController _logRetentionController;
   var _applyingServer = false;
   String? _portError;
   String? _intervalError;
+  String? _logBufferError;
+  String? _logRetentionError;
   String? _logDirectory;
+  var _clearingLogs = false;
 
   @override
   void initState() {
@@ -40,45 +43,22 @@ class _SettingsPageState extends State<SettingsPage> {
     _intervalController = TextEditingController(
       text: '${Get.find<AppSettingsStore>().autoRefreshIntervalSeconds.value}',
     );
+    final settings = Get.find<AppSettingsStore>();
+    _logBufferController = TextEditingController(
+      text: '${settings.logBufferKb.value}',
+    );
+    _logRetentionController = TextEditingController(
+      text: '${settings.logRetentionDays.value}',
+    );
     unawaited(_loadLogDirectory());
-  }
-
-  Future<void> _loadLogDirectory() async {
-    final path = await resolveLogDirectory();
-    if (!mounted) return;
-    setState(() => _logDirectory = path);
-  }
-
-  Future<void> _openLogDirectory() async {
-    final path = _logDirectory;
-    if (path == null) return;
-    try {
-      if (Platform.isAndroid) {
-        final granted = await ensureAllFilesAccess(context);
-        if (!granted || !mounted) return;
-      }
-      final directory = await ensureLogDirectory(create: true);
-      if (!mounted || directory == null) return;
-      setState(() => _logDirectory = directory);
-      await attachFileLogStore();
-      await openSystemDirectory(directory);
-    } catch (error, stackTrace) {
-      log.severe('打开日志目录失败：$path', error, stackTrace);
-      if (!mounted) return;
-      showAppMessage(
-        ScaffoldMessenger.of(context),
-        Theme.of(context),
-        title: context.l10n.settingsLogDirectory,
-        message: context.l10n.settingsOpenLogDirectoryFailed('$error'),
-        isError: true,
-      );
-    }
   }
 
   @override
   void dispose() {
     _portController.dispose();
     _intervalController.dispose();
+    _logBufferController.dispose();
+    _logRetentionController.dispose();
     super.dispose();
   }
 
@@ -204,6 +184,124 @@ class _SettingsPageState extends State<SettingsPage> {
         message: '$error',
         isError: true,
       );
+    }
+  }
+
+  Future<void> _loadLogDirectory() async {
+    final path = await resolveLogDirectory();
+    if (!mounted) return;
+    setState(() => _logDirectory = path);
+  }
+
+  Future<void> _openLogDirectory() async {
+    final path = _logDirectory;
+    if (path == null) return;
+    try {
+      final directory = await openSavedLogDirectory(context);
+      if (!mounted || directory == null) return;
+      setState(() => _logDirectory = directory);
+    } catch (error, stackTrace) {
+      log.severe('打开日志目录失败：$path', error, stackTrace);
+      if (!mounted) return;
+      showAppMessage(
+        ScaffoldMessenger.of(context),
+        Theme.of(context),
+        title: context.l10n.settingsLogDirectory,
+        message: context.l10n.settingsOpenLogDirectoryFailed('$error'),
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _applyLogBuffer() async {
+    await _applyRange(
+      controller: _logBufferController,
+      min: AppSettingsStore.minLogBufferKb,
+      max: AppSettingsStore.maxLogBufferKb,
+      invalid: context.l10n.settingsLogBufferInvalid,
+      assignError: (message) => _logBufferError = message,
+      save: Get.find<AppSettingsStore>().setLogBufferKb,
+      failure: '保存日志缓冲区失败',
+    );
+  }
+
+  Future<void> _applyLogRetention() async {
+    await _applyRange(
+      controller: _logRetentionController,
+      min: AppSettingsStore.minLogRetentionDays,
+      max: AppSettingsStore.maxLogRetentionDays,
+      invalid: context.l10n.settingsLogRetentionInvalid,
+      assignError: (message) => _logRetentionError = message,
+      save: Get.find<AppSettingsStore>().setLogRetentionDays,
+      failure: '保存日志天数失败',
+    );
+  }
+
+  Future<void> _applyRange({
+    required TextEditingController controller,
+    required int min,
+    required int max,
+    required String invalid,
+    required void Function(String?) assignError,
+    required Future<void> Function(int value) save,
+    required String failure,
+  }) async {
+    final value = int.tryParse(controller.text.trim());
+    if (value == null || value < min || value > max) {
+      setState(() => assignError(invalid));
+      return;
+    }
+    setState(() => assignError(null));
+    try {
+      await save(value);
+    } catch (error, stackTrace) {
+      log.severe(failure, error, stackTrace);
+      if (!mounted) return;
+      showAppMessage(
+        ScaffoldMessenger.of(context),
+        Theme.of(context),
+        title: context.l10n.commonSettingsSaveFailed,
+        message: '$error',
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _deleteSavedLogs() async {
+    final l10n = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.settingsLogDeleteAllTitle),
+        content: Text(l10n.settingsLogDeleteAllMessage),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.commonCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(l10n.settingsLogDeleteAll),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _clearingLogs = true);
+    try {
+      await deleteSavedLogs();
+    } catch (error, stackTrace) {
+      log.severe('清理日志文件失败', error, stackTrace);
+      if (!mounted) return;
+      showAppMessage(
+        ScaffoldMessenger.of(context),
+        Theme.of(context),
+        title: l10n.settingsLogDeleteAll,
+        message: l10n.settingsLogDeleteAllFailed('$error'),
+        isError: true,
+      );
+    } finally {
+      if (mounted) setState(() => _clearingLogs = false);
     }
   }
 
@@ -368,6 +466,28 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
                 const Divider(),
                 Text(
+                  l10n.navLogs,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.settingsLogBuffer,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.settingsLogBufferHelp,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                _numberRow(
+                  fieldKey: const ValueKey<String>('settings-log-buffer'),
+                  controller: _logBufferController,
+                  errorText: _logBufferError,
+                  onApply: _applyLogBuffer,
+                ),
+                const SizedBox(height: 12),
+                Text(
                   l10n.settingsLogDirectory,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
@@ -378,7 +498,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
-                    key: const ValueKey<String>('settings-open-log-directory'),
                     onPressed: _logDirectory == null
                         ? null
                         : () => unawaited(_openLogDirectory()),
@@ -386,11 +505,70 @@ class _SettingsPageState extends State<SettingsPage> {
                     label: Text(l10n.settingsOpenLogDirectory),
                   ),
                 ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _clearingLogs
+                        ? null
+                        : () => unawaited(_deleteSavedLogs()),
+                    icon: const Icon(Icons.delete_outline),
+                    label: Text(l10n.settingsLogDeleteAll),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.settingsLogRetention,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.settingsLogRetentionHelp,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                _numberRow(
+                  fieldKey: const ValueKey<String>('settings-log-retention'),
+                  controller: _logRetentionController,
+                  errorText: _logRetentionError,
+                  onApply: _applyLogRetention,
+                ),
               ],
             ),
           ),
         );
       }),
+    );
+  }
+
+  Widget _numberRow({
+    required Key fieldKey,
+    required TextEditingController controller,
+    required String? errorText,
+    required Future<void> Function() onApply,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Expanded(
+          child: TextField(
+            key: fieldKey,
+            controller: controller,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              isDense: true,
+              errorText: errorText,
+              border: const OutlineInputBorder(),
+            ),
+            onSubmitted: (_) => unawaited(onApply()),
+          ),
+        ),
+        const SizedBox(width: 8),
+        TextButton(
+          onPressed: () => unawaited(onApply()),
+          child: Text(context.l10n.settingsApply),
+        ),
+      ],
     );
   }
 

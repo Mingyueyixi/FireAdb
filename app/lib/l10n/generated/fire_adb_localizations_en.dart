@@ -97,6 +97,42 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   }
 
   @override
+  String get settingsLogBuffer => 'Log display buffer (KB)';
+
+  @override
+  String get settingsLogBufferHelp =>
+      'How much of the current log the log page keeps in memory. The default is 256 KB.';
+
+  @override
+  String get settingsLogBufferInvalid => 'Enter a whole number from 16 to 8192';
+
+  @override
+  String get settingsLogRetention => 'Days to keep logs';
+
+  @override
+  String get settingsLogRetentionHelp =>
+      'Log files older than this many days are deleted at startup. The default is 7 days.';
+
+  @override
+  String get settingsLogRetentionInvalid =>
+      'Enter a whole number of days from 1 to 365';
+
+  @override
+  String get settingsLogDeleteAll => 'Delete all';
+
+  @override
+  String get settingsLogDeleteAllTitle => 'Delete log files';
+
+  @override
+  String get settingsLogDeleteAllMessage =>
+      'Delete every log file in the log folder? The file being written starts over. Lines already shown on the log page stay.';
+
+  @override
+  String settingsLogDeleteAllFailed(Object error) {
+    return 'Could not delete the log files: $error';
+  }
+
+  @override
   String get homeAutoRefresh => 'Auto refresh';
 
   @override
@@ -1219,4 +1255,58 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get localPickerGo => 'Go';
+
+  @override
+  String get navConnection => 'Connect';
+
+  @override
+  String get navLogs => 'Logs';
+
+  @override
+  String get navAbout => 'About';
+
+  @override
+  String get logClear => 'Clear';
+
+  @override
+  String get logClearTitle => 'Clear logs';
+
+  @override
+  String get logClearMessage => 'Clear only what is shown? Log files are kept.';
+
+  @override
+  String get logEmpty => 'No logs yet';
+
+  @override
+  String get logRefresh => 'Refresh';
+
+  @override
+  String get logTruncated => 'Earlier lines are omitted. Only the end is kept.';
+
+  @override
+  String logClearFailed(Object error) {
+    return 'Could not clear logs: $error';
+  }
+
+  @override
+  String logReadFailed(Object error) {
+    return 'Could not read the log: $error';
+  }
+
+  @override
+  String aboutVersion(Object version) {
+    return 'Version $version';
+  }
+
+  @override
+  String aboutBuild(Object build) {
+    return 'Build $build';
+  }
+
+  @override
+  String get aboutDescription =>
+      'A cross-platform ADB toolbox. The protocol is implemented in the app and does not use the system adb binary.';
+
+  @override
+  String get aboutVersionUnknown => 'Version information is not available yet';
 }

@@ -51,6 +51,21 @@
       "error": {}
     }
   },
+  "settingsLogBuffer": "Log display buffer (KB)",
+  "settingsLogBufferHelp": "How much of the current log the log page keeps in memory. The default is 256 KB.",
+  "settingsLogBufferInvalid": "Enter a whole number from 16 to 8192",
+  "settingsLogRetention": "Days to keep logs",
+  "settingsLogRetentionHelp": "Log files older than this many days are deleted at startup. The default is 7 days.",
+  "settingsLogRetentionInvalid": "Enter a whole number of days from 1 to 365",
+  "settingsLogDeleteAll": "Delete all",
+  "settingsLogDeleteAllTitle": "Delete log files",
+  "settingsLogDeleteAllMessage": "Delete every log file in the log folder? The file being written starts over. Lines already shown on the log page stay.",
+  "settingsLogDeleteAllFailed": "Could not delete the log files: {error}",
+  "@settingsLogDeleteAllFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "homeAutoRefresh": "Auto refresh",
   "homeConnectionSucceeded": "Connected",
   "homeConnectedDevice": "Connected: {serial}",
@@ -787,5 +802,40 @@
   "localPickerNewFolder": "New folder",
   "localPickerInvalidName": "The name cannot contain / or \\",
   "localPickerUp": "Up",
-  "localPickerGo": "Go"
+  "localPickerGo": "Go",
+  "navConnection": "Connect",
+  "navLogs": "Logs",
+  "navAbout": "About",
+  "logClear": "Clear",
+  "logClearTitle": "Clear logs",
+  "logClearMessage": "Clear only what is shown? Log files are kept.",
+  "logEmpty": "No logs yet",
+  "logRefresh": "Refresh",
+  "logTruncated": "Earlier lines are omitted. Only the end is kept.",
+  "logClearFailed": "Could not clear logs: {error}",
+  "@logClearFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "logReadFailed": "Could not read the log: {error}",
+  "@logReadFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "aboutVersion": "Version {version}",
+  "@aboutVersion": {
+    "placeholders": {
+      "version": {}
+    }
+  },
+  "aboutBuild": "Build {build}",
+  "@aboutBuild": {
+    "placeholders": {
+      "build": {}
+    }
+  },
+  "aboutDescription": "A cross-platform ADB toolbox. The protocol is implemented in the app and does not use the system adb binary.",
+  "aboutVersionUnknown": "Version information is not available yet"
 }

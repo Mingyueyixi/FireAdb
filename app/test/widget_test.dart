@@ -41,6 +41,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('FireAdb'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, '连接'), findsNothing);
     expect(find.text('设备（2）'), findsOneWidget);
     expect(find.text('Pixel 8'), findsOneWidget);
     expect(
@@ -251,7 +252,11 @@ void main() {
       final intervalField = find.byKey(
         const ValueKey<String>('settings-auto-refresh-interval'),
       );
-      await tester.ensureVisible(intervalField);
+      await Scrollable.ensureVisible(
+        tester.element(intervalField),
+        alignment: 0.5,
+      );
+      await tester.pumpAndSettle();
       await tester.enterText(intervalField, '0');
       await tester.tap(
         find.byKey(
@@ -262,6 +267,10 @@ void main() {
       expect(find.text('请输入 1 到 3600 之间的整数'), findsOneWidget);
       expect(settings.autoRefreshIntervalSeconds.value, 3);
 
+      await Scrollable.ensureVisible(
+        tester.element(intervalField),
+        alignment: 0.5,
+      );
       await tester.enterText(intervalField, '5');
       await tester.tap(
         find.byKey(

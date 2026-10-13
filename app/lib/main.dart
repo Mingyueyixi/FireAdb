@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'app_locale_controller.dart';
+import 'app_shell/app_shell.dart';
 import 'connection/connection_manager.dart';
 import 'home/home_controller.dart';
-import 'home/home_page.dart';
 import 'l10n/generated/fire_adb_localizations.dart';
 import 'log/app_log.dart';
 import 'settings/app_settings_store.dart';
@@ -24,6 +24,11 @@ Future<void> main() async {
   Get.put<AppLocaleController>(localeController, permanent: true);
   final settings = AppSettingsStore();
   await settings.load();
+  try {
+    await pruneExpiredLogs(settings.logRetentionDays.value);
+  } catch (error, stackTrace) {
+    log.severe('清理过期日志失败', error, stackTrace);
+  }
   Get.put<AppSettingsStore>(settings, permanent: true);
   Get.put<HomeController>(HomeController(), permanent: true);
   runApp(const FireAdbApp());
@@ -55,7 +60,7 @@ class FireAdbApp extends StatelessWidget {
       ),
       initialRoute: '/',
       getPages: <GetPage<void>>[
-        GetPage<void>(name: '/', page: () => const HomePage()),
+        GetPage<void>(name: '/', page: () => const AppShell()),
         GetPage<void>(name: '/settings', page: () => const SettingsPage()),
         GetPage<void>(
           name: '/workspace',

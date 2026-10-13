@@ -93,6 +93,39 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   }
 
   @override
+  String get settingsLogBuffer => '日志显示缓冲区（KB）';
+
+  @override
+  String get settingsLogBufferHelp => '日志页在内存中保留这些内容，默认 256 KB。';
+
+  @override
+  String get settingsLogBufferInvalid => '请输入 16 到 8192 之间的整数';
+
+  @override
+  String get settingsLogRetention => '日志保存天数';
+
+  @override
+  String get settingsLogRetentionHelp => '启动时删除早于这个天数的日志文件。默认 7 天。';
+
+  @override
+  String get settingsLogRetentionInvalid => '请输入 1 到 365 之间的整数';
+
+  @override
+  String get settingsLogDeleteAll => '一键清理';
+
+  @override
+  String get settingsLogDeleteAllTitle => '清理日志文件';
+
+  @override
+  String get settingsLogDeleteAllMessage =>
+      '删除日志目录中的全部日志文件？正在写入的文件会重新开始，页面上已显示的内容保留。';
+
+  @override
+  String settingsLogDeleteAllFailed(Object error) {
+    return '清理日志文件失败：$error';
+  }
+
+  @override
   String get homeAutoRefresh => '自动刷新';
 
   @override
@@ -1184,4 +1217,57 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get localPickerGo => '前往';
+
+  @override
+  String get navConnection => '连接';
+
+  @override
+  String get navLogs => '日志';
+
+  @override
+  String get navAbout => '关于';
+
+  @override
+  String get logClear => '清理';
+
+  @override
+  String get logClearTitle => '清理日志';
+
+  @override
+  String get logClearMessage => '只清除当前显示的内容？日志文件仍会保留。';
+
+  @override
+  String get logEmpty => '还没有日志';
+
+  @override
+  String get logRefresh => '刷新';
+
+  @override
+  String get logTruncated => '较早的日志未在此显示，仅保留末尾。';
+
+  @override
+  String logClearFailed(Object error) {
+    return '清理日志失败：$error';
+  }
+
+  @override
+  String logReadFailed(Object error) {
+    return '读取日志失败：$error';
+  }
+
+  @override
+  String aboutVersion(Object version) {
+    return '版本 $version';
+  }
+
+  @override
+  String aboutBuild(Object build) {
+    return '构建号 $build';
+  }
+
+  @override
+  String get aboutDescription => '跨平台 ADB 工具箱。协议自实现，不依赖系统 adb。';
+
+  @override
+  String get aboutVersionUnknown => '版本信息还不可用';
 }

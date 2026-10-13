@@ -245,6 +245,66 @@ abstract class FireAdbLocalizations {
   /// **'无法打开日志目录：{error}'**
   String settingsOpenLogDirectoryFailed(Object error);
 
+  /// No description provided for @settingsLogBuffer.
+  ///
+  /// In zh, this message translates to:
+  /// **'日志显示缓冲区（KB）'**
+  String get settingsLogBuffer;
+
+  /// No description provided for @settingsLogBufferHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'日志页在内存中保留这些内容，默认 256 KB。'**
+  String get settingsLogBufferHelp;
+
+  /// No description provided for @settingsLogBufferInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 16 到 8192 之间的整数'**
+  String get settingsLogBufferInvalid;
+
+  /// No description provided for @settingsLogRetention.
+  ///
+  /// In zh, this message translates to:
+  /// **'日志保存天数'**
+  String get settingsLogRetention;
+
+  /// No description provided for @settingsLogRetentionHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'启动时删除早于这个天数的日志文件。默认 7 天。'**
+  String get settingsLogRetentionHelp;
+
+  /// No description provided for @settingsLogRetentionInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 1 到 365 之间的整数'**
+  String get settingsLogRetentionInvalid;
+
+  /// No description provided for @settingsLogDeleteAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'一键清理'**
+  String get settingsLogDeleteAll;
+
+  /// No description provided for @settingsLogDeleteAllTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'清理日志文件'**
+  String get settingsLogDeleteAllTitle;
+
+  /// No description provided for @settingsLogDeleteAllMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除日志目录中的全部日志文件？正在写入的文件会重新开始，页面上已显示的内容保留。'**
+  String get settingsLogDeleteAllMessage;
+
+  /// No description provided for @settingsLogDeleteAllFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'清理日志文件失败：{error}'**
+  String settingsLogDeleteAllFailed(Object error);
+
   /// No description provided for @homeAutoRefresh.
   ///
   /// In zh, this message translates to:
@@ -2128,6 +2188,96 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'前往'**
   String get localPickerGo;
+
+  /// No description provided for @navConnection.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接'**
+  String get navConnection;
+
+  /// No description provided for @navLogs.
+  ///
+  /// In zh, this message translates to:
+  /// **'日志'**
+  String get navLogs;
+
+  /// No description provided for @navAbout.
+  ///
+  /// In zh, this message translates to:
+  /// **'关于'**
+  String get navAbout;
+
+  /// No description provided for @logClear.
+  ///
+  /// In zh, this message translates to:
+  /// **'清理'**
+  String get logClear;
+
+  /// No description provided for @logClearTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'清理日志'**
+  String get logClearTitle;
+
+  /// No description provided for @logClearMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'只清除当前显示的内容？日志文件仍会保留。'**
+  String get logClearMessage;
+
+  /// No description provided for @logEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有日志'**
+  String get logEmpty;
+
+  /// No description provided for @logRefresh.
+  ///
+  /// In zh, this message translates to:
+  /// **'刷新'**
+  String get logRefresh;
+
+  /// No description provided for @logTruncated.
+  ///
+  /// In zh, this message translates to:
+  /// **'较早的日志未在此显示，仅保留末尾。'**
+  String get logTruncated;
+
+  /// No description provided for @logClearFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'清理日志失败：{error}'**
+  String logClearFailed(Object error);
+
+  /// No description provided for @logReadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'读取日志失败：{error}'**
+  String logReadFailed(Object error);
+
+  /// No description provided for @aboutVersion.
+  ///
+  /// In zh, this message translates to:
+  /// **'版本 {version}'**
+  String aboutVersion(Object version);
+
+  /// No description provided for @aboutBuild.
+  ///
+  /// In zh, this message translates to:
+  /// **'构建号 {build}'**
+  String aboutBuild(Object build);
+
+  /// No description provided for @aboutDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'跨平台 ADB 工具箱。协议自实现，不依赖系统 adb。'**
+  String get aboutDescription;
+
+  /// No description provided for @aboutVersionUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'版本信息还不可用'**
+  String get aboutVersionUnknown;
 }
 
 class _FireAdbLocalizationsDelegate
