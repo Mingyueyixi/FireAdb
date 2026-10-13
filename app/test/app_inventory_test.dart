@@ -99,13 +99,20 @@ Packages:
         label: '冻结应用',
         isDisabledUser: true,
       ),
+      const InstalledApp(
+        packageName: 'com.user.debug',
+        label: '调试应用',
+        isDebuggable: true,
+        versionName: '1.2.3',
+        versionCode: 45,
+      ),
     ];
     expect(
       filterInstalledApps(
         apps,
         filter: AppListFilter.user,
       ).map((a) => a.packageName),
-      ['com.user.chat', 'com.user.frozen'],
+      ['com.user.chat', 'com.user.frozen', 'com.user.debug'],
     );
     expect(
       filterInstalledApps(
@@ -129,6 +136,11 @@ Packages:
       ).single.packageName,
       'com.android.settings',
     );
+    expect(
+      filterInstalledApps(apps, filter: AppListFilter.debug).single.packageName,
+      'com.user.debug',
+    );
+    expect(apps.last.versionLabel, '1.2.3/45');
   });
 
   test('systemAppRisk 有核心组件时高于普通系统应用', () {

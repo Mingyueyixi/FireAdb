@@ -13,6 +13,10 @@ class InstalledApp {
     this.isDisabledUser = false,
     this.isSuspended = false,
     this.isAmFrozen = false,
+    this.isDebuggable = false,
+    this.dataDir,
+    this.cacheDir,
+    this.externalDir,
   });
 
   final String packageName;
@@ -25,6 +29,16 @@ class InstalledApp {
   final bool isDisabledUser;
   final bool isSuspended;
   final bool isAmFrozen;
+  final bool isDebuggable;
+
+  /// `/data/data` 或 `/data/user/0` 下的应用数据目录。
+  final String? dataDir;
+
+  /// 应用私有缓存目录。
+  final String? cacheDir;
+
+  /// SD 卡上的 `Android/data/包名` 目录。
+  final String? externalDir;
 
   bool get isFrozen => isDisabledUser || isSuspended || isAmFrozen;
 
@@ -41,6 +55,16 @@ class InstalledApp {
     final name = label?.trim();
     if (name != null && name.isNotEmpty) return name;
     return packageName;
+  }
+
+  /// `versionName/versionCode`。缺一边时只保留有的那一边。
+  String get versionLabel {
+    final name = versionName?.trim() ?? '';
+    final code = versionCode;
+    if (name.isNotEmpty && code != null) return '$name/$code';
+    if (name.isNotEmpty) return name;
+    if (code != null) return '$code';
+    return '';
   }
 
   String? get primaryPath {
@@ -63,6 +87,10 @@ class InstalledApp {
       isDisabledUser: isDisabledUser || other.isDisabledUser,
       isSuspended: isSuspended || other.isSuspended,
       isAmFrozen: isAmFrozen || other.isAmFrozen,
+      isDebuggable: isDebuggable || other.isDebuggable,
+      dataDir: _prefer(other.dataDir, dataDir),
+      cacheDir: _prefer(other.cacheDir, cacheDir),
+      externalDir: _prefer(other.externalDir, externalDir),
     );
   }
 
@@ -76,6 +104,10 @@ class InstalledApp {
     bool? isDisabledUser,
     bool? isSuspended,
     bool? isAmFrozen,
+    bool? isDebuggable,
+    String? dataDir,
+    String? cacheDir,
+    String? externalDir,
   }) {
     return InstalledApp(
       packageName: packageName,
@@ -88,6 +120,10 @@ class InstalledApp {
       isDisabledUser: isDisabledUser ?? this.isDisabledUser,
       isSuspended: isSuspended ?? this.isSuspended,
       isAmFrozen: isAmFrozen ?? this.isAmFrozen,
+      isDebuggable: isDebuggable ?? this.isDebuggable,
+      dataDir: dataDir ?? this.dataDir,
+      cacheDir: cacheDir ?? this.cacheDir,
+      externalDir: externalDir ?? this.externalDir,
     );
   }
 
@@ -109,7 +145,7 @@ class InstalledApp {
   }
 }
 
-enum AppListFilter { user, system, frozen, all }
+enum AppListFilter { user, system, debug, frozen, all }
 
 /// 一批应用里最高的系统风险。有核心组件时优先于普通系统应用。
 enum SystemAppRisk { none, system, core }

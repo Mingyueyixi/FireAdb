@@ -6,7 +6,7 @@ import '../../l10n/fire_adb_localizations_ext.dart';
 import '../data/bean/installed_app.dart';
 import '../data/source/app_inventory.dart';
 
-enum AppTileAction { export, uninstall, freeze, unfreeze }
+enum AppTileAction { details, export, uninstall, freeze, unfreeze }
 
 /// 固定高度的应用行。名称、版本、体积和路径后到时不再把行撑高。
 class AppListTile extends StatelessWidget {
@@ -20,6 +20,7 @@ class AppListTile extends StatelessWidget {
     required this.onToggleSelected,
     required this.onStartSelecting,
     required this.onUnfreeze,
+    required this.onOpen,
     required this.onAction,
   });
 
@@ -31,20 +32,21 @@ class AppListTile extends StatelessWidget {
   final VoidCallback onToggleSelected;
   final VoidCallback onStartSelecting;
   final VoidCallback onUnfreeze;
+  final VoidCallback onOpen;
   final ValueChanged<AppTileAction> onAction;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
-    final version = [
-      if (app.versionName != null && app.versionName!.isNotEmpty)
-        app.versionName,
-      if (app.versionCode != null) '${app.versionCode}',
-    ].join(' · ');
+    final version = app.versionLabel;
     return ListTile(
       selected: selecting && selected,
-      onTap: !selecting || busy ? null : onToggleSelected,
+      onTap: busy
+          ? null
+          : selecting
+          ? onToggleSelected
+          : onOpen,
       onLongPress: busy ? null : onStartSelecting,
       leading: _leading(theme),
       title: SizedBox(
@@ -59,6 +61,10 @@ class AppListTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (app.isDebuggable) ...<Widget>[
+              const SizedBox(width: 8),
+              _AppMetaTag(label: l10n.appsDebugBadge),
+            ],
             if (app.isDisabledUser) ...<Widget>[
               const SizedBox(width: 8),
               _AppMetaTag(label: l10n.appsDisabledBadge),
@@ -100,6 +106,10 @@ class AppListTile extends StatelessWidget {
         enabled: !busy,
         onSelected: onAction,
         itemBuilder: (context) => <PopupMenuEntry<AppTileAction>>[
+          PopupMenuItem(
+            value: AppTileAction.details,
+            child: Text(l10n.appsDetailsAction),
+          ),
           PopupMenuItem(
             value: AppTileAction.export,
             child: Text(l10n.appsExportAction),

@@ -10,6 +10,7 @@ import '../../l10n/generated/fire_adb_localizations.dart';
 import '../../log/app_log.dart';
 import '../apps_controller.dart';
 import '../data/bean/installed_app.dart';
+import 'app_details_page.dart';
 import 'app_dialogs.dart';
 import 'app_freeze_dialogs.dart';
 import 'app_list_tile.dart';
@@ -143,8 +144,20 @@ class _AppsPageState extends State<AppsPage> {
     await _showWhenDone(future, exportDialog: true);
   }
 
+  void _openDetails(InstalledApp app) {
+    unawaited(
+      Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (context) => AppDetailsPage(serial: widget.serial, app: app),
+        ),
+      ),
+    );
+  }
+
   void _onAction(InstalledApp app, AppTileAction action) {
     switch (action) {
+      case AppTileAction.details:
+        _openDetails(app);
       case AppTileAction.export:
         unawaited(
           _export(
@@ -257,6 +270,7 @@ class _AppsPageState extends State<AppsPage> {
           onToggleSelected: () => controller.toggleSelected(app),
           onStartSelecting: () => controller.startSelecting(app),
           onUnfreeze: () => _unfreeze(app),
+          onOpen: () => _openDetails(app),
           onAction: (action) => _onAction(app, action),
         );
       },

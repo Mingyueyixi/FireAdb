@@ -1067,6 +1067,12 @@ abstract class FireAdbLocalizations {
   /// **'系统应用'**
   String get appsFilterSystem;
 
+  /// No description provided for @appsFilterDebug.
+  ///
+  /// In zh, this message translates to:
+  /// **'Debug'**
+  String get appsFilterDebug;
+
   /// No description provided for @appsFilterFrozen.
   ///
   /// In zh, this message translates to:
@@ -1114,6 +1120,120 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'大小 {size}'**
   String appsSize(Object size);
+
+  /// No description provided for @appsDebugBadge.
+  ///
+  /// In zh, this message translates to:
+  /// **'Debug'**
+  String get appsDebugBadge;
+
+  /// No description provided for @appsDetailsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'应用详情'**
+  String get appsDetailsTitle;
+
+  /// No description provided for @appsDataDirectory.
+  ///
+  /// In zh, this message translates to:
+  /// **'数据目录'**
+  String get appsDataDirectory;
+
+  /// No description provided for @appsCacheDirectory.
+  ///
+  /// In zh, this message translates to:
+  /// **'缓存目录'**
+  String get appsCacheDirectory;
+
+  /// No description provided for @appsExternalDirectory.
+  ///
+  /// In zh, this message translates to:
+  /// **'SD 卡目录'**
+  String get appsExternalDirectory;
+
+  /// No description provided for @appsDirectoryUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'未知'**
+  String get appsDirectoryUnknown;
+
+  /// No description provided for @appsBrowseDirectory.
+  ///
+  /// In zh, this message translates to:
+  /// **'浏览'**
+  String get appsBrowseDirectory;
+
+  /// No description provided for @appsDetailsAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'属性'**
+  String get appsDetailsAction;
+
+  /// No description provided for @appsDebugOnlyHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'数据目录只有 debug 应用可以读取和修改。'**
+  String get appsDebugOnlyHint;
+
+  /// No description provided for @appsDataEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个目录是空的'**
+  String get appsDataEmpty;
+
+  /// No description provided for @appsDataFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'读取失败：{error}'**
+  String appsDataFailed(Object error);
+
+  /// No description provided for @appsDeleteTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除'**
+  String get appsDeleteTitle;
+
+  /// No description provided for @appsDeleteConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除 {name}？'**
+  String appsDeleteConfirm(Object name);
+
+  /// No description provided for @appsDeleteAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除'**
+  String get appsDeleteAction;
+
+  /// No description provided for @appsViewFile.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看'**
+  String get appsViewFile;
+
+  /// No description provided for @appsFileTooLarge.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件超过 {size}，不能直接查看'**
+  String appsFileTooLarge(Object size);
+
+  /// No description provided for @appsFileNotText.
+  ///
+  /// In zh, this message translates to:
+  /// **'这不是文本文件'**
+  String get appsFileNotText;
+
+  /// No description provided for @appsExportFile.
+  ///
+  /// In zh, this message translates to:
+  /// **'导出文件'**
+  String get appsExportFile;
+
+  /// No description provided for @appsExportFileDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'已保存到 {path}'**
+  String appsExportFileDone(Object path);
 
   /// No description provided for @appsPath.
   ///

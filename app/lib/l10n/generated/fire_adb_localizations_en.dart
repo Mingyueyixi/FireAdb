@@ -564,6 +564,9 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String get appsFilterSystem => 'System apps';
 
   @override
+  String get appsFilterDebug => 'Debug';
+
+  @override
   String get appsFilterFrozen => 'Frozen';
 
   @override
@@ -593,6 +596,72 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   @override
   String appsSize(Object size) {
     return 'Size $size';
+  }
+
+  @override
+  String get appsDebugBadge => 'Debug';
+
+  @override
+  String get appsDetailsTitle => 'App details';
+
+  @override
+  String get appsDataDirectory => 'Data directory';
+
+  @override
+  String get appsCacheDirectory => 'Cache directory';
+
+  @override
+  String get appsExternalDirectory => 'SD card directory';
+
+  @override
+  String get appsDirectoryUnknown => 'Unknown';
+
+  @override
+  String get appsBrowseDirectory => 'Browse';
+
+  @override
+  String get appsDetailsAction => 'Properties';
+
+  @override
+  String get appsDebugOnlyHint =>
+      'Only a debug app can read and change its data directory.';
+
+  @override
+  String get appsDataEmpty => 'This directory is empty';
+
+  @override
+  String appsDataFailed(Object error) {
+    return 'Could not read the directory: $error';
+  }
+
+  @override
+  String get appsDeleteTitle => 'Delete';
+
+  @override
+  String appsDeleteConfirm(Object name) {
+    return 'Delete $name?';
+  }
+
+  @override
+  String get appsDeleteAction => 'Delete';
+
+  @override
+  String get appsViewFile => 'View';
+
+  @override
+  String appsFileTooLarge(Object size) {
+    return 'The file is larger than $size and cannot be opened here';
+  }
+
+  @override
+  String get appsFileNotText => 'This is not a text file';
+
+  @override
+  String get appsExportFile => 'Export file';
+
+  @override
+  String appsExportFileDone(Object path) {
+    return 'Saved to $path';
   }
 
   @override

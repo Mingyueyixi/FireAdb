@@ -538,6 +538,9 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get appsFilterSystem => '系统应用';
 
   @override
+  String get appsFilterDebug => 'Debug';
+
+  @override
   String get appsFilterFrozen => '已冻结';
 
   @override
@@ -567,6 +570,71 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   @override
   String appsSize(Object size) {
     return '大小 $size';
+  }
+
+  @override
+  String get appsDebugBadge => 'Debug';
+
+  @override
+  String get appsDetailsTitle => '应用详情';
+
+  @override
+  String get appsDataDirectory => '数据目录';
+
+  @override
+  String get appsCacheDirectory => '缓存目录';
+
+  @override
+  String get appsExternalDirectory => 'SD 卡目录';
+
+  @override
+  String get appsDirectoryUnknown => '未知';
+
+  @override
+  String get appsBrowseDirectory => '浏览';
+
+  @override
+  String get appsDetailsAction => '属性';
+
+  @override
+  String get appsDebugOnlyHint => '数据目录只有 debug 应用可以读取和修改。';
+
+  @override
+  String get appsDataEmpty => '这个目录是空的';
+
+  @override
+  String appsDataFailed(Object error) {
+    return '读取失败：$error';
+  }
+
+  @override
+  String get appsDeleteTitle => '删除';
+
+  @override
+  String appsDeleteConfirm(Object name) {
+    return '删除 $name？';
+  }
+
+  @override
+  String get appsDeleteAction => '删除';
+
+  @override
+  String get appsViewFile => '查看';
+
+  @override
+  String appsFileTooLarge(Object size) {
+    return '文件超过 $size，不能直接查看';
+  }
+
+  @override
+  String get appsFileNotText => '这不是文本文件';
+
+  @override
+  String get appsExportFile => '导出文件';
+
+  @override
+  String appsExportFileDone(Object path) {
+    return '已保存到 $path';
   }
 
   @override

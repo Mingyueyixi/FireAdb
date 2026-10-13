@@ -260,6 +260,7 @@
   "appsSearchHint": "Search by app name or package name",
   "appsFilterUser": "User apps",
   "appsFilterSystem": "System apps",
+  "appsFilterDebug": "Debug",
   "appsFilterFrozen": "Frozen",
   "appsFilterAll": "All",
   "appsRefresh": "Refresh app list",
@@ -288,6 +289,45 @@
   "@appsSize": {
     "placeholders": {
       "size": {}
+    }
+  },
+  "appsDebugBadge": "Debug",
+  "appsDetailsTitle": "App details",
+  "appsDataDirectory": "Data directory",
+  "appsCacheDirectory": "Cache directory",
+  "appsExternalDirectory": "SD card directory",
+  "appsDirectoryUnknown": "Unknown",
+  "appsBrowseDirectory": "Browse",
+  "appsDetailsAction": "Properties",
+  "appsDebugOnlyHint": "Only a debug app can read and change its data directory.",
+  "appsDataEmpty": "This directory is empty",
+  "appsDataFailed": "Could not read the directory: {error}",
+  "@appsDataFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "appsDeleteTitle": "Delete",
+  "appsDeleteConfirm": "Delete {name}?",
+  "@appsDeleteConfirm": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsDeleteAction": "Delete",
+  "appsViewFile": "View",
+  "appsFileTooLarge": "The file is larger than {size} and cannot be opened here",
+  "@appsFileTooLarge": {
+    "placeholders": {
+      "size": {}
+    }
+  },
+  "appsFileNotText": "This is not a text file",
+  "appsExportFile": "Export file",
+  "appsExportFileDone": "Saved to {path}",
+  "@appsExportFileDone": {
+    "placeholders": {
+      "path": {}
     }
   },
   "appsPath": "Path {path}",

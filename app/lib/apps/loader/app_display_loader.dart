@@ -8,7 +8,7 @@ import '../data/bean/installed_app.dart';
 import '../data/repo/device_app_repository.dart';
 import '../data/source/fire_app_service.dart';
 
-/// 一行显示出来之后才取的名称、图标、版本和体积。
+/// 图标和体积在行显示出来之后再取。名称、版本和 Debug 标记来自列表。
 class AppDisplay {
   const AppDisplay({
     required this.label,
@@ -19,6 +19,10 @@ class AppDisplay {
     required this.isSystem,
     required this.isDisabledUser,
     required this.isSuspended,
+    required this.isDebuggable,
+    this.dataDir,
+    this.cacheDir,
+    this.externalDir,
   });
 
   final String label;
@@ -29,6 +33,33 @@ class AppDisplay {
   final bool isSystem;
   final bool isDisabledUser;
   final bool isSuspended;
+  final bool isDebuggable;
+  final String? dataDir;
+  final String? cacheDir;
+  final String? externalDir;
+}
+
+InstalledApp applyAppSummary(InstalledApp app, FireAppSummary summary) {
+  final label = summary.label.trim();
+  final versionName = summary.versionName.trim();
+  return app.copyWith(
+    label: label.isEmpty ? null : label,
+    versionName: versionName.isEmpty ? null : versionName,
+    versionCode: summary.versionCode,
+    isSystem: app.isSystem || summary.isSystem,
+    isDisabledUser: app.isDisabledUser || summary.isDisabledUser,
+    isSuspended: app.isSuspended || summary.isSuspended,
+    isDebuggable: summary.isDebuggable,
+    apkPaths: summary.apkPaths,
+    sizeBytes: summary.sizeBytes ?? app.sizeBytes,
+  );
+}
+
+InstalledApp installedAppFromSummary(FireAppSummary summary) {
+  return applyAppSummary(
+    InstalledApp(packageName: summary.packageName),
+    summary,
+  );
 }
 
 InstalledApp applyAppDisplay(InstalledApp app, AppDisplay details) {
@@ -42,6 +73,10 @@ InstalledApp applyAppDisplay(InstalledApp app, AppDisplay details) {
     isSystem: app.isSystem || details.isSystem,
     isDisabledUser: app.isDisabledUser || details.isDisabledUser,
     isSuspended: app.isSuspended || details.isSuspended,
+    isDebuggable: app.isDebuggable || details.isDebuggable,
+    dataDir: details.dataDir,
+    cacheDir: details.cacheDir,
+    externalDir: details.externalDir,
   );
 }
 
@@ -91,9 +126,11 @@ class AppDisplayLoader {
   }
 
   Future<AppDisplay?> _load(String packageName) async {
-    final path = appOf(packageName)?.primaryPath;
+    final current = appOf(packageName);
+    final path = current?.primaryPath;
     final showFuture = _loadShow(packageName);
-    final sizeFuture = path == null || path.isEmpty
+    final sizeFuture =
+        current?.sizeBytes != null || path == null || path.isEmpty
         ? Future<int?>.value()
         : _loadSize(packageName, path);
     final show = await showFuture;
@@ -108,7 +145,17 @@ class AppDisplayLoader {
       isSystem: show?.isSystem ?? false,
       isDisabledUser: show?.isDisabledUser ?? false,
       isSuspended: show?.isSuspended ?? false,
+      isDebuggable: show?.isDebuggable ?? false,
+      dataDir: _directory(show?.dataDir),
+      cacheDir: _directory(show?.cacheDir),
+      externalDir: _directory(show?.externalDir),
     );
+  }
+
+  String? _directory(String? path) {
+    final value = path?.trim();
+    if (value == null || value.isEmpty) return null;
+    return value;
   }
 
   Future<FireAppShow?> _loadShow(String packageName) async {
@@ -119,6 +166,8 @@ class AppDisplayLoader {
       final shown = await loadFireAppShow(device, packageName);
       if (generation != _generation) return null;
       return shown;
+    } on FireAppLoadCancelled {
+      return null;
     } on TimeoutException catch (error, stackTrace) {
       log.severe('读取应用信息超时：$packageName', error, stackTrace);
       return null;

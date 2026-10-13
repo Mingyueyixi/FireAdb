@@ -227,6 +227,8 @@ List<InstalledApp> filterInstalledApps(
         if (app.isSystem) return false;
       case AppListFilter.system:
         if (!app.isSystem) return false;
+      case AppListFilter.debug:
+        if (!app.isDebuggable) return false;
       case AppListFilter.frozen:
         if (!app.isFrozen) return false;
       case AppListFilter.all:

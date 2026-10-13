@@ -73,6 +73,7 @@ class AppsToolbar extends StatelessWidget {
                   for (final entry in <(AppListFilter, String)>[
                     (AppListFilter.user, l10n.appsFilterUser),
                     (AppListFilter.system, l10n.appsFilterSystem),
+                    (AppListFilter.debug, l10n.appsFilterDebug),
                     (AppListFilter.frozen, l10n.appsFilterFrozen),
                     (AppListFilter.all, l10n.appsFilterAll),
                   ])

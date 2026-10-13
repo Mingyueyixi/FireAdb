@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:fire_adb/apps/data/bean/installed_app.dart';
 import 'package:fire_adb/apps/data/source/fire_app_service.dart';
+import 'package:fire_adb/apps/loader/app_display_loader.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -32,6 +34,10 @@ void main() {
     expect(label.packageName, 'com.example.app');
     expect(label.label, '示例应用');
     expect(frames[2], isA<FireAppLabelsDone>());
+    expect(
+      FireAppFrameReader().add(_header(fireAppFrameCatalogDone)).single,
+      isA<FireAppCatalogDone>(),
+    );
     final icon = frames[3] as FireAppIcon;
     expect(icon.png, <int>[1, 2, 3, 4]);
   });
@@ -43,8 +49,11 @@ void main() {
         label: '示例',
         versionName: '1.2.3',
         versionCode: 12,
-        flags: fireAppFlagSystem | fireAppFlagSuspended,
+        flags: fireAppFlagSystem | fireAppFlagSuspended | fireAppFlagDebug,
         png: const <int>[9],
+        dataDir: '/data/user/0/com.example.app',
+        cacheDir: '/data/user/0/com.example.app/cache',
+        externalDir: '/sdcard/Android/data/com.example.app',
       ),
     );
     final shown = frames.single as FireAppShow;
@@ -55,7 +64,42 @@ void main() {
     expect(shown.isSystem, isTrue);
     expect(shown.isSuspended, isTrue);
     expect(shown.isDisabledUser, isFalse);
+    expect(shown.isDebuggable, isTrue);
     expect(shown.png, <int>[9]);
+    expect(shown.dataDir, '/data/user/0/com.example.app');
+    expect(shown.cacheDir, '/data/user/0/com.example.app/cache');
+    expect(shown.externalDir, '/sdcard/Android/data/com.example.app');
+  });
+
+  test('LIST 帧带上名称、版本和 Debug 标记', () {
+    final frames = FireAppFrameReader().add(
+      _summary(
+        packageName: 'com.example.app',
+        label: '示例',
+        versionName: '1.2.3',
+        versionCode: 12,
+        flags: fireAppFlagDebug,
+        apkPath: '/data/app/com.example.app/base.apk',
+        sizeBytes: 4096,
+      ),
+    );
+    final summary = frames.single as FireAppSummary;
+    expect(summary.label, '示例');
+    expect(summary.versionName, '1.2.3');
+    expect(summary.versionCode, 12);
+    expect(summary.isDebuggable, isTrue);
+    expect(summary.isSystem, isFalse);
+    expect(summary.apkPaths, <String>['/data/app/com.example.app/base.apk']);
+    expect(summary.sizeBytes, 4096);
+    final app = applyAppSummary(
+      const InstalledApp(packageName: 'com.example.app'),
+      summary,
+    );
+    expect(app.displayName, '示例');
+    expect(app.versionLabel, '1.2.3/12');
+    expect(app.isDebuggable, isTrue);
+    expect(app.primaryPath, '/data/app/com.example.app/base.apk');
+    expect(app.sizeBytes, 4096);
   });
 
   test('版本号为 -1 时没有版本', () {
@@ -105,6 +149,9 @@ Uint8List _show({
   required int versionCode,
   required int flags,
   required List<int> png,
+  String dataDir = '',
+  String cacheDir = '',
+  String externalDir = '',
 }) {
   final version = ByteData(4)..setInt32(0, versionCode);
   final length = ByteData(4)..setUint32(0, png.length);
@@ -116,7 +163,33 @@ Uint8List _show({
     ..add(version.buffer.asUint8List())
     ..add(<int>[flags])
     ..add(length.buffer.asUint8List())
-    ..add(png);
+    ..add(png)
+    ..add(_string(dataDir))
+    ..add(_string(cacheDir))
+    ..add(_string(externalDir));
+  return builder.takeBytes();
+}
+
+Uint8List _summary({
+  required String packageName,
+  required String label,
+  required String versionName,
+  required int versionCode,
+  required int flags,
+  String apkPath = '',
+  int sizeBytes = 0,
+}) {
+  final version = ByteData(4)..setInt32(0, versionCode);
+  final size = ByteData(8)..setUint64(0, sizeBytes);
+  final builder = BytesBuilder()
+    ..add(_header(fireAppFrameApp))
+    ..add(_string(packageName))
+    ..add(_string(label))
+    ..add(_string(versionName))
+    ..add(version.buffer.asUint8List())
+    ..add(<int>[flags])
+    ..add(_string(apkPath))
+    ..add(size.buffer.asUint8List());
   return builder.takeBytes();
 }
 

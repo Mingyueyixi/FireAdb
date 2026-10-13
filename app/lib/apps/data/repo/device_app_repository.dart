@@ -25,7 +25,7 @@ class DeviceAppRepository {
   static const _shellTimeout = Duration(seconds: 20);
   static const _slowShellTimeout = Duration(seconds: 60);
 
-  /// 首屏列出用户应用和 APK 路径。名称、图标、版本和体积在行显示时再取。
+  /// 通过 `pm list` 列出用户应用。界面列表改由应用信息服务一次返回。
   Future<List<InstalledApp>> listApps() async {
     final listed = parsePmListPackages(
       await _device

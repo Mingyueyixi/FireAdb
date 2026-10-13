@@ -12,7 +12,7 @@ import 'data/bean/installed_app.dart';
 import 'data/repo/device_app_repository.dart';
 import 'data/source/app_freeze_settings.dart';
 import 'data/source/app_inventory.dart';
-import 'loader/app_catalog.dart';
+import 'data/source/fire_app_service.dart';
 import 'loader/app_display_loader.dart';
 
 /// 一次操作结束后给界面看的提示。
@@ -63,7 +63,6 @@ class AppsController extends GetxController {
 
   final String serial;
   final TextEditingController search = TextEditingController();
-  final AppCatalog _catalog = AppCatalog();
   late final AppDisplayLoader _display;
 
   final RxString query = ''.obs;
@@ -162,7 +161,6 @@ class AppsController extends GetxController {
   Future<void> reload() async {
     final generation = ++_generation;
     _display.reset();
-    _catalog.clear();
     final repo = _repository();
     loading.value = true;
     error.value = null;
@@ -173,14 +171,63 @@ class AppsController extends GetxController {
       return;
     }
     try {
-      final loaded = await repo.listApps();
-      if (_closed || generation != _generation) return;
-      apps.assignAll(loaded);
-      loading.value = false;
-      selected.removeWhere(
-        (name) => !loaded.any((app) => app.packageName == name),
+      final device = _manager.deviceOf(serial);
+      if (device == null) {
+        loading.value = false;
+        error.value = const DeviceNotConnectedException();
+        return;
+      }
+      final began = Stopwatch()..start();
+      var shownAtMs = -1;
+      await loadFireAppSummaries(
+        device,
+        onCatalog: (items, timing) {
+          if (_closed || generation != _generation) return;
+          _replaceApps(items);
+          final count = items.length;
+          final jarMs = timing.jarMs;
+          final readyMs = timing.readyMs;
+          final listMs = timing.listMs;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_closed || generation != _generation || shownAtMs >= 0) return;
+            shownAtMs = began.elapsedMilliseconds;
+            final uiMs = shownAtMs - jarMs - readyMs - listMs;
+            final startup = jarMs == 0 && readyMs == 0
+                ? '进程仍在'
+                : 'jar $jarMs，进程就绪 $readyMs';
+            log.info(
+              '应用列表已显示 $count 个，距开始 $shownAtMs ms'
+              '（$startup，列表 $listMs，界面 $uiMs）',
+            );
+          });
+        },
+        onNames: (items, timing) {
+          if (_closed || generation != _generation) return;
+          _replaceApps(items);
+          final named = items
+              .where(
+                (item) =>
+                    item.label.isNotEmpty && item.label != item.packageName,
+              )
+              .length;
+          void logNames() {
+            if (_closed || generation != _generation) return;
+            final now = began.elapsedMilliseconds;
+            final nameMs = shownAtMs < 0 ? 0 : now - shownAtMs;
+            log.info(
+              '应用名称已更新：有名称 $named 个，距开始 $now ms（名称 $nameMs）',
+            );
+          }
+
+          if (shownAtMs >= 0) {
+            logNames();
+          } else {
+            WidgetsBinding.instance.addPostFrameCallback((_) => logNames());
+          }
+        },
       );
-      unawaited(_loadCatalog(generation, repo));
+      if (_closed || generation != _generation) return;
+      unawaited(_loadAmFrozen(generation, repo));
     } catch (loadError, stackTrace) {
       log.severe('读取应用列表失败：$serial', loadError, stackTrace);
       if (_closed || generation != _generation) return;
@@ -189,10 +236,34 @@ class AppsController extends GetxController {
     }
   }
 
-  Future<void> _loadCatalog(int generation, DeviceAppRepository repo) async {
-    final changed = await _catalog.load(repo, serial: serial);
-    if (_closed || generation != _generation || !changed) return;
-    apps.assignAll(_catalog.merge(apps.toList(), resort: true));
+  void _replaceApps(List<FireAppSummary> summaries) {
+    final loaded =
+        <InstalledApp>[
+          for (final summary in summaries) installedAppFromSummary(summary),
+        ]..sort(
+          (a, b) => a.packageName.toLowerCase().compareTo(
+            b.packageName.toLowerCase(),
+          ),
+        );
+    apps.assignAll(loaded);
+    loading.value = false;
+    selected.removeWhere((name) => !apps.any((app) => app.packageName == name));
+  }
+
+  Future<void> _loadAmFrozen(int generation, DeviceAppRepository repo) async {
+    try {
+      final frozen = await repo.listAmFrozenPackages();
+      if (_closed || generation != _generation || frozen.isEmpty) return;
+      apps.assignAll(<InstalledApp>[
+        for (final app in apps)
+          if (frozen.contains(app.packageName))
+            app.copyWith(isAmFrozen: true)
+          else
+            app,
+      ]);
+    } catch (error, stackTrace) {
+      log.severe('读取 AM 冻结列表失败：$serial', error, stackTrace);
+    }
   }
 
   void _onDisplayUpdated() {

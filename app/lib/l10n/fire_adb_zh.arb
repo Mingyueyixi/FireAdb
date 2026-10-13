@@ -260,6 +260,7 @@
   "appsSearchHint": "搜索应用名称或包名",
   "appsFilterUser": "用户应用",
   "appsFilterSystem": "系统应用",
+  "appsFilterDebug": "Debug",
   "appsFilterFrozen": "已冻结",
   "appsFilterAll": "全部",
   "appsRefresh": "刷新应用列表",
@@ -288,6 +289,45 @@
   "@appsSize": {
     "placeholders": {
       "size": {}
+    }
+  },
+  "appsDebugBadge": "Debug",
+  "appsDetailsTitle": "应用详情",
+  "appsDataDirectory": "数据目录",
+  "appsCacheDirectory": "缓存目录",
+  "appsExternalDirectory": "SD 卡目录",
+  "appsDirectoryUnknown": "未知",
+  "appsBrowseDirectory": "浏览",
+  "appsDetailsAction": "属性",
+  "appsDebugOnlyHint": "数据目录只有 debug 应用可以读取和修改。",
+  "appsDataEmpty": "这个目录是空的",
+  "appsDataFailed": "读取失败：{error}",
+  "@appsDataFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "appsDeleteTitle": "删除",
+  "appsDeleteConfirm": "删除 {name}？",
+  "@appsDeleteConfirm": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "appsDeleteAction": "删除",
+  "appsViewFile": "查看",
+  "appsFileTooLarge": "文件超过 {size}，不能直接查看",
+  "@appsFileTooLarge": {
+    "placeholders": {
+      "size": {}
+    }
+  },
+  "appsFileNotText": "这不是文本文件",
+  "appsExportFile": "导出文件",
+  "appsExportFileDone": "已保存到 {path}",
+  "@appsExportFileDone": {
+    "placeholders": {
+      "path": {}
     }
   },
   "appsPath": "路径 {path}",
