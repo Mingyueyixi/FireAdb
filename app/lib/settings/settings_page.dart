@@ -413,74 +413,24 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  l10n.settingsAutoRefreshInterval,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(
-                      child: TextField(
-                        key: const ValueKey<String>(
-                          'settings-auto-refresh-interval',
-                        ),
-                        controller: _intervalController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          errorText: _intervalError,
-                          border: const OutlineInputBorder(),
-                        ),
-                        onSubmitted: (_) => unawaited(_applyInterval()),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      key: const ValueKey<String>(
-                        'settings-auto-refresh-interval-apply',
-                      ),
-                      onPressed: () => unawaited(_applyInterval()),
-                      child: Text(l10n.settingsApply),
-                    ),
-                  ],
+                _SettingNumberField(
+                  title: l10n.settingsAutoRefreshInterval,
+                  fieldKey: const ValueKey<String>(
+                    'settings-auto-refresh-interval',
+                  ),
+                  controller: _intervalController,
+                  errorText: _intervalError,
+                  onApply: _applyInterval,
                 ),
                 const Divider(),
-                Text(
-                  l10n.settingsAdbServerPort,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  l10n.settingsAdbServerPortHelp,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(
-                      child: TextField(
-                        controller: _portController,
-                        enabled: !_applyingServer,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          isDense: true,
-                          errorText: _portError,
-                          border: const OutlineInputBorder(),
-                        ),
-                        onSubmitted: (_) => unawaited(_applyPort()),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: _applyingServer
-                          ? null
-                          : () => unawaited(_applyPort()),
-                      child: Text(l10n.settingsApply),
-                    ),
-                  ],
+                _SettingNumberField(
+                  title: l10n.settingsAdbServerPort,
+                  help: l10n.settingsAdbServerPortHelp,
+                  fieldKey: const ValueKey<String>('settings-adb-server-port'),
+                  controller: _portController,
+                  errorText: _portError,
+                  enabled: !_applyingServer,
+                  onApply: _applyPort,
                 ),
                 if (!Platform.isAndroid) ...<Widget>[
                   const Divider(),
@@ -498,17 +448,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  l10n.settingsLogBuffer,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  l10n.settingsLogBufferHelp,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 8),
-                _numberRow(
+                _SettingNumberField(
+                  title: l10n.settingsLogBuffer,
+                  help: l10n.settingsLogBufferHelp,
                   fieldKey: const ValueKey<String>('settings-log-buffer'),
                   controller: _logBufferController,
                   errorText: _logBufferError,
@@ -545,17 +487,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  l10n.settingsLogRetention,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  l10n.settingsLogRetentionHelp,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 8),
-                _numberRow(
+                _SettingNumberField(
+                  title: l10n.settingsLogRetention,
+                  help: l10n.settingsLogRetentionHelp,
                   fieldKey: const ValueKey<String>('settings-log-retention'),
                   controller: _logRetentionController,
                   errorText: _logRetentionError,
@@ -566,37 +500,6 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         );
       }),
-    );
-  }
-
-  Widget _numberRow({
-    required Key fieldKey,
-    required TextEditingController controller,
-    required String? errorText,
-    required Future<void> Function() onApply,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Expanded(
-          child: TextField(
-            key: fieldKey,
-            controller: controller,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              isDense: true,
-              errorText: errorText,
-              border: const OutlineInputBorder(),
-            ),
-            onSubmitted: (_) => unawaited(onApply()),
-          ),
-        ),
-        const SizedBox(width: 8),
-        TextButton(
-          onPressed: () => unawaited(onApply()),
-          child: Text(context.l10n.settingsApply),
-        ),
-      ],
     );
   }
 
@@ -613,5 +516,122 @@ class _SettingsPageState extends State<SettingsPage> {
     if (adbPath != null) return '$help\n${l10n.settingsSdkAdbPath(adbPath)}';
     if (prefer) return '$help\n${l10n.settingsSdkAdbMissing}';
     return help;
+  }
+}
+
+/// 标题和短数字框同一行，说明文字独占下一行。回车或结束编辑时保存。
+class _SettingNumberField extends StatefulWidget {
+  const _SettingNumberField({
+    required this.title,
+    required this.fieldKey,
+    required this.controller,
+    required this.errorText,
+    required this.onApply,
+    this.help,
+    this.enabled = true,
+  });
+
+  final String title;
+  final String? help;
+  final Key fieldKey;
+  final TextEditingController controller;
+  final String? errorText;
+  final bool enabled;
+  final Future<void> Function() onApply;
+
+  @override
+  State<_SettingNumberField> createState() => _SettingNumberFieldState();
+}
+
+class _SettingNumberFieldState extends State<_SettingNumberField> {
+  late final FocusNode _focus;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus = FocusNode()..addListener(_onFocus);
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocus);
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _onFocus() {
+    if (!mounted || _focus.hasFocus || !widget.enabled) return;
+    unawaited(widget.onApply());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final radius = BorderRadius.circular(6);
+    final quiet = OutlineInputBorder(
+      borderRadius: radius,
+      borderSide: BorderSide.none,
+    );
+    final helpStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(widget.title, style: theme.textTheme.bodyLarge),
+              ),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 72,
+                child: TextField(
+                  key: widget.fieldKey,
+                  focusNode: _focus,
+                  controller: widget.controller,
+                  enabled: widget.enabled,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
+                  decoration: InputDecoration(
+                    isCollapsed: true,
+                    isDense: true,
+                    filled: true,
+                    fillColor: scheme.surfaceContainerHighest,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
+                    border: quiet,
+                    enabledBorder: quiet,
+                    disabledBorder: quiet,
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: radius,
+                      borderSide: BorderSide(color: scheme.primary),
+                    ),
+                  ),
+                  onSubmitted: widget.enabled ? (_) => _focus.unfocus() : null,
+                ),
+              ),
+            ],
+          ),
+          if (widget.help != null) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(widget.help!, style: helpStyle),
+          ],
+          if (widget.errorText != null) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+              widget.errorText!,
+              style: helpStyle?.copyWith(color: scheme.error),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }

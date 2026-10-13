@@ -258,11 +258,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.enterText(intervalField, '0');
-      await tester.tap(
-        find.byKey(
-          const ValueKey<String>('settings-auto-refresh-interval-apply'),
-        ),
-      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
       expect(find.text('请输入 1 到 3600 之间的整数'), findsOneWidget);
       expect(settings.autoRefreshIntervalSeconds.value, 3);
@@ -272,11 +268,7 @@ void main() {
         alignment: 0.5,
       );
       await tester.enterText(intervalField, '5');
-      await tester.tap(
-        find.byKey(
-          const ValueKey<String>('settings-auto-refresh-interval-apply'),
-        ),
-      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
       expect(settings.autoRefreshIntervalSeconds.value, 5);
       expect(find.text('勾选后每 5 秒刷新一次'), findsWidgets);
