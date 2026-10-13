@@ -18,9 +18,25 @@ class DeviceProfile {
   /// 直接打开的 USB 设备地址，例如 `usb:1-4.2`。
   final String? usbAddress;
 
-  String get displayName => label.isNotEmpty ? label : (host ?? serial);
+  /// 已经有设备名。地址、序列号、USB 路径不算。
+  bool get hasDeviceName {
+    final name = label.trim();
+    if (name.isEmpty) return false;
+    if (name == host || name == serial) return false;
+    final listedSerial = adbSerial;
+    if (listedSerial != null && name == listedSerial) return false;
+    final usb = usbAddress;
+    if (usb != null && name == usb) return false;
+    return name != connectionAddress;
+  }
 
-  String get shortName => host ?? serial;
+  /// 界面上的设备名。没有名称时先用地址，读到型号后会换成型号。
+  String get displayName {
+    if (hasDeviceName) return label.trim();
+    final endpointHost = host;
+    if (endpointHost != null && endpointHost.isNotEmpty) return endpointHost;
+    return serial;
+  }
 
   /// 用来区分同名设备的连接地址：网络是主机和端口，USB 是序列号或总线地址。
   String get connectionAddress {

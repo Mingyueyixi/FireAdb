@@ -18,11 +18,6 @@ import 'workspace_controller.dart';
 class WorkspacePage extends GetView<WorkspaceController> {
   const WorkspacePage({super.key});
 
-  String _shortName(String serial) {
-    final colon = serial.indexOf(':');
-    return colon > 0 ? serial.substring(0, colon) : serial;
-  }
-
   Widget _homeButton(BuildContext context) {
     return IconButton(
       tooltip: context.l10n.workspaceBackToHome,
@@ -33,8 +28,8 @@ class WorkspacePage extends GetView<WorkspaceController> {
 
   Widget _deviceTitle(BuildContext context) {
     final serial = controller.selectedSerial.value;
-    final profile = Get.find<ConnectionManager>().profileOf(serial);
-    final name = profile?.displayName ?? _shortName(serial);
+    final name =
+        Get.find<ConnectionManager>().profileOf(serial)?.displayName ?? serial;
     return TextButton.icon(
       onPressed: () => showWorkspaceDeviceSwitcher(context),
       iconAlignment: IconAlignment.end,
@@ -92,7 +87,12 @@ class WorkspacePage extends GetView<WorkspaceController> {
     );
   }
 
-  Widget _buildWide(BuildContext context, List<String> serials, Widget cache) {
+  Widget _buildWide(
+    BuildContext context,
+    List<String> serials,
+    Widget cache,
+    ConnectionManager manager,
+  ) {
     final selectedIndex = serials.indexOf(controller.selectedSerial.value);
     return Scaffold(
       appBar: AppBar(
@@ -114,7 +114,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
                 NavigationRailDestination(
                   icon: const Icon(Icons.smartphone),
                   selectedIcon: const Icon(Icons.phone_android),
-                  label: Text(_shortName(s)),
+                  label: Text(manager.profileOf(s)?.displayName ?? s),
                 ),
             ],
           ),
@@ -238,7 +238,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
         return _keepCache(_buildDisconnected(context, serials), cache);
       }
       if (isWide(context)) {
-        return _buildWide(context, serials, cache);
+        return _buildWide(context, serials, cache, manager);
       }
       if (controller.narrowFeatureOpen.value) {
         return _buildNarrowFeature(context, cache);

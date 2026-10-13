@@ -85,7 +85,16 @@ void main() {
     );
 
     expect(network.displayName, 'Pixel 8');
+    expect(network.hasDeviceName, isTrue);
     expect(network.connectionAddress, '192.0.2.10:5555');
+    const addressOnly = DeviceProfile(
+      serial: '192.0.2.10:5555',
+      host: '192.0.2.10',
+      port: 5555,
+      label: '192.0.2.10',
+    );
+    expect(addressOnly.hasDeviceName, isFalse);
+    expect(addressOnly.displayName, '192.0.2.10');
     expect(sameName.displayName, 'Pixel 8');
     expect(sameName.connectionAddress, 'USB999');
     expect(ipv6.connectionAddress, '[2001:db8::1]:5556');

@@ -298,7 +298,6 @@ class ConnectionManager extends GetxService {
     );
     await rememberManualEndpoint(host, port);
     await _registerConnection(profile, connected);
-    unawaited(_refreshHostLabel(profile, connected));
     return device;
   }
 
@@ -464,21 +463,21 @@ class ConnectionManager extends GetxService {
     _profiles[profile.serial] = profile;
     _devices[device.serial] = device;
     await _remember(profile);
+    if (!profile.hasDeviceName) {
+      unawaited(_refreshDeviceName(profile, device));
+    }
   }
 
   String? _savedHostLabel(String host, int port) {
     final key = 'tcp:$host:$port';
     for (final entry in _history) {
-      if (entry.historyKey == key &&
-          entry.label.isNotEmpty &&
-          entry.label != host) {
-        return entry.label;
-      }
+      if (entry.historyKey == key && entry.hasDeviceName) return entry.label;
     }
     return null;
   }
 
-  Future<void> _refreshHostLabel(
+  /// 手动输入地址、二维码连上时往往只有地址。和没有型号的 USB、adb 列表一样，连上后读设备型号。
+  Future<void> _refreshDeviceName(
     DeviceProfile profile,
     ConnectedDevice device,
   ) async {
@@ -500,7 +499,9 @@ class ConnectionManager extends GetxService {
 
   Future<String?> _modelName(ConnectedDevice device) async {
     try {
-      final model = (await device.shell('getprop ro.product.model')).trim();
+      final model = (await device.shell('getprop ro.product.model'))
+          .trim()
+          .replaceAll('_', ' ');
       if (model.isEmpty) return null;
       return model;
     } catch (error, stackTrace) {
