@@ -39,6 +39,9 @@ class _ConnectionPagePresence extends StatefulWidget {
 }
 
 class _ConnectionPagePresenceState extends State<_ConnectionPagePresence> {
+  static var _nextOwner = 0;
+  late final int _owner = ++_nextOwner;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -53,7 +56,7 @@ class _ConnectionPagePresenceState extends State<_ConnectionPagePresence> {
 
   void _report(bool visible) {
     if (!Get.isRegistered<HomeController>()) return;
-    Get.find<HomeController>().setConnectionPageVisible(visible);
+    Get.find<HomeController>().setConnectionPageVisible(visible, owner: _owner);
   }
 
   @override

@@ -70,32 +70,4 @@ void main() {
       ],
     );
   });
-
-  test('一次扫描没发现设备时，10 秒内仍留着，再久就去掉', () {
-    final service = MdnsService(
-      instanceName: 'adb-phone',
-      serviceType: adbServiceTypeTransport,
-      port: 6666,
-      address: InternetAddress('192.168.3.45'),
-    );
-    final seenAt = <String, DateTime>{
-      discoveredServiceKey(service): DateTime(2026, 10, 13, 18, 10, 50),
-    };
-
-    final kept = retainRecentDiscoveries(
-      previous: <MdnsService>[service],
-      found: const <MdnsService>[],
-      seenAt: seenAt,
-      now: DateTime(2026, 10, 13, 18, 10, 58),
-    );
-    expect(kept, <MdnsService>[service]);
-
-    final dropped = retainRecentDiscoveries(
-      previous: <MdnsService>[service],
-      found: const <MdnsService>[],
-      seenAt: seenAt,
-      now: DateTime(2026, 10, 13, 18, 11, 5),
-    );
-    expect(dropped, isEmpty);
-  });
 }

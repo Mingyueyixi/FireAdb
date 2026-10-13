@@ -9,6 +9,7 @@ import '../connection/connection_manager.dart';
 import '../connection/model/connected_device.dart';
 import '../log/app_log.dart';
 import '../settings/app_settings_store.dart';
+import 'device_scanner.dart';
 import 'discovered_devices.dart';
 
 class HomeController extends GetxController with WidgetsBindingObserver {
@@ -69,10 +70,14 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   Worker? _intervalWorker;
   Worker? _backgroundRefreshWorker;
   var _deviceRefreshGeneration = 0;
-  final Map<String, DateTime> _discoveredSeenAt = <String, DateTime>{};
   final MdnsBrowser _wirelessBrowser = MdnsBrowser();
+  late final DeviceScanner _deviceScanner;
   var _pageVisible = true;
-  var _appResumed = true;
+  var _connectionPageOwner = 0;
+
+  /// 窗口还在屏幕上。桌面端失去焦点只是 inactive，扫描继续。
+  /// hidden / paused / detached 才算离开前台。
+  var _appForeground = true;
   var _refreshing = true;
 
   ConnectionManager get manager => Get.find<ConnectionManager>();
@@ -83,6 +88,12 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   void onInit() {
     super.onInit();
     WidgetsBinding.instance.addObserver(this);
+    _deviceScanner = DeviceScanner(
+      queryAdb: _queryAdb,
+      queryUsb: _queryUsb,
+      discoverMdns: _discoverRound,
+    );
+    _wirelessBrowser.onUnsolicited = _onUnsolicitedDiscovery;
     _restoreManualConnection();
     final canListDevices = adbServerSupported.value || usbSupported;
     if (canListDevices) {
@@ -106,22 +117,33 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   }
 
   /// 连接页在树上且是当前路由时为 true。
-  void setConnectionPageVisible(bool visible) {
-    if (isClosed || _pageVisible == visible) return;
+  ///
+  /// [owner] 用来忽略已经卸下的那一页。新页面先报可见，旧页面再报不可见时，
+  /// 不能把还在屏幕上的连接页标成离开。
+  void setConnectionPageVisible(bool visible, {int? owner}) {
+    if (isClosed) return;
+    if (visible && owner != null) _connectionPageOwner = owner;
+    if (!visible && owner != null && owner != _connectionPageOwner) return;
+    if (_pageVisible == visible) return;
     _pageVisible = visible;
     _syncRefreshGate();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final resumed = state == AppLifecycleState.resumed;
-    if (_appResumed == resumed) return;
-    _appResumed = resumed;
+    final foreground = switch (state) {
+      AppLifecycleState.resumed || AppLifecycleState.inactive => true,
+      AppLifecycleState.hidden ||
+      AppLifecycleState.paused ||
+      AppLifecycleState.detached => false,
+    };
+    if (_appForeground == foreground) return;
+    _appForeground = foreground;
     _syncRefreshGate();
   }
 
   bool get _allowsAutoRefresh =>
-      _settings.refreshInBackground.value || (_pageVisible && _appResumed);
+      _settings.refreshInBackground.value || (_pageVisible && _appForeground);
 
   void _syncRefreshGate() {
     final allow = _allowsAutoRefresh;
@@ -193,28 +215,89 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> refreshListedDevices({bool includeWirelessScan = false}) {
-    final pending = <Future<void>>[];
-    if (adbServerSupported.value) pending.add(refreshAdbDevices());
-    if (showDirectUsbList) {
-      pending.add(refreshUsbDevices());
-    } else {
-      usbDevices.clear();
-    }
-    if (includeWirelessScan && !scanning.value) {
-      pending.add(scan(automatic: true));
-    }
-    return Future.wait(pending);
+    return _runDeviceScan(includeMdns: includeWirelessScan);
   }
 
-  /// 手动刷新设备列表：adb server、USB，以及无线服务。
+  /// 手动刷新设备列表：adb server、USB 和无线服务同一轮进行。
   Future<void> refreshDeviceList() async {
     final generation = _deviceRefreshGeneration;
     _adbDeviceRefreshTimer?.cancel();
     _adbDeviceRefreshTimer = null;
-    await refreshListedDevices();
-    await scan();
+    await _runDeviceScan(includeMdns: true, manual: true);
     if (!_deviceRefreshCurrent(generation)) return;
     _scheduleDeviceRefresh(generation);
+  }
+
+  Future<void> _runDeviceScan({
+    required bool includeMdns,
+    bool manual = false,
+  }) {
+    List<MdnsService> kept = const <MdnsService>[];
+    if (!showDirectUsbList) usbDevices.clear();
+    return _deviceScanner.run(
+      includeAdb: adbServerSupported.value,
+      includeUsb: showDirectUsbList,
+      includeMdns: includeMdns,
+      onStart: (mdnsStarted) {
+        if (!mdnsStarted) return;
+        scanning.value = true;
+        scanError.value = null;
+        kept = List<MdnsService>.of(discovered);
+        if (manual) log.info('开始扫描无线设备');
+      },
+      onListed: _applyListed,
+      onMdns: (services) {
+        if (isClosed) return;
+        discovered.assignAll(mergeDiscoveredServices(kept, services));
+      },
+      onRoundComplete: (round) =>
+          _finishDeviceScan(round, kept: kept, manual: manual),
+      isCancelled: () => isClosed,
+    );
+  }
+
+  void _applyListed(ListedDeviceScan scan) {
+    if (isClosed) return;
+    if (scan.adbDevices != null) adbDevices.assignAll(scan.adbDevices!);
+    if (scan.adbServerAbsent != null) {
+      adbServerAbsent.value = scan.adbServerAbsent!;
+    }
+    if (scan.clearAdbError || scan.adbError != null) {
+      adbDevicesError.value = scan.adbError;
+    }
+    if (scan.usbDevices != null) usbDevices.assignAll(scan.usbDevices!);
+    if (scan.clearUsbError || scan.usbError != null) {
+      usbDevicesError.value = scan.usbError;
+    }
+  }
+
+  void _finishDeviceScan(
+    DeviceScanRound round, {
+    required List<MdnsService> kept,
+    required bool manual,
+  }) {
+    if (!round.includedMdns) return;
+    if (round.cancelled || isClosed) {
+      discovered.assignAll(kept);
+    } else if (round.mdnsError != null) {
+      log.severe('mDNS 设备扫描失败', round.mdnsError, round.mdnsStackTrace);
+      scanError.value = '${round.mdnsError}';
+      discovered.assignAll(kept);
+    } else if (!round.timedOut) {
+      discovered.assignAll(round.services);
+    }
+    if (manual &&
+        !round.cancelled &&
+        !isClosed &&
+        round.mdnsError == null &&
+        !round.timedOut) {
+      log.info(
+        round.services.isEmpty
+            ? '扫描结束，没有发现无线设备'
+            : '扫描结束，共 ${round.services.length} 个',
+      );
+    }
+    scanning.value = false;
   }
 
   Future<AdbDevice> connectUsb(UsbAdbDevice device) async {
@@ -253,55 +336,11 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     }
   }
 
-  Future<void> scan({bool automatic = false}) async {
-    if (scanning.value) return;
-    scanning.value = true;
-    scanError.value = null;
-    final kept = List<MdnsService>.of(discovered);
-    var cancelled = false;
-    if (!automatic) log.info('开始扫描无线设备');
-    try {
-      final found = await _discover(
-        (services) {
-          discovered.assignAll(mergeDiscoveredServices(kept, services));
-          if (!automatic) {
-            log.info(
-              '扫描到 ${services.length} 个：${services.map((service) => service.endpointText).join('，')}',
-            );
-          }
-        },
-        isCancelled: automatic
-            ? () {
-                final stop = isClosed || !_allowsAutoRefresh;
-                if (stop) cancelled = true;
-                return stop;
-              }
-            : null,
-      );
-      final expiredEmpty =
-          discoverServices == null && _wirelessBrowser.lastRoundExpiredEmpty;
-      if (cancelled || isClosed || expiredEmpty) {
-        discovered.assignAll(kept);
-      } else {
-        discovered.assignAll(
-          retainRecentDiscoveries(
-            previous: kept,
-            found: found,
-            seenAt: _discoveredSeenAt,
-            now: DateTime.now(),
-          ),
-        );
-      }
-      if (!automatic && !cancelled && !expiredEmpty) {
-        log.info(found.isEmpty ? '扫描结束，没有发现无线设备' : '扫描结束，共 ${found.length} 个');
-      }
-    } catch (error, stackTrace) {
-      log.severe('mDNS 设备扫描失败', error, stackTrace);
-      scanError.value = '$error';
-      discovered.assignAll(kept);
-    } finally {
-      scanning.value = false;
-    }
+  void _onUnsolicitedDiscovery(List<MdnsService> services) {
+    if (isClosed || services.isEmpty) return;
+    discovered.assignAll(
+      mergeDiscoveredServices(discovered.toList(), services),
+    );
   }
 
   /// 给二维码配对用。不改首页上的发现列表，也不占用扫描按钮。
@@ -319,6 +358,16 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       stopWhen: stopWhen,
       isCancelled: isCancelled,
     );
+  }
+
+  Future<MdnsDiscoverResult> _discoverRound(
+    void Function(List<MdnsService> services) onUpdate, {
+    bool Function()? isCancelled,
+  }) async {
+    final found = await _discover(onUpdate, isCancelled: isCancelled);
+    final timedOut =
+        discoverServices == null && _wirelessBrowser.lastRoundExpiredEmpty;
+    return MdnsDiscoverResult(services: found, timedOut: timedOut);
   }
 
   Future<List<MdnsService>> _discover(
@@ -346,51 +395,65 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     );
   }
 
-  Future<void> refreshUsbDevices() async {
+  Future<void> _queryUsb(void Function(ListedDeviceScan scan) publish) async {
     if (!showDirectUsbList || loadingUsbDevices.value) return;
     loadingUsbDevices.value = true;
     final started = DateTime.now();
-    usbDevicesError.value = null;
     try {
-      usbDevices.assignAll(await _listUsbDevices());
+      final devices = await _listUsbDevices();
       _loggedUsbError = null;
+      publish(ListedDeviceScan(usbDevices: devices, clearUsbError: true));
     } catch (error, stackTrace) {
       final message = '$error';
       if (message != _loggedUsbError) {
         _loggedUsbError = message;
         log.severe('刷新 USB 设备列表失败', error, stackTrace);
       }
-      usbDevicesError.value = message;
+      publish(ListedDeviceScan(usbError: message));
     } finally {
       await _keepRefreshIndicator(started);
       if (!isClosed) loadingUsbDevices.value = false;
     }
   }
 
-  Future<void> refreshAdbDevices() async {
+  Future<void> _queryAdb(void Function(ListedDeviceScan scan) publish) async {
     if (!adbServerSupported.value || loadingAdbDevices.value) return;
     loadingAdbDevices.value = true;
     final started = DateTime.now();
-    adbDevicesError.value = null;
     try {
-      adbDevices.assignAll(await _hostClient.devices(long: true));
+      final devices = await _hostClient.devices(long: true);
       _loggedAdbError = null;
-      adbServerAbsent.value = false;
+      publish(
+        ListedDeviceScan(
+          adbDevices: devices,
+          adbServerAbsent: false,
+          clearAdbError: true,
+        ),
+      );
     } catch (error, stackTrace) {
       if (_isAdbServerAbsent(error)) {
         final recovered = await _restartLocalServer();
-        if (recovered) return;
-        adbServerAbsent.value = true;
-        adbDevicesError.value = null;
+        if (recovered != null) {
+          publish(
+            ListedDeviceScan(
+              adbDevices: recovered,
+              adbServerAbsent: false,
+              clearAdbError: true,
+            ),
+          );
+          return;
+        }
+        publish(
+          const ListedDeviceScan(adbServerAbsent: true, clearAdbError: true),
+        );
         return;
       }
-      adbServerAbsent.value = false;
       final message = '$error';
       if (message != _loggedAdbError) {
         _loggedAdbError = message;
         log.severe('刷新 ADB 设备列表失败', error, stackTrace);
       }
-      adbDevicesError.value = message;
+      publish(ListedDeviceScan(adbError: message, adbServerAbsent: false));
     } finally {
       await _keepRefreshIndicator(started);
       if (!isClosed) loadingAdbDevices.value = false;
@@ -422,23 +485,22 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     _indicatorHolds.clear();
   }
 
-  Future<bool> _restartLocalServer() async {
+  Future<List<AdbDeviceInfo>?> _restartLocalServer() async {
     try {
       await manager.ensureLocalAdbServer(restart: true);
     } catch (error, stackTrace) {
       log.severe('启动本机 ADB Server 失败', error, stackTrace);
-      return false;
+      return null;
     }
     if (!manager.ownsLocalAdbServer.value && !manager.usingSdkAdbServer.value) {
-      return false;
+      return null;
     }
     try {
-      adbDevices.assignAll(await _hostClient.devices(long: true));
+      final devices = await _hostClient.devices(long: true);
       _loggedAdbError = null;
-      adbServerAbsent.value = false;
-      return true;
+      return devices;
     } catch (_) {
-      return false;
+      return null;
     }
   }
 

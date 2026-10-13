@@ -249,6 +249,10 @@ class MdnsBrowser {
   /// 这是监听被定时停掉，不是网络确认没有设备。
   bool lastRoundExpiredEmpty = false;
 
+  /// 采集窗口结束之后，复用的套接字仍可能收到晚到的应答。
+  void Function(List<MdnsService> services)? onUnsolicited;
+  String _idleSnapshot = '';
+
   /// 发现局域网内的 adb 服务。
   ///
   /// [serviceTypes] 默认查询所有三类 adb 服务（legacy 传输、TLS 配对、
@@ -549,12 +553,8 @@ class MdnsBrowser {
       _mdnsLog('mDNS 扫描已取消');
     } else if (expiredEmpty) {
       _mdnsLog('mDNS 扫描时间到，本轮没有新应答');
-    } else {
-      _mdnsLog(
-        found.isEmpty
-            ? 'mDNS 扫描结束，没有发现设备'
-            : 'mDNS 扫描到 ${found.length} 个：${found.map((service) => '${service.serviceType} ${service.endpointText}').join('；')}',
-      );
+    } else if (found.isEmpty) {
+      _mdnsLog('mDNS 扫描结束，没有发现设备');
     }
     return found;
   }
@@ -587,6 +587,10 @@ class MdnsBrowser {
       final next = _serviceSnapshot(services);
       if (next.isEmpty || next == snapshot) return;
       snapshot = next;
+      // 窗口还要继续听，但设备在应答到达时就能用，不必等窗口结束。
+      _mdnsLog(
+        'mDNS 扫描到 ${services.length} 个：${services.map((service) => '${service.serviceType} ${service.endpointText}').join('；')}',
+      );
       onUpdate?.call(services);
       if (stopWhen?.call(services) ?? false) {
         scheduleMicrotask(finish);
@@ -683,15 +687,37 @@ class MdnsBrowser {
     } finally {
       timer.cancel();
       if (retainListener) {
-        for (final entry in sockets) {
-          if (entry.onDatagram == take) entry.onDatagram = null;
-        }
+        _holdForLateReplies(sockets, serviceTypes);
       }
       for (final subscription in subscriptions) {
         await subscription.cancel();
       }
     }
     return (services: resolver.services(), expired: expired);
+  }
+
+  /// 窗口结束后继续收包。查询已经发出，应答常常晚一点才到。
+  void _holdForLateReplies(
+    List<_QuerySocket> sockets,
+    Set<String> serviceTypes,
+  ) {
+    final resolver = _MdnsResolver(serviceTypes: _queryTypes(serviceTypes));
+    void take(Datagram datagram) {
+      resolver.handleDatagram(datagram.data, datagram.address);
+      final found = resolver.services();
+      final next = _serviceSnapshot(found);
+      if (next.isEmpty || next == _idleSnapshot) return;
+      _idleSnapshot = next;
+      _mdnsLog(
+        'mDNS 收到 ${found.length} 个：${found.map((service) => '${service.serviceType} ${service.endpointText}').join('；')}',
+      );
+      onUnsolicited?.call(List<MdnsService>.unmodifiable(found));
+    }
+
+    for (final entry in sockets) {
+      entry.ensureListening();
+      entry.onDatagram = take;
+    }
   }
 }
 

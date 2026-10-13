@@ -96,49 +96,6 @@ List<MdnsService> mergeDiscoveredServices(
 String discoveredServiceKey(MdnsService service) =>
     '${service.serviceType}\n${normalizeHost(service.addressText)}\n${service.port}';
 
-/// 一次扫描没应答不代表设备走了。大约盖住一个刷新周期，连续两次没有再出现就去掉。
-const Duration discoveredServiceGrace = Duration(seconds: 10);
-
-/// 用这次扫到的结果更新列表，并保留 [grace] 内出现过的服务。
-List<MdnsService> retainRecentDiscoveries({
-  required List<MdnsService> previous,
-  required List<MdnsService> found,
-  required Map<String, DateTime> seenAt,
-  required DateTime now,
-  Duration grace = discoveredServiceGrace,
-}) {
-  final foundByKey = <String, MdnsService>{
-    for (final service in found) discoveredServiceKey(service): service,
-  };
-  for (final entry in foundByKey.entries) {
-    seenAt[entry.key] = now;
-  }
-  final result = <MdnsService>[];
-  final used = <String>{};
-  for (final service in previous) {
-    final key = discoveredServiceKey(service);
-    if (!used.add(key)) continue;
-    final updated = foundByKey[key];
-    if (updated != null) {
-      result.add(updated);
-      continue;
-    }
-    final seen = seenAt[key];
-    if (seen != null && now.difference(seen) <= grace) {
-      result.add(service);
-      continue;
-    }
-    used.remove(key);
-    seenAt.remove(key);
-  }
-  for (final service in found) {
-    final key = discoveredServiceKey(service);
-    if (used.add(key)) result.add(service);
-  }
-  seenAt.removeWhere((key, _) => !used.contains(key));
-  return result;
-}
-
 String discoveredServiceTitle(MdnsService service) {
   final name = service.txt['name']?.replaceAll('_', ' ');
   if (name != null && name.isNotEmpty) return name;
