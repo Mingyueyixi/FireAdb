@@ -177,7 +177,7 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   }
 
   @override
-  String get homeNoDevicesFound => '未扫描到设备。请确认上述条件，或改用「手动连接」。';
+  String get homeNoDevicesFound => '未扫描到当前设备，请确认当前设备';
 
   @override
   String get homeServiceAdbTransport => 'ADB 传输';

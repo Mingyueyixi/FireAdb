@@ -15,6 +15,8 @@ class HomeController extends GetxController {
 
   /// 列表查询往往几十毫秒就结束，图标来不及转完一圈。
   static const Duration _refreshIndicatorHold = Duration(milliseconds: 900);
+  final List<({Timer timer, Completer<void> done})> _indicatorHolds =
+      <({Timer timer, Completer<void> done})>[];
 
   HomeController({
     AdbHostClient? hostClient,
@@ -273,7 +275,7 @@ class HomeController extends GetxController {
       usbDevicesError.value = message;
     } finally {
       await _keepRefreshIndicator(started);
-      loadingUsbDevices.value = false;
+      if (!isClosed) loadingUsbDevices.value = false;
     }
   }
 
@@ -303,16 +305,33 @@ class HomeController extends GetxController {
       adbDevicesError.value = message;
     } finally {
       await _keepRefreshIndicator(started);
-      loadingAdbDevices.value = false;
+      if (!isClosed) loadingAdbDevices.value = false;
     }
   }
 
-  Future<void> _keepRefreshIndicator(DateTime started) async {
+  Future<void> _keepRefreshIndicator(DateTime started) {
     final remaining =
         _refreshIndicatorHold - DateTime.now().difference(started);
-    if (remaining > Duration.zero) {
-      await Future<void>.delayed(remaining);
+    if (remaining <= Duration.zero || isClosed) return Future<void>.value();
+    final done = Completer<void>();
+    late final ({Timer timer, Completer<void> done}) hold;
+    final timer = Timer(remaining, () {
+      _indicatorHolds.remove(hold);
+      if (!done.isCompleted) done.complete();
+    });
+    hold = (timer: timer, done: done);
+    _indicatorHolds.add(hold);
+    return done.future;
+  }
+
+  void _cancelIndicatorHolds() {
+    for (final hold in List<({Timer timer, Completer<void> done})>.of(
+      _indicatorHolds,
+    )) {
+      hold.timer.cancel();
+      if (!hold.done.isCompleted) hold.done.complete();
     }
+    _indicatorHolds.clear();
   }
 
   Future<bool> _restartLocalServer() async {
@@ -364,5 +383,6 @@ class HomeController extends GetxController {
     hostController.dispose();
     portController.dispose();
     super.onClose();
+    _cancelIndicatorHolds();
   }
 }

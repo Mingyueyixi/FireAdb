@@ -17,7 +17,7 @@ class HistorySection extends GetView<HomeController> {
       final history = controller.manager.history;
       return Card(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -28,7 +28,7 @@ class HistorySection extends GetView<HomeController> {
               const SizedBox(height: 4),
               if (history.isEmpty)
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text(
                     l10n.homeNoHistory,
                     style: TextStyle(color: theme.colorScheme.outline),

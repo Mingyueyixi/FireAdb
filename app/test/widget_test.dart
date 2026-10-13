@@ -34,6 +34,9 @@ void main() {
         listUsbDevices: () async => const <UsbAdbDevice>[],
       ),
     );
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(const FireAdbApp());
     await tester.pump();
 
@@ -51,6 +54,16 @@ void main() {
     expect(find.text('设备发现（mDNS）'), findsOneWidget);
     expect(find.text('历史连接'), findsOneWidget);
     expect(hostClient.deviceListRequests, 1);
+
+    final title = tester.getRect(find.text('设备（2）'));
+    final autoRefresh = tester.getRect(
+      find.byKey(const ValueKey<String>('home-auto-refresh-devices')),
+    );
+    final refreshIcon = tester.getRect(find.byIcon(Icons.refresh));
+    expect(autoRefresh.center.dy, closeTo(title.center.dy, 1));
+    expect(refreshIcon.center.dy, closeTo(title.center.dy, 1));
+    expect(autoRefresh.left, greaterThan(title.right));
+    expect(refreshIcon.left, greaterThan(autoRefresh.right));
 
     final scaffoldContext = tester.element(find.byType(Scaffold).first);
     showAppMessage(

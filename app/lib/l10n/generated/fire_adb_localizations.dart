@@ -404,7 +404,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @homeNoDevicesFound.
   ///
   /// In zh, this message translates to:
-  /// **'未扫描到设备。请确认上述条件，或改用「手动连接」。'**
+  /// **'未扫描到当前设备，请确认当前设备'**
   String get homeNoDevicesFound;
 
   /// No description provided for @homeServiceAdbTransport.

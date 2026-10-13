@@ -16,7 +16,7 @@ class ManualConnectSection extends GetView<HomeController> {
       final connecting = controller.connecting.value;
       return Card(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -24,7 +24,7 @@ class ManualConnectSection extends GetView<HomeController> {
                 icon: Icons.link,
                 title: l10n.homeManualConnection,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Row(
                 children: <Widget>[
                   Expanded(

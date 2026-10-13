@@ -26,7 +26,7 @@ class HomePage extends StatelessWidget {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 920),
@@ -53,13 +53,13 @@ class _HomeLayout extends StatelessWidget {
         children: <Widget>[
           Expanded(
             child: Column(
-              children: <Widget>[manual, SizedBox(height: 16), discovery],
+              children: <Widget>[manual, SizedBox(height: 10), discovery],
             ),
           ),
-          SizedBox(width: 16),
+          SizedBox(width: 10),
           Expanded(
             child: Column(
-              children: <Widget>[devices, SizedBox(height: 16), history],
+              children: <Widget>[devices, SizedBox(height: 10), history],
             ),
           ),
         ],
@@ -69,11 +69,11 @@ class _HomeLayout extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         devices,
-        SizedBox(height: 16),
+        SizedBox(height: 10),
         manual,
-        SizedBox(height: 16),
+        SizedBox(height: 10),
         discovery,
-        SizedBox(height: 16),
+        SizedBox(height: 10),
         history,
       ],
     );

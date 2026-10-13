@@ -185,7 +185,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get homeNoDevicesFound =>
-      'No devices found. Check the requirements above or use Manual connection.';
+      'The current device was not found. Please check the current device.';
 
   @override
   String get homeServiceAdbTransport => 'ADB transport';

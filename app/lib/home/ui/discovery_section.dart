@@ -20,7 +20,7 @@ class DiscoverySection extends GetView<HomeController> {
       final connecting = controller.connecting.value;
       return Card(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -56,9 +56,9 @@ class DiscoverySection extends GetView<HomeController> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surfaceContainerHighest.withValues(
                     alpha: 0.5,
@@ -88,7 +88,7 @@ class DiscoverySection extends GetView<HomeController> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
                       l10n.homePairingCodeGuideTitle,
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -104,7 +104,7 @@ class DiscoverySection extends GetView<HomeController> {
                         height: 1.4,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
                       l10n.homeQrPairingGuideTitle,
                       style: theme.textTheme.bodySmall?.copyWith(
@@ -123,13 +123,14 @@ class DiscoverySection extends GetView<HomeController> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               if (controller.scanError.value != null)
                 Text(
                   l10n.homeScanFailed('${controller.scanError.value}'),
                   style: TextStyle(color: theme.colorScheme.error),
                 )
-              else if (controller.discovered.isEmpty && !scanning)
+              else if (controller.discovered.isEmpty)
+                // 扫描中列表仍为空时也留着这句。卸掉再装上会让卡片高度来回变。
                 Text(
                   l10n.homeNoDevicesFound,
                   style: TextStyle(color: theme.colorScheme.outline),

@@ -87,7 +87,7 @@
       "error": {}
     }
   },
-  "homeNoDevicesFound": "No devices found. Check the requirements above or use Manual connection.",
+  "homeNoDevicesFound": "The current device was not found. Please check the current device.",
   "homeServiceAdbTransport": "ADB transport",
   "homeServiceTlsConnection": "TLS connection",
   "homeServicePairing": "Pairing service",

@@ -43,27 +43,42 @@ class HomeSectionHeader extends StatelessWidget {
 }
 
 /// 标题和右侧操作放在一行；窄宽度时操作换到下一行。
+///
+/// [inline] 为 true 时，操作始终和标题同一行，并与标题垂直居中。
+/// 空间不够时标题省略，操作不换行。
 class HomeSectionBar extends StatelessWidget {
   const HomeSectionBar({
     super.key,
     required this.header,
     required this.actions,
+    this.inline = false,
   });
 
   final Widget header;
   final List<Widget> actions;
+  final bool inline;
 
   @override
   Widget build(BuildContext context) {
+    final actionWrap = Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: actions,
+    );
+    if (inline) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          Expanded(child: header),
+          const SizedBox(width: 8),
+          actionWrap,
+        ],
+      );
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final actionWrap = Wrap(
-          spacing: 4,
-          runSpacing: 4,
-          alignment: WrapAlignment.end,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: actions,
-        );
         if (!constraints.maxWidth.isFinite || constraints.maxWidth < 480) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

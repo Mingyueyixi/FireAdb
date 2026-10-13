@@ -45,11 +45,12 @@ class DeviceListSection extends GetView<HomeController> {
           controller.loadingUsbDevices.value;
       return Card(
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               HomeSectionBar(
+                inline: true,
                 header: HomeSectionHeader(
                   icon: Icons.devices,
                   title: l10n.homeDeviceCount(total),
@@ -129,6 +130,7 @@ class DeviceListSection extends GetView<HomeController> {
                 for (final device in devices) _AdbDeviceTile(device: device),
               for (final profile in additionalConnectedProfiles)
                 HomeListTile(
+                  dense: true,
                   leading: const Icon(Icons.phone_android),
                   title: Text(profile.displayName),
                   subtitle: Text(
@@ -181,6 +183,7 @@ class _UsbDeviceTile extends GetView<HomeController> {
     }
     final connecting = controller.connecting.value;
     return HomeListTile(
+      dense: true,
       leading: const Icon(Icons.usb),
       title: Text(device.title),
       subtitle: Text(subtitle.toString(), maxLines: 2),
@@ -238,6 +241,7 @@ class _AdbDeviceTile extends GetView<HomeController> {
         device.isOnline && controller.manager.canConnectAdbDevice(device);
 
     return HomeListTile(
+      dense: true,
       leading: Icon(device.devPath == null ? Icons.phone_android : Icons.usb),
       title: Text(title),
       subtitle: Text(subtitle.toString(), maxLines: 2),
