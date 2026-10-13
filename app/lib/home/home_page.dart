@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 import '../widgets/adaptive.dart';
+import 'home_controller.dart';
 import 'ui/device_list_section.dart';
 import 'ui/discovery_section.dart';
 import 'ui/history_section.dart';
@@ -12,16 +14,50 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 920),
-          child: const _HomeLayout(),
+    return _ConnectionPagePresence(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(12),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 920),
+            child: const _HomeLayout(),
+          ),
         ),
       ),
     );
   }
+}
+
+class _ConnectionPagePresence extends StatefulWidget {
+  const _ConnectionPagePresence({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_ConnectionPagePresence> createState() =>
+      _ConnectionPagePresenceState();
+}
+
+class _ConnectionPagePresenceState extends State<_ConnectionPagePresence> {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _report(ModalRoute.of(context)?.isCurrent ?? false);
+  }
+
+  @override
+  void dispose() {
+    _report(false);
+    super.dispose();
+  }
+
+  void _report(bool visible) {
+    if (!Get.isRegistered<HomeController>()) return;
+    Get.find<HomeController>().setConnectionPageVisible(visible);
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _HomeLayout extends StatelessWidget {

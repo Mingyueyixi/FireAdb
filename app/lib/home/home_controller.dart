@@ -10,7 +10,7 @@ import '../connection/model/connected_device.dart';
 import '../log/app_log.dart';
 import '../settings/app_settings_store.dart';
 
-class HomeController extends GetxController {
+class HomeController extends GetxController with WidgetsBindingObserver {
   static const Duration adbDeviceRefreshInterval = Duration(seconds: 3);
 
   /// 列表查询往往几十毫秒就结束，图标来不及转完一圈。
@@ -68,7 +68,11 @@ class HomeController extends GetxController {
   Worker? _devicesRefreshWorker;
   Worker? _mdnsRefreshWorker;
   Worker? _intervalWorker;
+  Worker? _backgroundRefreshWorker;
   var _mdnsRefreshGeneration = 0;
+  var _pageVisible = true;
+  var _appResumed = true;
+  var _refreshing = true;
 
   ConnectionManager get manager => Get.find<ConnectionManager>();
 
@@ -77,6 +81,7 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    WidgetsBinding.instance.addObserver(this);
     _restoreManualConnection();
     final canListDevices = adbServerSupported.value || usbSupported;
     if (canListDevices) {
@@ -99,6 +104,41 @@ class HomeController extends GetxController {
       _applyDeviceAutoRefresh(_settings.autoRefreshDevices.value);
       _applyMdnsAutoRefresh(_settings.autoRefreshMdns.value);
     });
+    _backgroundRefreshWorker = ever<bool>(
+      _settings.refreshInBackground,
+      (_) => _syncRefreshGate(),
+    );
+  }
+
+  /// 连接页在树上且是当前路由时为 true。
+  void setConnectionPageVisible(bool visible) {
+    if (isClosed || _pageVisible == visible) return;
+    _pageVisible = visible;
+    _syncRefreshGate();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final resumed = state == AppLifecycleState.resumed;
+    if (_appResumed == resumed) return;
+    _appResumed = resumed;
+    _syncRefreshGate();
+  }
+
+  bool get _allowsAutoRefresh =>
+      _settings.refreshInBackground.value || (_pageVisible && _appResumed);
+
+  void _syncRefreshGate() {
+    final allow = _allowsAutoRefresh;
+    if (allow == _refreshing) return;
+    _refreshing = allow;
+    _applyDeviceAutoRefresh(_settings.autoRefreshDevices.value);
+    _applyMdnsAutoRefresh(_settings.autoRefreshMdns.value);
+    if (!allow || !_settings.autoRefreshDevices.value || isClosed) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isClosed || !_allowsAutoRefresh) return;
+      refreshListedDevices();
+    });
   }
 
   Duration get _refreshInterval =>
@@ -107,7 +147,7 @@ class HomeController extends GetxController {
   void _applyDeviceAutoRefresh(bool enabled) {
     _adbDeviceRefreshTimer?.cancel();
     _adbDeviceRefreshTimer = null;
-    if (!enabled || isClosed) return;
+    if (!enabled || !_allowsAutoRefresh || isClosed) return;
     if (!adbServerSupported.value && !usbSupported) return;
     _adbDeviceRefreshTimer = Timer.periodic(_refreshInterval, (_) {
       refreshListedDevices();
@@ -119,7 +159,7 @@ class HomeController extends GetxController {
     _mdnsRefreshTimer?.cancel();
     _mdnsRefreshTimer = null;
     _mdnsRefreshGeneration++;
-    if (!enabled || isClosed) return;
+    if (!enabled || !_allowsAutoRefresh || isClosed) return;
     _scheduleMdnsRefresh(_mdnsRefreshGeneration);
   }
 
@@ -128,7 +168,7 @@ class HomeController extends GetxController {
       if (generation != _mdnsRefreshGeneration || isClosed) return;
       await scan(automatic: true);
       if (generation != _mdnsRefreshGeneration || isClosed) return;
-      if (!_settings.autoRefreshMdns.value) return;
+      if (!_settings.autoRefreshMdns.value || !_allowsAutoRefresh) return;
       _scheduleMdnsRefresh(generation);
     });
   }
@@ -206,7 +246,7 @@ class HomeController extends GetxController {
             '扫描到 ${services.length} 个：${services.map((service) => service.endpointText).join('，')}',
           );
         }
-      });
+      }, isCancelled: automatic ? () => isClosed || !_allowsAutoRefresh : null);
       discovered.assignAll(found);
       if (!automatic) {
         log.info(found.isEmpty ? '扫描结束，没有发现无线设备' : '扫描结束，共 ${found.length} 个');
@@ -374,9 +414,11 @@ class HomeController extends GetxController {
 
   @override
   void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
     _devicesRefreshWorker?.dispose();
     _mdnsRefreshWorker?.dispose();
     _intervalWorker?.dispose();
+    _backgroundRefreshWorker?.dispose();
     _adbDeviceRefreshTimer?.cancel();
     _mdnsRefreshGeneration++;
     _mdnsRefreshTimer?.cancel();

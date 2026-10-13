@@ -18,6 +18,7 @@ class LogPage extends StatefulWidget {
 
 class _LogPageState extends State<LogPage> {
   final ScrollController _scroll = ScrollController();
+  final ScrollController _horizontal = ScrollController();
   String? _directory;
   var _followEnd = true;
 
@@ -34,6 +35,7 @@ class _LogPageState extends State<LogPage> {
   void dispose() {
     sessionLog.removeListener(_onLog);
     _scroll.dispose();
+    _horizontal.dispose();
     super.dispose();
   }
 
@@ -101,6 +103,22 @@ class _LogPageState extends State<LogPage> {
     }
   }
 
+  double _widestLine(
+    List<String> lines,
+    TextStyle? style,
+    TextDirection direction,
+  ) {
+    final painter = TextPainter(textDirection: direction, maxLines: 1);
+    var maxWidth = 0.0;
+    for (final line in lines) {
+      painter.text = TextSpan(text: line, style: style);
+      painter.layout();
+      if (painter.width > maxWidth) maxWidth = painter.width;
+    }
+    painter.dispose();
+    return maxWidth;
+  }
+
   void _showError(String message) {
     showAppMessage(
       ScaffoldMessenger.of(context),
@@ -165,17 +183,45 @@ class _LogPageState extends State<LogPage> {
                       style: TextStyle(color: theme.colorScheme.outline),
                     ),
                   )
-                : Scrollbar(
-                    controller: _scroll,
-                    child: SelectionArea(
-                      child: ListView.builder(
-                        controller: _scroll,
-                        padding: const EdgeInsets.all(12),
-                        itemCount: lines.length,
-                        itemBuilder: (context, index) =>
-                            Text(lines[index], style: style),
-                      ),
-                    ),
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      final textWidth = _widestLine(
+                        lines,
+                        style,
+                        Directionality.of(context),
+                      );
+                      final width = textWidth + 24 > constraints.maxWidth
+                          ? textWidth + 24
+                          : constraints.maxWidth;
+                      return Scrollbar(
+                        controller: _horizontal,
+                        notificationPredicate: (notification) =>
+                            notification.metrics.axis == Axis.horizontal,
+                        child: SingleChildScrollView(
+                          controller: _horizontal,
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: width,
+                            height: constraints.maxHeight,
+                            child: Scrollbar(
+                              controller: _scroll,
+                              child: SelectionArea(
+                                child: ListView.builder(
+                                  controller: _scroll,
+                                  padding: const EdgeInsets.all(12),
+                                  itemCount: lines.length,
+                                  itemBuilder: (context, index) => Text(
+                                    lines[index],
+                                    softWrap: false,
+                                    style: style,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
           ),
         ],

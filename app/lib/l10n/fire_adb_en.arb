@@ -42,6 +42,8 @@
   },
   "settingsAutoRefreshInterval": "Refresh interval (seconds)",
   "settingsAutoRefreshIntervalInvalid": "Enter a whole number of seconds from 1 to 3600",
+  "settingsRefreshInBackground": "Refresh in the background",
+  "settingsRefreshInBackgroundHelp": "While off, auto-refresh stops when the Connect page is not current or the app is in the background.",
   "settingsLogDirectory": "Log folder",
   "settingsOpenLogDirectory": "Open in file manager",
   "settingsLogDirectoryUnavailable": "The log folder is not available yet",

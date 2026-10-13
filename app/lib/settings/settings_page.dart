@@ -305,6 +305,22 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  Future<void> _setRefreshInBackground(bool value) async {
+    try {
+      await Get.find<AppSettingsStore>().setRefreshInBackground(value);
+    } catch (error, stackTrace) {
+      log.severe('保存后台刷新设置失败', error, stackTrace);
+      if (!mounted) return;
+      showAppMessage(
+        ScaffoldMessenger.of(context),
+        Theme.of(context),
+        title: context.l10n.commonSettingsSaveFailed,
+        message: '$error',
+        isError: true,
+      );
+    }
+  }
+
   Future<void> _setAutoRefresh({
     required bool mdns,
     required bool value,
@@ -344,6 +360,7 @@ class _SettingsPageState extends State<SettingsPage> {
         final adbError = manager.sdkAdbError.value;
         final autoRefreshMdns = settings.autoRefreshMdns.value;
         final autoRefreshDevices = settings.autoRefreshDevices.value;
+        final refreshInBackground = settings.refreshInBackground.value;
         final intervalSeconds = settings.autoRefreshIntervalSeconds.value;
         return Align(
           alignment: Alignment.topCenter,
@@ -382,6 +399,17 @@ class _SettingsPageState extends State<SettingsPage> {
                   onChanged: (value) {
                     if (value == null) return;
                     unawaited(_setAutoRefresh(mdns: false, value: value));
+                  },
+                ),
+                CheckboxListTile(
+                  key: const ValueKey<String>('settings-refresh-in-background'),
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(l10n.settingsRefreshInBackground),
+                  subtitle: Text(l10n.settingsRefreshInBackgroundHelp),
+                  value: refreshInBackground,
+                  onChanged: (value) {
+                    if (value == null) return;
+                    unawaited(_setRefreshInBackground(value));
                   },
                 ),
                 const SizedBox(height: 8),

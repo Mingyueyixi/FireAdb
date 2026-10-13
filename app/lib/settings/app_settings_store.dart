@@ -10,6 +10,7 @@ class AppSettingsStore extends GetxController {
   static const String autoRefreshMdnsKey = 'autoRefreshMdns';
   static const String autoRefreshDevicesKey = 'autoRefreshDevices';
   static const String autoRefreshIntervalKey = 'autoRefreshIntervalSeconds';
+  static const String refreshInBackgroundKey = 'refreshInBackground';
   static const String logBufferKbKey = 'logBufferKb';
   static const String logRetentionDaysKey = 'logRetentionDays';
   static const int defaultAutoRefreshSeconds = 3;
@@ -24,6 +25,9 @@ class AppSettingsStore extends GetxController {
 
   final RxBool autoRefreshMdns = false.obs;
   final RxBool autoRefreshDevices = true.obs;
+
+  /// 默认关闭：连接页不在前台，或应用进入后台时，不自动刷新。
+  final RxBool refreshInBackground = false.obs;
   final RxInt autoRefreshIntervalSeconds = defaultAutoRefreshSeconds.obs;
   final RxInt logBufferKb = defaultLogBufferKb.obs;
   final RxInt logRetentionDays = defaultLogRetentionDays.obs;
@@ -35,6 +39,8 @@ class AppSettingsStore extends GetxController {
     autoRefreshMdns.value = preferences.getBool(autoRefreshMdnsKey) ?? false;
     autoRefreshDevices.value =
         preferences.getBool(autoRefreshDevicesKey) ?? true;
+    refreshInBackground.value =
+        preferences.getBool(refreshInBackgroundKey) ?? false;
     autoRefreshIntervalSeconds.value = _clampInterval(
       preferences.getInt(autoRefreshIntervalKey),
     );
@@ -59,6 +65,10 @@ class AppSettingsStore extends GetxController {
 
   Future<void> setAutoRefreshDevices(bool value) {
     return _save(autoRefreshDevices, autoRefreshDevicesKey, value);
+  }
+
+  Future<void> setRefreshInBackground(bool value) {
+    return _save(refreshInBackground, refreshInBackgroundKey, value);
   }
 
   Future<void> setAutoRefreshIntervalSeconds(int seconds) {

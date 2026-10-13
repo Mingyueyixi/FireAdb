@@ -221,6 +221,18 @@ abstract class FireAdbLocalizations {
   /// **'请输入 1 到 3600 之间的整数'**
   String get settingsAutoRefreshIntervalInvalid;
 
+  /// No description provided for @settingsRefreshInBackground.
+  ///
+  /// In zh, this message translates to:
+  /// **'后台刷新'**
+  String get settingsRefreshInBackground;
+
+  /// No description provided for @settingsRefreshInBackgroundHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'关闭时，连接页不在最前面或应用进入后台，自动刷新会停下来。'**
+  String get settingsRefreshInBackgroundHelp;
+
   /// No description provided for @settingsLogDirectory.
   ///
   /// In zh, this message translates to:

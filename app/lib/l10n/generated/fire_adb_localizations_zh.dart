@@ -79,6 +79,12 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get settingsAutoRefreshIntervalInvalid => '请输入 1 到 3600 之间的整数';
 
   @override
+  String get settingsRefreshInBackground => '后台刷新';
+
+  @override
+  String get settingsRefreshInBackgroundHelp => '关闭时，连接页不在最前面或应用进入后台，自动刷新会停下来。';
+
+  @override
   String get settingsLogDirectory => '日志目录';
 
   @override

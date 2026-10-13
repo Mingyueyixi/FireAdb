@@ -328,6 +328,84 @@ void main() {
     }
   });
 
+  testWidgets('连接页不在最前面或应用在后台时停止自动刷新', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    Get.put<ConnectionManager>(ConnectionManager(), permanent: true);
+    Get.put<AppLocaleController>(AppLocaleController(), permanent: true);
+    final settings = Get.put<AppSettingsStore>(
+      AppSettingsStore(),
+      permanent: true,
+    );
+    final hostClient = _FakeAdbHostClient(const <AdbDeviceInfo>[]);
+    final homeController = HomeController(
+      hostClient: hostClient,
+      listUsbDevices: () async => const <UsbAdbDevice>[],
+      discoverServices: (onUpdate) async => const <MdnsService>[],
+    );
+    Get.put<HomeController>(homeController);
+    final binding = TestWidgetsFlutterBinding.instance;
+    try {
+      await tester.pumpWidget(const FireAdbApp());
+      await tester.pump();
+      expect(hostClient.deviceListRequests, 1);
+
+      await tester.tap(find.widgetWithText(NavigationDestination, '日志'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      expect(hostClient.deviceListRequests, 1);
+
+      await tester.tap(find.widgetWithText(NavigationDestination, '连接'));
+      await tester.pump();
+      expect(hostClient.deviceListRequests, 2);
+      await tester.pump(const Duration(seconds: 3));
+      expect(hostClient.deviceListRequests, 3);
+
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await tester.pump(const Duration(seconds: 3));
+      expect(hostClient.deviceListRequests, 3);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(hostClient.deviceListRequests, 4);
+
+      await tester.tap(find.byIcon(Icons.settings_outlined));
+      await tester.pumpAndSettle();
+      final background = find.byKey(
+        const ValueKey<String>('settings-refresh-in-background'),
+      );
+      await Scrollable.ensureVisible(
+        tester.element(background),
+        alignment: 0.5,
+      );
+      await tester.pumpAndSettle();
+      expect(tester.widget<CheckboxListTile>(background).value, isFalse);
+      await tester.tap(background);
+      await tester.pump();
+      expect(settings.refreshInBackground.value, isTrue);
+      final whileAway = hostClient.deviceListRequests;
+
+      Get.back<void>();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.widgetWithText(NavigationDestination, '日志'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      expect(hostClient.deviceListRequests, whileAway + 1);
+    } finally {
+      final lifecycle = binding.lifecycleState;
+      if (lifecycle != AppLifecycleState.resumed) {
+        if (lifecycle != AppLifecycleState.inactive &&
+            lifecycle != AppLifecycleState.detached) {
+          binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+        }
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      }
+      homeController.onClose();
+      Get.reset();
+    }
+  });
+
   testWidgets('二维码配对展示二维码，取消后停止等待', (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     Get.put<ConnectionManager>(ConnectionManager(), permanent: true);

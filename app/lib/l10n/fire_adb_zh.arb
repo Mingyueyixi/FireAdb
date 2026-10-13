@@ -42,6 +42,8 @@
   },
   "settingsAutoRefreshInterval": "刷新间隔（秒）",
   "settingsAutoRefreshIntervalInvalid": "请输入 1 到 3600 之间的整数",
+  "settingsRefreshInBackground": "后台刷新",
+  "settingsRefreshInBackgroundHelp": "关闭时，连接页不在最前面或应用进入后台，自动刷新会停下来。",
   "settingsLogDirectory": "日志目录",
   "settingsOpenLogDirectory": "在文件管理器中打开",
   "settingsLogDirectoryUnavailable": "日志目录还不可用",

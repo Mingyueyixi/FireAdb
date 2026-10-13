@@ -82,6 +82,13 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
       'Enter a whole number of seconds from 1 to 3600';
 
   @override
+  String get settingsRefreshInBackground => 'Refresh in the background';
+
+  @override
+  String get settingsRefreshInBackgroundHelp =>
+      'While off, auto-refresh stops when the Connect page is not current or the app is in the background.';
+
+  @override
   String get settingsLogDirectory => 'Log folder';
 
   @override
