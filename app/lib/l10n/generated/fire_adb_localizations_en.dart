@@ -623,6 +623,36 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String get appsDetailsAction => 'Properties';
 
   @override
+  String get appsPermissionAction => 'Permissions';
+
+  @override
+  String get appsPermissionTitle => 'App permissions';
+
+  @override
+  String get appsPermissionRuntime => 'Can change';
+
+  @override
+  String get appsPermissionInstall => 'Granted at install';
+
+  @override
+  String get appsPermissionGranted => 'Granted';
+
+  @override
+  String get appsPermissionDenied => 'Not granted';
+
+  @override
+  String get appsPermissionEmpty => 'No permissions found';
+
+  @override
+  String get appsPermissionShellBlocked =>
+      'This device blocks the shell from changing runtime permissions. In Developer options, turn on Disable permission monitoring or USB debugging (Security settings), restart the device, and try again.';
+
+  @override
+  String appsPermissionLoadFailed(Object error) {
+    return 'Could not read permissions: $error';
+  }
+
+  @override
   String get appsDebugOnlyHint =>
       'Only a debug app can read and change its data directory.';
 

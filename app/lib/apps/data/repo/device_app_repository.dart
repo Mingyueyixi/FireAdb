@@ -11,6 +11,7 @@ import '../../../shell/root_shell.dart';
 import '../bean/app_freeze.dart';
 import '../bean/installed_app.dart';
 import '../source/app_inventory.dart';
+import '../source/app_permissions.dart';
 
 /// 通过 ADB shell / sync 读取并管理设备应用。
 class DeviceAppRepository {
@@ -244,6 +245,50 @@ class DeviceAppRepository {
         : method.unfreezeCommand(packageName);
     final output = await _shell(command);
     ensureFreezeCommandSuccess(output);
+  }
+
+  /// 读取应用声明的权限。运行时权限之后可以用 [setAppPermission] 修改。
+  Future<List<AppPermissionEntry>> listAppPermissions(
+    String packageName,
+  ) async {
+    final output = await _shell(
+      'dumpsys package ${quoteShellArg(packageName)}',
+      timeout: _slowShellTimeout,
+    );
+    final failure = output.trim();
+    if (failure.contains('Unable to find package')) {
+      throw StateError(permissionCommandError(failure));
+    }
+    final entries = parsePackagePermissions(output);
+    try {
+      final ops = parseAppOps(
+        await _shell('appops get ${quoteShellArg(packageName)}'),
+      );
+      return applyAppOps(entries, ops);
+    } catch (_) {
+      return entries;
+    }
+  }
+
+  /// 授予或收回一项权限。运行时权限走 `pm`，悬浮窗等特殊权限走 `appops`。
+  /// 这两条都是 adb shell 命令，不使用 su。
+  Future<void> setAppPermission(
+    String packageName,
+    String permission, {
+    required bool granted,
+  }) async {
+    if (!isAppPermissionName(permission)) {
+      throw StateError(permission);
+    }
+    final op = appOpForPermission(permission);
+    final output = op == null
+        ? await _shell(
+            'pm ${granted ? 'grant' : 'revoke'} ${quoteShellArg(packageName)} ${quoteShellArg(permission)}',
+          )
+        : await _shell(
+            'appops set ${quoteShellArg(packageName)} $op ${granted ? 'allow' : 'ignore'}',
+          );
+    ensurePermissionCommand(output);
   }
 
   /// 尝试列出被 `am freeze` 冻结的包名；旧系统或无 freezer dumpsys 时返回空。

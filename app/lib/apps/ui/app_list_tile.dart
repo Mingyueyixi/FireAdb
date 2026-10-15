@@ -6,7 +6,7 @@ import '../../l10n/fire_adb_localizations_ext.dart';
 import '../data/bean/installed_app.dart';
 import '../data/source/app_inventory.dart';
 
-enum AppTileAction { details, export, uninstall, freeze, unfreeze }
+enum AppTileAction { details, permissions, export, uninstall, freeze, unfreeze }
 
 /// 固定高度的应用行。名称、版本、体积和路径后到时不再把行撑高。
 class AppListTile extends StatelessWidget {
@@ -109,6 +109,10 @@ class AppListTile extends StatelessWidget {
           PopupMenuItem(
             value: AppTileAction.details,
             child: Text(l10n.appsDetailsAction),
+          ),
+          PopupMenuItem(
+            value: AppTileAction.permissions,
+            child: Text(l10n.appsPermissionAction),
           ),
           PopupMenuItem(
             value: AppTileAction.export,

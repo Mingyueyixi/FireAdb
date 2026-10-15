@@ -14,6 +14,7 @@ import 'app_details_page.dart';
 import 'app_dialogs.dart';
 import 'app_freeze_dialogs.dart';
 import 'app_list_tile.dart';
+import 'app_permissions_page.dart';
 import 'app_task_view.dart';
 import 'apps_toolbar.dart';
 
@@ -158,6 +159,15 @@ class _AppsPageState extends State<AppsPage> {
     switch (action) {
       case AppTileAction.details:
         _openDetails(app);
+      case AppTileAction.permissions:
+        unawaited(
+          Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              builder: (context) =>
+                  AppPermissionsPage(serial: widget.serial, app: app),
+            ),
+          ),
+        );
       case AppTileAction.export:
         unawaited(
           _export(

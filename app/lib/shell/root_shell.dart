@@ -72,10 +72,7 @@ Future<AdbRootStatus> requestAdbRoot(ConnectedDevice device) async {
   if (attempt != AdbRootAttempt.restarting || !device.usesHost) {
     return AdbRootStatus(attempt, message);
   }
-  final rooted = await _waitUntil(
-    device,
-    (output) => isRootIdentity(output),
-  );
+  final rooted = await _waitUntil(device, (output) => isRootIdentity(output));
   return AdbRootStatus(
     rooted ? AdbRootAttempt.active : AdbRootAttempt.unavailable,
     message,

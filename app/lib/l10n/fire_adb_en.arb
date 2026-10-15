@@ -299,6 +299,20 @@
   "appsDirectoryUnknown": "Unknown",
   "appsBrowseDirectory": "Browse",
   "appsDetailsAction": "Properties",
+  "appsPermissionAction": "Permissions",
+  "appsPermissionTitle": "App permissions",
+  "appsPermissionRuntime": "Can change",
+  "appsPermissionInstall": "Granted at install",
+  "appsPermissionGranted": "Granted",
+  "appsPermissionDenied": "Not granted",
+  "appsPermissionEmpty": "No permissions found",
+  "appsPermissionShellBlocked": "This device blocks the shell from changing runtime permissions. In Developer options, turn on Disable permission monitoring or USB debugging (Security settings), restart the device, and try again.",
+  "appsPermissionLoadFailed": "Could not read permissions: {error}",
+  "@appsPermissionLoadFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "appsDebugOnlyHint": "Only a debug app can read and change its data directory.",
   "appsDataEmpty": "This directory is empty",
   "appsDataFailed": "Could not read the directory: {error}",

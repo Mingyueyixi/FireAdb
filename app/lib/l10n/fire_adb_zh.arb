@@ -299,6 +299,20 @@
   "appsDirectoryUnknown": "未知",
   "appsBrowseDirectory": "浏览",
   "appsDetailsAction": "属性",
+  "appsPermissionAction": "权限",
+  "appsPermissionTitle": "应用权限",
+  "appsPermissionRuntime": "可以修改",
+  "appsPermissionInstall": "安装时授予",
+  "appsPermissionGranted": "已授予",
+  "appsPermissionDenied": "未授予",
+  "appsPermissionEmpty": "没有读到权限",
+  "appsPermissionShellBlocked": "这台设备禁止 shell 修改运行时权限。请在开发者选项打开「关闭权限监控」或「USB 调试（安全设置）」，重启后再试。",
+  "appsPermissionLoadFailed": "读取权限失败：{error}",
+  "@appsPermissionLoadFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
   "appsDebugOnlyHint": "数据目录只有 debug 应用可以读取和修改。",
   "appsDataEmpty": "这个目录是空的",
   "appsDataFailed": "读取失败：{error}",

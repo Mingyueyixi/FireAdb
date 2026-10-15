@@ -1169,6 +1169,60 @@ abstract class FireAdbLocalizations {
   /// **'属性'**
   String get appsDetailsAction;
 
+  /// No description provided for @appsPermissionAction.
+  ///
+  /// In zh, this message translates to:
+  /// **'权限'**
+  String get appsPermissionAction;
+
+  /// No description provided for @appsPermissionTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'应用权限'**
+  String get appsPermissionTitle;
+
+  /// No description provided for @appsPermissionRuntime.
+  ///
+  /// In zh, this message translates to:
+  /// **'可以修改'**
+  String get appsPermissionRuntime;
+
+  /// No description provided for @appsPermissionInstall.
+  ///
+  /// In zh, this message translates to:
+  /// **'安装时授予'**
+  String get appsPermissionInstall;
+
+  /// No description provided for @appsPermissionGranted.
+  ///
+  /// In zh, this message translates to:
+  /// **'已授予'**
+  String get appsPermissionGranted;
+
+  /// No description provided for @appsPermissionDenied.
+  ///
+  /// In zh, this message translates to:
+  /// **'未授予'**
+  String get appsPermissionDenied;
+
+  /// No description provided for @appsPermissionEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有读到权限'**
+  String get appsPermissionEmpty;
+
+  /// No description provided for @appsPermissionShellBlocked.
+  ///
+  /// In zh, this message translates to:
+  /// **'这台设备禁止 shell 修改运行时权限。请在开发者选项打开「关闭权限监控」或「USB 调试（安全设置）」，重启后再试。'**
+  String get appsPermissionShellBlocked;
+
+  /// No description provided for @appsPermissionLoadFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'读取权限失败：{error}'**
+  String appsPermissionLoadFailed(Object error);
+
   /// No description provided for @appsDebugOnlyHint.
   ///
   /// In zh, this message translates to:

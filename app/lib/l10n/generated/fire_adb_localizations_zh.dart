@@ -597,6 +597,36 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get appsDetailsAction => '属性';
 
   @override
+  String get appsPermissionAction => '权限';
+
+  @override
+  String get appsPermissionTitle => '应用权限';
+
+  @override
+  String get appsPermissionRuntime => '可以修改';
+
+  @override
+  String get appsPermissionInstall => '安装时授予';
+
+  @override
+  String get appsPermissionGranted => '已授予';
+
+  @override
+  String get appsPermissionDenied => '未授予';
+
+  @override
+  String get appsPermissionEmpty => '没有读到权限';
+
+  @override
+  String get appsPermissionShellBlocked =>
+      '这台设备禁止 shell 修改运行时权限。请在开发者选项打开「关闭权限监控」或「USB 调试（安全设置）」，重启后再试。';
+
+  @override
+  String appsPermissionLoadFailed(Object error) {
+    return '读取权限失败：$error';
+  }
+
+  @override
   String get appsDebugOnlyHint => '数据目录只有 debug 应用可以读取和修改。';
 
   @override
