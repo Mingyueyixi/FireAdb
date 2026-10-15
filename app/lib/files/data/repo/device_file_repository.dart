@@ -7,6 +7,7 @@ import 'package:libadb/libadb.dart';
 import '../../../connection/local_adb_target.dart';
 import '../../../connection/model/connected_device.dart';
 import '../../../files/remote_file_export.dart';
+import '../../../shell/root_shell.dart';
 import '../bean/remote_file.dart';
 import '../source/remote_file_commands.dart';
 
@@ -50,6 +51,13 @@ class DeviceFileRepository {
   }
 
   Future<List<RemoteFile>> list(String directory) async {
+    if (commandUsesSu(_device, SuScope.files)) {
+      final output = await _shell(rootListCommand(directory));
+      final files = parseRootList(output, directory);
+      final failure = rootListFailure(output);
+      if (failure != null && files.isEmpty) throw StateError(failure);
+      return _markDirectoryLinks(files);
+    }
     final sync = await _openSync();
     final List<RemoteFile> files;
     try {
@@ -405,7 +413,9 @@ class DeviceFileRepository {
   }
 
   Future<String> _shell(String command, {Duration? timeout}) async {
-    final shell = await _device.openShell(command);
+    final shell = await _device.openShell(
+      await rootCommand(_device, command, scope: SuScope.files),
+    );
     _shellSession = shell;
     try {
       _ensureActive(null);

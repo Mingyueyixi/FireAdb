@@ -776,6 +776,11 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   }
 
   @override
+  String appsUninstallRemains(Object name) {
+    return '$name is still installed. Uninstall did not finish.';
+  }
+
+  @override
   String get appsFreezeSystemTitle => 'Freeze system app';
 
   @override
@@ -1144,9 +1149,6 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String get filesLocationsTemp => 'Temp';
 
   @override
-  String get filesLocationsRoot => 'Root';
-
-  @override
   String get captureDirectoryUnavailable =>
       'The app directory is unavailable, so the file cannot be saved';
 
@@ -1407,4 +1409,43 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get aboutVersionUnknown => 'Version information is not available yet';
+
+  @override
+  String get deviceAdbRoot => 'ADB Root';
+
+  @override
+  String get deviceAdbRootHelp =>
+      'Connect this device with adb root. If that cannot connect, the normal connection stays.';
+
+  @override
+  String get deviceAdbRootKeptNormal =>
+      'This device cannot use adb root, so the normal connection stays';
+
+  @override
+  String get deviceAdbRootDisconnected =>
+      'The device did not come back after adb root. Connect it again';
+
+  @override
+  String get deviceSuCommand => 'su command';
+
+  @override
+  String get deviceSuCommandHelp =>
+      'The su command name or path on this device. File management and app management choose separately whether to use it.';
+
+  @override
+  String get deviceSuCommandInvalid => 'Enter the su command name or path';
+
+  @override
+  String get suMode => 'su mode';
+
+  @override
+  String get filesSuModeHelp =>
+      'Listing, search, delete, rename, copy, move, create, and permission changes run through su. Open, edit, upload, and export use the current connection\'s identity. Copied and newly created files are owned by root.';
+
+  @override
+  String get appsSuModeHelp =>
+      'Uninstall runs through su. Freeze and APK export use the current connection\'s identity.';
+
+  @override
+  String get deviceSuFailed => 'su did not get root';
 }

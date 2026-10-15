@@ -408,6 +408,12 @@
       "name": {}
     }
   },
+  "appsUninstallRemains": "{name} 还在，卸载没有完成。",
+  "@appsUninstallRemains": {
+    "placeholders": {
+      "name": {}
+    }
+  },
   "appsFreezeSystemTitle": "冻结系统应用",
   "appsFreezeSystemConfirm": "{name}（{packageName}）是系统应用。冻结后可能影响相关功能，确定继续吗？",
   "@appsFreezeSystemConfirm": {
@@ -733,7 +739,6 @@
   "filesTaskSave": "正在保存",
   "filesLocationsStorage": "内部存储",
   "filesLocationsTemp": "临时目录",
-  "filesLocationsRoot": "根目录",
   "captureDirectoryUnavailable": "找不到应用目录，无法保存文件",
   "captureSaved": "已保存到 {path}",
   "@captureSaved": {
@@ -886,5 +891,16 @@
     }
   },
   "aboutDescription": "跨平台 ADB 工具箱。协议自实现，不依赖系统 adb。",
-  "aboutVersionUnknown": "版本信息还不可用"
+  "aboutVersionUnknown": "版本信息还不可用",
+  "deviceAdbRoot": "ADB Root",
+  "deviceAdbRootHelp": "用 adb root 连接这台设备。连不上就保持普通连接。",
+  "deviceAdbRootKeptNormal": "这台设备不能 adb root，已保持普通连接",
+  "deviceAdbRootDisconnected": "adb root 后没有连上，请重新连接设备",
+  "deviceSuCommand": "su 命令",
+  "deviceSuCommandHelp": "这台设备上 su 的命令名或路径。文件管理和应用管理各自决定要不要用。",
+  "deviceSuCommandInvalid": "请输入 su 的命令名或路径",
+  "suMode": "su 模式",
+  "filesSuModeHelp": "列目录、搜索、删除、重命名、复制、移动、新建和改权限用 su 执行。打开、编辑、上传和导出按当前连接的身份执行。复制和新建的文件属于 root。",
+  "appsSuModeHelp": "卸载用 su 执行。冻结和导出 APK 按当前连接的身份执行。",
+  "deviceSuFailed": "su 没有取得 root"
 }

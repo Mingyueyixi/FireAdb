@@ -1415,6 +1415,12 @@ abstract class FireAdbLocalizations {
   /// **'已卸载 {name}'**
   String appsUninstallSucceeded(Object name);
 
+  /// No description provided for @appsUninstallRemains.
+  ///
+  /// In zh, this message translates to:
+  /// **'{name} 还在，卸载没有完成。'**
+  String appsUninstallRemains(Object name);
+
   /// No description provided for @appsFreezeSystemTitle.
   ///
   /// In zh, this message translates to:
@@ -2003,12 +2009,6 @@ abstract class FireAdbLocalizations {
   /// **'临时目录'**
   String get filesLocationsTemp;
 
-  /// No description provided for @filesLocationsRoot.
-  ///
-  /// In zh, this message translates to:
-  /// **'根目录'**
-  String get filesLocationsRoot;
-
   /// No description provided for @captureDirectoryUnavailable.
   ///
   /// In zh, this message translates to:
@@ -2452,6 +2452,72 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'版本信息还不可用'**
   String get aboutVersionUnknown;
+
+  /// No description provided for @deviceAdbRoot.
+  ///
+  /// In zh, this message translates to:
+  /// **'ADB Root'**
+  String get deviceAdbRoot;
+
+  /// No description provided for @deviceAdbRootHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'用 adb root 连接这台设备。连不上就保持普通连接。'**
+  String get deviceAdbRootHelp;
+
+  /// No description provided for @deviceAdbRootKeptNormal.
+  ///
+  /// In zh, this message translates to:
+  /// **'这台设备不能 adb root，已保持普通连接'**
+  String get deviceAdbRootKeptNormal;
+
+  /// No description provided for @deviceAdbRootDisconnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'adb root 后没有连上，请重新连接设备'**
+  String get deviceAdbRootDisconnected;
+
+  /// No description provided for @deviceSuCommand.
+  ///
+  /// In zh, this message translates to:
+  /// **'su 命令'**
+  String get deviceSuCommand;
+
+  /// No description provided for @deviceSuCommandHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'这台设备上 su 的命令名或路径。文件管理和应用管理各自决定要不要用。'**
+  String get deviceSuCommandHelp;
+
+  /// No description provided for @deviceSuCommandInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'请输入 su 的命令名或路径'**
+  String get deviceSuCommandInvalid;
+
+  /// No description provided for @suMode.
+  ///
+  /// In zh, this message translates to:
+  /// **'su 模式'**
+  String get suMode;
+
+  /// No description provided for @filesSuModeHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'列目录、搜索、删除、重命名、复制、移动、新建和改权限用 su 执行。打开、编辑、上传和导出按当前连接的身份执行。复制和新建的文件属于 root。'**
+  String get filesSuModeHelp;
+
+  /// No description provided for @appsSuModeHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'卸载用 su 执行。冻结和导出 APK 按当前连接的身份执行。'**
+  String get appsSuModeHelp;
+
+  /// No description provided for @deviceSuFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'su 没有取得 root'**
+  String get deviceSuFailed;
 }
 
 class _FireAdbLocalizationsDelegate

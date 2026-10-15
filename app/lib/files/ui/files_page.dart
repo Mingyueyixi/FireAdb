@@ -7,6 +7,8 @@ import '../../app_feedback.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../l10n/generated/fire_adb_localizations.dart';
 import '../../log/app_log.dart';
+import '../../shell/device_root_store.dart';
+import '../../shell/su_mode_chip.dart';
 import '../data/bean/remote_file.dart';
 import '../data/source/remote_file_commands.dart';
 import '../files_controller.dart';
@@ -279,25 +281,33 @@ class _FilesPageState extends State<FilesPage> {
               ],
             ),
           ),
-          SizedBox(
-            height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
+            child: Row(
               children: <Widget>[
-                ActionChip(
-                  label: Text(l10n.filesLocationsStorage),
-                  onPressed: () => controller.open(remoteStoragePath),
+                Expanded(
+                  child: SizedBox(
+                    height: 40,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: <Widget>[
+                        ActionChip(
+                          label: Text(l10n.filesLocationsStorage),
+                          onPressed: () => controller.open(remoteStoragePath),
+                        ),
+                        const SizedBox(width: 8),
+                        ActionChip(
+                          label: Text(l10n.filesLocationsTemp),
+                          onPressed: () => controller.open(remoteTempPath),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                ActionChip(
-                  label: Text(l10n.filesLocationsTemp),
-                  onPressed: () => controller.open(remoteTempPath),
-                ),
-                const SizedBox(width: 8),
-                ActionChip(
-                  label: Text(l10n.filesLocationsRoot),
-                  onPressed: () => controller.open('/'),
+                SuModeChip(
+                  serial: widget.serial,
+                  scope: SuScope.files,
+                  inline: true,
                 ),
               ],
             ),
@@ -387,6 +397,8 @@ class _FilesPageState extends State<FilesPage> {
             l10n.filesLoadFailed(
               loadError is DeviceNotConnectedException
                   ? l10n.deviceOverviewNotConnected
+                  : loadError is StateError
+                  ? loadError.message
                   : '$loadError',
             ),
             style: TextStyle(color: theme.colorScheme.error),
@@ -400,7 +412,7 @@ class _FilesPageState extends State<FilesPage> {
       );
     }
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+      padding: const EdgeInsets.fromLTRB(8, 0, 0, 16),
       itemCount: visible.length,
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, index) {

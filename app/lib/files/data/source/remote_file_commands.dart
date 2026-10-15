@@ -110,6 +110,85 @@ Set<String> parseDirectoryProbe(String output) {
       .toSet();
 }
 
+/// Root 下列目录。sync 的身份是 adbd，su 设备上读不到受保护目录。
+String rootListCommand(String directory) {
+  return 'ls -lA ${quoteRemotePath(normalizeRemotePath(directory))}';
+}
+
+final _rootListLine = RegExp(
+  r'^([bcdlps-])([rwxstST-]{9})\s+\d+\s+\S+\s+\S+\s+(\d+)\s+'
+  r'(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)\s+(.+)$',
+);
+
+List<RemoteFile> parseRootList(String output, String directory) {
+  final files = <RemoteFile>[];
+  for (final raw in output.split(RegExp(r'\r?\n'))) {
+    final line = raw.trim();
+    final match = _rootListLine.firstMatch(line);
+    if (match == null) continue;
+    var name = match.group(6)!;
+    final link = name.indexOf(' -> ');
+    if (link >= 0) name = name.substring(0, link);
+    if (!isSafeRemoteName(name)) continue;
+    files.add(
+      RemoteFile(
+        name: name,
+        path: joinRemotePath(directory, name),
+        mode: _modeFromList(match.group(1)!, match.group(2)!),
+        size: int.tryParse(match.group(3)!) ?? 0,
+        mtime: _listTime(match.group(4)!, match.group(5)!),
+      ),
+    );
+  }
+  return files;
+}
+
+/// `ls` 没解析出文件，但输出里有别的内容时，那是 su 或 ls 的报错。
+String? rootListFailure(String output) {
+  final lines = <String>[];
+  for (final raw in output.split(RegExp(r'\r?\n'))) {
+    final line = raw.trim();
+    if (line.isEmpty || line.startsWith('total ')) continue;
+    if (_rootListLine.hasMatch(line)) continue;
+    lines.add(line);
+  }
+  if (lines.isEmpty) return null;
+  return lines.join('\n');
+}
+
+int _modeFromList(String type, String perms) {
+  var mode = switch (type) {
+    'd' => 0x4000,
+    'l' => 0xa000,
+    'b' => 0x6000,
+    'c' => 0x2000,
+    'p' => 0x1000,
+    's' => 0xc000,
+    _ => 0x8000,
+  };
+  for (var index = 0; index < 9 && index < perms.length; index++) {
+    final letter = perms[index];
+    if (letter == '-' || letter == 'S' || letter == 'T') continue;
+    mode |= 1 << (8 - index);
+  }
+  return mode;
+}
+
+int _listTime(String date, String clock) {
+  final day = date.split('-');
+  final time = clock.split(':');
+  if (day.length != 3 || time.length < 2) return 0;
+  final parsed = DateTime(
+    int.parse(day[0]),
+    int.parse(day[1]),
+    int.parse(day[2]),
+    int.parse(time[0]),
+    int.parse(time[1]),
+    time.length > 2 ? int.parse(time[2]) : 0,
+  );
+  return parsed.millisecondsSinceEpoch ~/ 1000;
+}
+
 String escapeFindName(String keyword) {
   return keyword
       .replaceAll(r'\', r'\\')

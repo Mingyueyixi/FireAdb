@@ -649,6 +649,8 @@ class FilesController extends GetxController {
         title: l10n.filesActionFailed,
         message: taskError is DeviceNotConnectedException
             ? l10n.deviceOverviewNotConnected
+            : taskError is StateError
+            ? taskError.message
             : '$taskError',
         isError: true,
       );

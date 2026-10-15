@@ -331,6 +331,9 @@ class AppsController extends GetxController {
           success: l10n.appsUninstallSucceeded(app.displayName),
         );
         await reload();
+        if (result.failed == 0) {
+          _throwIfUninstallRemains(l10n, <InstalledApp>[app]);
+        }
         return notice;
       },
     );
@@ -418,6 +421,9 @@ class AppsController extends GetxController {
           exitSelection: true,
         );
         await reload();
+        if (result.failed == 0) {
+          _throwIfUninstallRemains(l10n, targets);
+        }
         return notice;
       },
     );
@@ -657,7 +663,7 @@ class AppsController extends GetxController {
       throw result.firstError ?? StateError(l10n.appsActionFailed);
     }
     final message = result.failed > 0
-        ? l10n.appsBatchPartial(result.succeeded, result.failed)
+        ? _partialFailureMessage(l10n, result)
         : result.cancelled
         ? l10n.appsTaskCancelledDone(result.succeeded)
         : success;
@@ -689,9 +695,7 @@ class AppsController extends GetxController {
       if (_closed) return null;
       return AppNotice(
         title: l10n.appsActionFailed,
-        message: taskError is DeviceNotConnectedException
-            ? l10n.deviceOverviewNotConnected
-            : '$taskError',
+        message: _operationErrorText(l10n, taskError),
         isError: true,
       );
     } finally {
@@ -701,6 +705,35 @@ class AppsController extends GetxController {
         _publish(force: true);
       }
     }
+  }
+
+  void _throwIfUninstallRemains(
+    FireAdbLocalizations l10n,
+    List<InstalledApp> targets,
+  ) {
+    if (_closed || error.value != null) return;
+    final names = <String>[
+      for (final item in targets)
+        if (apps.any((app) => app.packageName == item.packageName))
+          item.displayName,
+    ];
+    if (names.isEmpty) return;
+    throw StateError(l10n.appsUninstallRemains(names.join('、')));
+  }
+
+  String _partialFailureMessage(FireAdbLocalizations l10n, _BatchOutcome result) {
+    final summary = l10n.appsBatchPartial(result.succeeded, result.failed);
+    final detail = result.firstError;
+    if (detail == null) return summary;
+    return '$summary\n${_operationErrorText(l10n, detail)}';
+  }
+
+  String _operationErrorText(FireAdbLocalizations l10n, Object error) {
+    return switch (error) {
+      DeviceNotConnectedException() => l10n.deviceOverviewNotConnected,
+      StateError(:final message) when message.isNotEmpty => message,
+      _ => '$error',
+    };
   }
 
   void requestCancel() {

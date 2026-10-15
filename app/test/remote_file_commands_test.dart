@@ -67,6 +67,26 @@ Permission denied
     expect(decodeProcessText(utf16).trim(), encoded);
   });
 
+  test('root 下列目录解析 toybox ls', () {
+    final files = parseRootList('''
+total 8
+drwxr-xr-x 2 root root 4096 2026-10-14 11:20 data
+-rw-r--r-- 1 root root 12 2026-10-14 11:20:03 note.txt
+lrwxrwxrwx 1 root root 7 2026-10-14 11:20 link -> /system
+../skip
+''', '/data/data/com.example');
+    expect(files.map((file) => file.name), ['data', 'note.txt', 'link']);
+    expect(files[0].isDirectory, isTrue);
+    expect(files[0].path, '/data/data/com.example/data');
+    expect(files[1].size, 12);
+    expect(files[1].isDirectory, isFalse);
+    expect(files[2].isLink, isTrue);
+    expect(files[1].mtime, isNot(0));
+    expect(rootListFailure(''), isNull);
+    expect(rootListFailure('total 0'), isNull);
+    expect(rootListFailure('su: not found'), 'su: not found');
+  });
+
   test('空文件和文本判断', () {
     expect(looksLikeBinary(<int>[0x68, 0x69]), isFalse);
     expect(looksLikeBinary(<int>[0x68, 0x00]), isTrue);

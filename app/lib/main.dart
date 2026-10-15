@@ -9,6 +9,8 @@ import 'l10n/generated/fire_adb_localizations.dart';
 import 'log/app_log.dart';
 import 'settings/app_settings_store.dart';
 import 'settings/settings_page.dart';
+import 'shell/device_root.dart';
+import 'shell/device_root_store.dart';
 import 'workspace/workspace_controller.dart';
 import 'workspace/workspace_page.dart';
 
@@ -30,6 +32,10 @@ Future<void> main() async {
     log.severe('清理过期日志失败', error, stackTrace);
   }
   Get.put<AppSettingsStore>(settings, permanent: true);
+  final deviceRoot = DeviceRootStore();
+  await deviceRoot.load();
+  Get.put<DeviceRootStore>(deviceRoot, permanent: true);
+  manager.afterConnect = activateSavedAdbRoot;
   Get.put<HomeController>(HomeController(), permanent: true);
   runApp(const FireAdbApp());
 }

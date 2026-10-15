@@ -187,6 +187,7 @@ class _AppsPageState extends State<AppsPage> {
       return Column(
         children: <Widget>[
           AppsToolbar(
+            serial: widget.serial,
             search: controller.search,
             filter: controller.filter.value,
             onFilter: controller.setFilter,

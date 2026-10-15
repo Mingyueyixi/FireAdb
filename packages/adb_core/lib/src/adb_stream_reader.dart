@@ -6,6 +6,7 @@ library;
 
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:typed_data';
 
 class _ReadRequest {
@@ -55,14 +56,20 @@ class AdbSizedReader {
 
   void _onDone() {
     _done = true;
+    _serve();
     if (_rawMode) {
       unawaited(_rawController?.close());
       return;
     }
-    final left = _buffer.length;
-    final err = StateError('流已结束，仍有 $left 字节未消费');
+    if (_requests.isEmpty) return;
+    final pending = _requests.first.length;
+    final preview = _buffer.isEmpty
+        ? ''
+        : utf8.decode(Uint8List.fromList(_buffer), allowMalformed: true).trim();
+    final err = StateError(
+      preview.isEmpty ? '流已结束，无法读取 $pending 字节' : preview,
+    );
     _failAll(err, StackTrace.current);
-    _buffer.clear();
   }
 
   void _failAll(Object error, StackTrace stack) {

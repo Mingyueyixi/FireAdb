@@ -165,6 +165,17 @@ void main() {
       await reader.close();
     });
 
+    test('流结束后剩余字节仍可取出', () async {
+      final controller = StreamController<List<int>>();
+      final reader = AdbSizedReader(controller.stream);
+      controller.add(const <int>[9, 8, 7]);
+      await controller.close();
+      expect(
+        await reader.takeRemainingStream().expand((chunk) => chunk).toList(),
+        <int>[9, 8, 7],
+      );
+    });
+
     test('流结束后未消费数据抛错', () async {
       final reader = AdbSizedReader(chunkStream([
         [1, 2]

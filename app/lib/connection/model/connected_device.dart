@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -27,6 +28,35 @@ class ConnectedDevice {
   }
 
   bool get isConnected => _device?.isConnected ?? true;
+
+  /// 经本机 adb server 转发时，`adb root` 重启后由 server 重新接上设备。
+  bool get usesHost => _device == null;
+
+  /// 打开任意设备服务并读完一行输出，例如 `root:`。
+  ///
+  /// `adb root` 写完提示后不会自己关连接，要等这边关掉才会重启。
+  /// 读到换行或超时就返回已收到的内容，避免一直等对端关闭。
+  Future<String> serviceText(String service) {
+    return _serviceText(service).timeout(const Duration(seconds: 4));
+  }
+
+  Future<String> _serviceText(String service) async {
+    final device = _device;
+    if (device != null) {
+      final stream = await device.connection.open(service);
+      try {
+        return await collectServiceText(stream.readStream());
+      } finally {
+        await stream.close();
+      }
+    }
+    final session = await _hostClient!.openDeviceService(_adbSerial!, service);
+    try {
+      return await collectServiceText(session.readStream);
+    } finally {
+      await session.close();
+    }
+  }
 
   Future<ConnectedShell> openShell(String command) async {
     final device = _device;
@@ -179,4 +209,35 @@ class ConnectedShell {
     }
     await _hostShell!.close();
   }
+}
+
+/// 读到第一行，或对端关闭。没有换行时最多等 3 秒，已收到的字节仍然返回。
+Future<String> collectServiceText(Stream<List<int>> stream) async {
+  final bytes = <int>[];
+  final done = Completer<void>();
+  final subscription = stream.listen(
+    (chunk) {
+      if (chunk.isEmpty) return;
+      bytes.addAll(chunk);
+      if (!done.isCompleted && bytes.contains(0x0a)) done.complete();
+    },
+    onError: (Object error, StackTrace stack) {
+      if (bytes.isNotEmpty) {
+        if (!done.isCompleted) done.complete();
+        return;
+      }
+      if (!done.isCompleted) done.completeError(error, stack);
+    },
+    onDone: () {
+      if (!done.isCompleted) done.complete();
+    },
+  );
+  try {
+    await done.future.timeout(const Duration(seconds: 3));
+  } on TimeoutException {
+    if (bytes.isEmpty) rethrow;
+  } finally {
+    await subscription.cancel();
+  }
+  return utf8.decode(bytes, allowMalformed: true);
 }

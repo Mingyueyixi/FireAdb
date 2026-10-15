@@ -749,6 +749,11 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   }
 
   @override
+  String appsUninstallRemains(Object name) {
+    return '$name 还在，卸载没有完成。';
+  }
+
+  @override
   String get appsFreezeSystemTitle => '冻结系统应用';
 
   @override
@@ -1116,9 +1121,6 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get filesLocationsTemp => '临时目录';
 
   @override
-  String get filesLocationsRoot => '根目录';
-
-  @override
   String get captureDirectoryUnavailable => '找不到应用目录，无法保存文件';
 
   @override
@@ -1365,4 +1367,38 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get aboutVersionUnknown => '版本信息还不可用';
+
+  @override
+  String get deviceAdbRoot => 'ADB Root';
+
+  @override
+  String get deviceAdbRootHelp => '用 adb root 连接这台设备。连不上就保持普通连接。';
+
+  @override
+  String get deviceAdbRootKeptNormal => '这台设备不能 adb root，已保持普通连接';
+
+  @override
+  String get deviceAdbRootDisconnected => 'adb root 后没有连上，请重新连接设备';
+
+  @override
+  String get deviceSuCommand => 'su 命令';
+
+  @override
+  String get deviceSuCommandHelp => '这台设备上 su 的命令名或路径。文件管理和应用管理各自决定要不要用。';
+
+  @override
+  String get deviceSuCommandInvalid => '请输入 su 的命令名或路径';
+
+  @override
+  String get suMode => 'su 模式';
+
+  @override
+  String get filesSuModeHelp =>
+      '列目录、搜索、删除、重命名、复制、移动、新建和改权限用 su 执行。打开、编辑、上传和导出按当前连接的身份执行。复制和新建的文件属于 root。';
+
+  @override
+  String get appsSuModeHelp => '卸载用 su 执行。冻结和导出 APK 按当前连接的身份执行。';
+
+  @override
+  String get deviceSuFailed => 'su 没有取得 root';
 }

@@ -22,6 +22,10 @@ class ConnectionManager extends GetxService {
   static const String _preferSdkAdbServerKey = 'prefer_sdk_adb_server';
   static const String _adbServerPortKey = 'fire_adb_server_port';
 
+  /// 新连接登记后调用。用来按设备尝试 adb root，失败则保持普通连接。
+  Future<void> Function(String serial)? afterConnect;
+  var _skipAfterConnect = 0;
+
   final RxMap<String, ConnectedDevice> _devices =
       <String, ConnectedDevice>{}.obs;
   final RxMap<String, DeviceProfile> _profiles = <String, DeviceProfile>{}.obs;
@@ -285,7 +289,11 @@ class ConnectionManager extends GetxService {
   /// 与 [MdnsBrowser.discover] 的区别：
   /// - 本方法：直接 TCP 握手，**不依赖 mDNS**，只要端口通即可连
   /// - mDNS 发现：仅能发现**主动广播** `_adb-tls-pairing._tcp` 等服务的设备
-  Future<AdbDevice> connectHost(String host, int port) async {
+  Future<AdbDevice> connectHost(
+    String host,
+    int port, {
+    bool rememberManual = true,
+  }) async {
     await init();
     _resolveSigners();
     final device = await adbConnectTcp(host, port: port, signers: _signers);
@@ -296,7 +304,7 @@ class ConnectionManager extends GetxService {
       port: port,
       label: _savedHostLabel(host, port) ?? host,
     );
-    await rememberManualEndpoint(host, port);
+    if (rememberManual) await rememberManualEndpoint(host, port);
     await _registerConnection(profile, connected);
     return device;
   }
@@ -438,6 +446,43 @@ class ConnectionManager extends GetxService {
     return device;
   }
 
+  /// adbd 因 root / unroot 重启后，按原来的地址把直连设备接回来。
+  /// 经本机 adb server 的连接不用换对象，server 会自己重连。
+  Future<ConnectedDevice?> reconnectDirect(String serial) async {
+    final current = deviceOf(serial);
+    if (current != null && current.usesHost) return current;
+    final profile = profileOf(serial);
+    if (profile == null) return null;
+    _skipAfterConnect++;
+    try {
+      final host = profile.host;
+      final port = profile.port;
+      final usbAddress = profile.usbAddress;
+      final adbSerial = profile.adbSerial;
+      await disconnect(serial);
+      if (host != null && port != null) {
+        final adb = await connectHost(host, port, rememberManual: false);
+        return deviceOf(adb.serial);
+      }
+      if (usbAddress == null && adbSerial == null) return null;
+      final usb = await _matchUsb(usbAddress, adbSerial);
+      if (usb == null) return null;
+      final adb = await connectUsb(usb);
+      return deviceOf(adb.serial);
+    } finally {
+      _skipAfterConnect--;
+    }
+  }
+
+  Future<UsbAdbDevice?> _matchUsb(String? address, String? serial) async {
+    final devices = await listUsbAdbDevices();
+    for (final usb in devices) {
+      if (address != null && usb.address == address) return usb;
+      if (serial != null && usb.serialNumber == serial) return usb;
+    }
+    return null;
+  }
+
   Future<void> disconnect(String serial) async {
     final device = _devices.remove(serial);
     _profiles.remove(serial);
@@ -463,8 +508,19 @@ class ConnectionManager extends GetxService {
     _profiles[profile.serial] = profile;
     _devices[device.serial] = device;
     await _remember(profile);
-    if (!profile.hasDeviceName) {
-      unawaited(_refreshDeviceName(profile, device));
+    final hook = afterConnect;
+    if (hook != null && _skipAfterConnect == 0) {
+      await hook(device.serial);
+    }
+    if (deviceOf(profile.serial) == null) {
+      throw StateError('adb root 后设备没有连上');
+    }
+    final current = deviceOf(profile.serial);
+    final currentProfile = profileOf(profile.serial);
+    if (current != null &&
+        currentProfile != null &&
+        !currentProfile.hasDeviceName) {
+      unawaited(_refreshDeviceName(currentProfile, current));
     }
   }
 

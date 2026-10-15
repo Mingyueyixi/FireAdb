@@ -51,6 +51,7 @@ class FileListTile extends StatelessWidget {
       if ((file.mode & 0x1ff) != 0) formatPermission(file.mode),
     ].join('  ');
     return ListTile(
+      contentPadding: const EdgeInsets.only(left: 16),
       leading: selecting
           ? Checkbox(
               value: selected,
@@ -72,43 +73,49 @@ class FileListTile extends StatelessWidget {
             ),
       onTap: busy ? null : onTap,
       onLongPress: busy ? null : onStartSelecting,
-      trailing: PopupMenuButton<FileTileAction>(
-        enabled: !busy,
-        onSelected: onAction,
-        itemBuilder: (context) => <PopupMenuEntry<FileTileAction>>[
-          if (file.canEnter)
-            PopupMenuItem(
-              value: FileTileAction.open,
-              child: Text(l10n.filesOpen),
+      trailing: selecting
+          ? null
+          : PopupMenuButton<FileTileAction>(
+              padding: EdgeInsets.zero,
+              enabled: !busy,
+              onSelected: onAction,
+              itemBuilder: (context) => <PopupMenuEntry<FileTileAction>>[
+                if (file.canEnter)
+                  PopupMenuItem(
+                    value: FileTileAction.open,
+                    child: Text(l10n.filesOpen),
+                  ),
+                PopupMenuItem(
+                  value: FileTileAction.export,
+                  child: Text(l10n.filesExport),
+                ),
+                PopupMenuItem(
+                  value: FileTileAction.rename,
+                  child: Text(l10n.filesRename),
+                ),
+                PopupMenuItem(
+                  value: FileTileAction.copy,
+                  child: Text(l10n.filesCopy),
+                ),
+                PopupMenuItem(
+                  value: FileTileAction.cut,
+                  child: Text(l10n.filesCut),
+                ),
+                if (!file.canEnter)
+                  PopupMenuItem(
+                    value: FileTileAction.edit,
+                    child: Text(l10n.filesEdit),
+                  ),
+                PopupMenuItem(
+                  value: FileTileAction.permission,
+                  child: Text(l10n.filesPermission),
+                ),
+                PopupMenuItem(
+                  value: FileTileAction.delete,
+                  child: Text(l10n.filesDelete),
+                ),
+              ],
             ),
-          PopupMenuItem(
-            value: FileTileAction.export,
-            child: Text(l10n.filesExport),
-          ),
-          PopupMenuItem(
-            value: FileTileAction.rename,
-            child: Text(l10n.filesRename),
-          ),
-          PopupMenuItem(
-            value: FileTileAction.copy,
-            child: Text(l10n.filesCopy),
-          ),
-          PopupMenuItem(value: FileTileAction.cut, child: Text(l10n.filesCut)),
-          if (!file.canEnter)
-            PopupMenuItem(
-              value: FileTileAction.edit,
-              child: Text(l10n.filesEdit),
-            ),
-          PopupMenuItem(
-            value: FileTileAction.permission,
-            child: Text(l10n.filesPermission),
-          ),
-          PopupMenuItem(
-            value: FileTileAction.delete,
-            child: Text(l10n.filesDelete),
-          ),
-        ],
-      ),
     );
   }
 

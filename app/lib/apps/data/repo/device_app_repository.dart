@@ -7,6 +7,7 @@ import 'package:libadb/libadb.dart';
 import '../../../connection/local_adb_target.dart';
 import '../../../connection/model/connected_device.dart';
 import '../../../files/remote_file_export.dart';
+import '../../../shell/root_shell.dart';
 import '../bean/app_freeze.dart';
 import '../bean/installed_app.dart';
 import '../source/app_inventory.dart';
@@ -224,7 +225,11 @@ class DeviceAppRepository {
   Future<void> uninstall(String packageName, {bool keepData = false}) async {
     final options = keepData ? ' -k' : '';
     final output = await _shell(
-      'pm uninstall$options ${quoteShellArg(packageName)}',
+      await rootCommand(
+        _device,
+        'pm uninstall$options ${quoteShellArg(packageName)}',
+        scope: SuScope.apps,
+      ),
     );
     ensurePmSuccess(output);
   }

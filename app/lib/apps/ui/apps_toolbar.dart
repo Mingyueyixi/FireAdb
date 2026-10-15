@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../shell/device_root_store.dart';
+import '../../shell/su_mode_chip.dart';
 import '../data/bean/installed_app.dart';
 
 class AppsToolbar extends StatelessWidget {
   const AppsToolbar({
     super.key,
+    required this.serial,
     required this.search,
     required this.filter,
     required this.onFilter,
@@ -24,6 +27,7 @@ class AppsToolbar extends StatelessWidget {
     required this.onUninstall,
   });
 
+  final String serial;
   final TextEditingController search;
   final AppListFilter filter;
   final ValueChanged<AppListFilter> onFilter;
@@ -60,7 +64,8 @@ class AppsToolbar extends StatelessWidget {
               isDense: true,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
+          SuModeChip(serial: serial, scope: SuScope.apps),
           Wrap(
             spacing: 8,
             runSpacing: 8,

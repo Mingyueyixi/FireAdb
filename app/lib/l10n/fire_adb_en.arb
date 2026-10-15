@@ -408,6 +408,12 @@
       "name": {}
     }
   },
+  "appsUninstallRemains": "{name} is still installed. Uninstall did not finish.",
+  "@appsUninstallRemains": {
+    "placeholders": {
+      "name": {}
+    }
+  },
   "appsFreezeSystemTitle": "Freeze system app",
   "appsFreezeSystemConfirm": "{name} ({packageName}) is a system app. Freezing it may break related features. Continue?",
   "@appsFreezeSystemConfirm": {
@@ -733,7 +739,6 @@
   "filesTaskSave": "Saving",
   "filesLocationsStorage": "Internal storage",
   "filesLocationsTemp": "Temp",
-  "filesLocationsRoot": "Root",
   "captureDirectoryUnavailable": "The app directory is unavailable, so the file cannot be saved",
   "captureSaved": "Saved to {path}",
   "@captureSaved": {
@@ -886,5 +891,16 @@
     }
   },
   "aboutDescription": "A cross-platform ADB toolbox. The protocol is implemented in the app and does not use the system adb binary.",
-  "aboutVersionUnknown": "Version information is not available yet"
+  "aboutVersionUnknown": "Version information is not available yet",
+  "deviceAdbRoot": "ADB Root",
+  "deviceAdbRootHelp": "Connect this device with adb root. If that cannot connect, the normal connection stays.",
+  "deviceAdbRootKeptNormal": "This device cannot use adb root, so the normal connection stays",
+  "deviceAdbRootDisconnected": "The device did not come back after adb root. Connect it again",
+  "deviceSuCommand": "su command",
+  "deviceSuCommandHelp": "The su command name or path on this device. File management and app management choose separately whether to use it.",
+  "deviceSuCommandInvalid": "Enter the su command name or path",
+  "suMode": "su mode",
+  "filesSuModeHelp": "Listing, search, delete, rename, copy, move, create, and permission changes run through su. Open, edit, upload, and export use the current connection's identity. Copied and newly created files are owned by root.",
+  "appsSuModeHelp": "Uninstall runs through su. Freeze and APK export use the current connection's identity.",
+  "deviceSuFailed": "su did not get root"
 }
