@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:adb_usb/src/libusb_binary.dart';
+import 'package:libadb/src/libusb_binary.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -60,8 +60,8 @@ void main() {
   });
 
   test('仓库里的 Windows DLL 架构与文件名一致', () {
-    final root = Directory('packages/adb_usb').existsSync()
-        ? 'packages/adb_usb'
+    final root = Directory('packages/libadb').existsSync()
+        ? 'packages/libadb'
         : '.';
     expect(_peMachine('$root/vendor/windows/x64/libusb-1.0.dll'), 0x8664);
     expect(_peMachine('$root/vendor/windows/arm64/libusb-1.0.dll'), 0xAA64);

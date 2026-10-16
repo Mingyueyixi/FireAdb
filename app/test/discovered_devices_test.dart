@@ -70,4 +70,38 @@ void main() {
       ],
     );
   });
+
+  test('无线设备连续两轮不再出现后从列表去掉', () {
+    final misses = <String, int>{};
+    final phone = MdnsService(
+      instanceName: 'adb-phone',
+      serviceType: adbServiceTypeConnect,
+      port: 37055,
+      address: InternetAddress('192.0.2.10'),
+    );
+    final kept = settleDiscoveredServices(
+      current: <MdnsService>[phone],
+      confirmed: const <MdnsService>[],
+      misses: misses,
+      heard: false,
+    );
+    expect(kept, <MdnsService>[phone]);
+
+    final gone = settleDiscoveredServices(
+      current: kept,
+      confirmed: const <MdnsService>[],
+      misses: misses,
+      heard: false,
+    );
+    expect(gone, isEmpty);
+
+    final again = settleDiscoveredServices(
+      current: <MdnsService>[phone],
+      confirmed: <MdnsService>[phone],
+      misses: misses,
+      heard: true,
+    );
+    expect(again, <MdnsService>[phone]);
+    expect(misses, isEmpty);
+  });
 }

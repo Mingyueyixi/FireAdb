@@ -1,7 +1,7 @@
 # adb_core
 
 纯 Dart 实现的 **ADB 协议引擎**。不调用系统 `adb` 二进制，零平台依赖（仅依赖 `pointycastle`），
-可同时被 Flutter 应用与 `package:adb_usb` 复用。
+可单独使用。桌面 USB 不在这个包里。
 
 ## 模块
 

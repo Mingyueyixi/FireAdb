@@ -23,7 +23,7 @@ class LibusbBinaryPlan {
   }
 }
 
-/// 代码资源 id 的包内名字。完整 id 是 `package:adb_usb/src/libusb.dart`。
+/// 代码资源 id 的包内名字。完整 id 是 `package:libadb/src/libusb.dart`。
 const String libusbCodeAssetName = 'src/libusb.dart';
 
 /// 已经放进仓库、构建时应当拷贝的相对路径。没有这份文件时返回 null。

@@ -31,7 +31,6 @@ void main() {
     Get.put<HomeController>(
       HomeController(
         hostClient: hostClient,
-        listUsbDevices: () async => const <UsbAdbDevice>[],
         discoverServices: (onUpdate) async => const <MdnsService>[],
       ),
     );
@@ -107,7 +106,6 @@ void main() {
     Get.put<AppLocaleController>(localeController, permanent: true);
     final homeController = HomeController(
       hostClient: _FakeAdbHostClient(const <AdbDeviceInfo>[]),
-      listUsbDevices: () async => const <UsbAdbDevice>[],
       discoverServices: (onUpdate) async => const <MdnsService>[],
     );
     Get.put<HomeController>(homeController);
@@ -171,7 +169,6 @@ void main() {
     Get.put<AppSettingsStore>(AppSettingsStore(), permanent: true);
     final homeController = HomeController(
       hostClient: _FakeAdbHostClient(const <AdbDeviceInfo>[]),
-      listUsbDevices: () async => const <UsbAdbDevice>[],
       discoverServices: (onUpdate) async => const <MdnsService>[],
     );
     Get.put<HomeController>(homeController);
@@ -201,7 +198,6 @@ void main() {
     final hostClient = _FakeAdbHostClient(const <AdbDeviceInfo>[]);
     final homeController = HomeController(
       hostClient: hostClient,
-      listUsbDevices: () async => const <UsbAdbDevice>[],
       discoverServices: (onUpdate) async {
         scans++;
         return const <MdnsService>[];
@@ -311,7 +307,6 @@ void main() {
     final hostClient = _FakeAdbHostClient(const <AdbDeviceInfo>[]);
     final homeController = HomeController(
       hostClient: hostClient,
-      listUsbDevices: () async => const <UsbAdbDevice>[],
       discoverServices: (onUpdate) async => const <MdnsService>[],
     );
     Get.put<HomeController>(homeController);
@@ -387,7 +382,6 @@ void main() {
     Get.put<AppSettingsStore>(AppSettingsStore(), permanent: true);
     final homeController = HomeController(
       hostClient: _FakeAdbHostClient(const <AdbDeviceInfo>[]),
-      listUsbDevices: () async => const <UsbAdbDevice>[],
       discoverServices: (onUpdate) async => const <MdnsService>[],
     );
     Get.put<HomeController>(homeController);
@@ -434,5 +428,10 @@ class _FakeAdbHostClient extends AdbHostClient {
   Future<List<AdbDeviceInfo>> devices({bool long = false}) async {
     deviceListRequests++;
     return _devices;
+  }
+
+  @override
+  Stream<List<AdbDeviceInfo>> trackDevices({bool long = false}) {
+    return const Stream<List<AdbDeviceInfo>>.empty();
   }
 }

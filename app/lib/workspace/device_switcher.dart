@@ -4,7 +4,6 @@ import 'package:libadb/libadb.dart';
 
 import '../app_feedback.dart';
 import '../connection/connection_manager.dart';
-import '../connection/model/device_profile.dart';
 import '../home/discovered_devices.dart';
 import '../home/home_controller.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
@@ -71,21 +70,6 @@ class _DeviceSwitcherSheetState extends State<_DeviceSwitcherSheet> {
     }
   }
 
-  Future<void> _connectUsb(UsbAdbDevice device) async {
-    if (_connectingId != null) return;
-    setState(() => _connectingId = device.address);
-    try {
-      final connected = await Get.find<HomeController>().connectUsb(device);
-      if (!mounted) return;
-      await _switchTo(connected.serial);
-    } catch (error, stackTrace) {
-      log.severe('连接 USB 设备失败：${device.address}', error, stackTrace);
-      if (!mounted) return;
-      setState(() => _connectingId = null);
-      _showFailure(error);
-    }
-  }
-
   void _showFailure(Object error) {
     final l10n = context.l10n;
     showAppMessage(
@@ -114,20 +98,12 @@ class _DeviceSwitcherSheetState extends State<_DeviceSwitcherSheet> {
                 device.isOnline && manager.profileForAdbDevice(device) == null,
           )
           .toList();
-      final availableUsb = home.showDirectUsbList
-          ? home.usbDevices
-                .where((device) => !_usbAlreadyConnected(manager, device))
-                .toList()
-          : const <UsbAdbDevice>[];
       final availableWireless = connectableDiscoveredServices(
         discovered: home.discovered,
         adbDevices: home.adbDevices,
         profiles: profiles,
       );
-      final loading =
-          home.loadingAdbDevices.value ||
-          home.loadingUsbDevices.value ||
-          home.scanning.value;
+      final loading = home.loadingAdbDevices.value || home.scanning.value;
       final error = home.adbDevicesError.value;
 
       return SafeArea(
@@ -179,9 +155,7 @@ class _DeviceSwitcherSheetState extends State<_DeviceSwitcherSheet> {
                     style: TextStyle(color: theme.colorScheme.error),
                   ),
                 )
-              else if (availableAdb.isEmpty &&
-                  availableUsb.isEmpty &&
-                  availableWireless.isEmpty)
+              else if (availableAdb.isEmpty && availableWireless.isEmpty)
                 ListTile(
                   title: Text(
                     l10n.workspaceNoAvailableDevices,
@@ -220,22 +194,6 @@ class _DeviceSwitcherSheetState extends State<_DeviceSwitcherSheet> {
                       ? () => _connectDiscovered(service)
                       : null,
                 ),
-              for (final device in availableUsb)
-                ListTile(
-                  leading: const Icon(Icons.usb),
-                  title: Text(device.productName ?? device.address),
-                  subtitle: Text(device.address),
-                  trailing: _connectingId == device.address
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.link),
-                  onTap: _connectingId == null
-                      ? () => _connectUsb(device)
-                      : null,
-                ),
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.tune),
@@ -271,16 +229,4 @@ String _adbName(AdbDeviceInfo info) {
   final model = info.model?.replaceAll('_', ' ');
   if (model != null && model.isNotEmpty) return model;
   return info.serial;
-}
-
-bool _usbAlreadyConnected(ConnectionManager manager, UsbAdbDevice device) {
-  for (final DeviceProfile profile in manager.profiles) {
-    final sameUsb = profile.usbAddress == device.address;
-    final serial = device.serialNumber;
-    final sameSerial =
-        serial != null &&
-        (profile.serial == serial || profile.adbSerial == serial);
-    if (sameUsb || sameSerial) return true;
-  }
-  return false;
 }

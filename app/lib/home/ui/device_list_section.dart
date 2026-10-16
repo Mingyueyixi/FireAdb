@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:libadb/libadb.dart';
 
-import '../../connection/model/device_profile.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../settings/app_settings_store.dart';
 import '../discovered_devices.dart';
@@ -19,22 +18,12 @@ class DeviceListSection extends GetView<HomeController> {
       final theme = Theme.of(context);
       final l10n = context.l10n;
       final devices = controller.adbDevices;
-      final usbDevices = controller.showDirectUsbList
-          ? controller.usbDevices
-          : const <UsbAdbDevice>[];
       final manager = controller.manager;
       final additionalConnectedProfiles = manager.profiles
           .where(
-            (profile) =>
-                !devices.any(
-                  (device) => manager.profileForAdbDevice(device) == profile,
-                ) &&
-                !usbDevices.any(
-                  (device) =>
-                      device.address == profile.usbAddress ||
-                      (device.serialNumber != null &&
-                          device.serialNumber == profile.serial),
-                ),
+            (profile) => !devices.any(
+              (device) => manager.profileForAdbDevice(device) == profile,
+            ),
           )
           .toList();
       final wireless = connectableDiscoveredServices(
@@ -43,14 +32,9 @@ class DeviceListSection extends GetView<HomeController> {
         profiles: manager.profiles,
       );
       final total =
-          devices.length +
-          usbDevices.length +
-          additionalConnectedProfiles.length +
-          wireless.length;
+          devices.length + additionalConnectedProfiles.length + wireless.length;
       final loading =
-          controller.loadingAdbDevices.value ||
-          controller.loadingUsbDevices.value ||
-          controller.scanning.value;
+          controller.loadingAdbDevices.value || controller.scanning.value;
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -93,12 +77,6 @@ class DeviceListSection extends GetView<HomeController> {
                   l10n.homeUsbDevicesReadError(localUsb),
                   style: TextStyle(color: theme.colorScheme.error),
                 ),
-              if (controller.usbDevicesError.value case final usbError?)
-                Text(
-                  l10n.homeUsbDevicesReadError(usbError),
-                  style: TextStyle(color: theme.colorScheme.error),
-                ),
-              for (final device in usbDevices) _UsbDeviceTile(device: device),
               if (!controller.adbServerSupported.value)
                 Text(
                   l10n.homeAdbServerUnavailable,
@@ -152,65 +130,6 @@ class DeviceListSection extends GetView<HomeController> {
         ),
       );
     });
-  }
-}
-
-class _UsbDeviceTile extends GetView<HomeController> {
-  const _UsbDeviceTile({required this.device});
-
-  final UsbAdbDevice device;
-
-  @override
-  Widget build(BuildContext context) {
-    final manager = controller.manager;
-    final l10n = context.l10n;
-    DeviceProfile? connectedProfile;
-    for (final profile in manager.profiles) {
-      final connected = manager.deviceOf(profile.serial) != null;
-      final sameUsb = profile.usbAddress == device.address;
-      final sameSerial =
-          device.serialNumber != null &&
-          (profile.serial == device.serialNumber ||
-              profile.adbSerial == device.serialNumber);
-      if (connected && (sameUsb || sameSerial)) {
-        connectedProfile = profile;
-        break;
-      }
-    }
-    final subtitle = StringBuffer('USB · ${device.address}');
-    final serial = device.serialNumber;
-    if (serial != null) subtitle.write(' · $serial');
-    final active = connectedProfile;
-    if (active != null) {
-      subtitle.write(' · ${l10n.homeFireAdbConnected}');
-    }
-    final connecting = controller.connecting.value;
-    return HomeListTile(
-      dense: true,
-      leading: const Icon(Icons.usb),
-      title: Text(device.title),
-      subtitle: Text(subtitle.toString(), maxLines: 2),
-      trailing: active != null
-          ? IconButton(
-              tooltip: l10n.commonDisconnect,
-              icon: const Icon(Icons.link_off),
-              onPressed: () =>
-                  disconnectDevice(context, controller, active.serial),
-            )
-          : TextButton(
-              onPressed: connecting
-                  ? null
-                  : () => connectUsbDevice(context, controller, device),
-              child: Text(
-                connecting ? l10n.homeConnecting : l10n.commonConnect,
-              ),
-            ),
-      onTap: active != null
-          ? () => openWorkspace(active.serial)
-          : connecting
-          ? null
-          : () => connectUsbDevice(context, controller, device),
-    );
   }
 }
 

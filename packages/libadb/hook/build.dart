@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:adb_usb/src/libusb_binary.dart';
+import 'package:libadb/src/libusb_binary.dart';
 import 'package:code_assets/code_assets.dart';
 import 'package:hooks/hooks.dart';
 

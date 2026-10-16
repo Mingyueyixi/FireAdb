@@ -4,7 +4,6 @@ import 'dart:io' show Platform;
 import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'package:adb_core/adb_core.dart';
 import 'package:dart_libusb/dart_libusb.dart';
 import 'package:ffi/ffi.dart';
 
@@ -16,6 +15,7 @@ const int _libusbErrorAccess = -3;
 const int _libusbErrorBusy = -6;
 const int _libusbErrorInterrupted = -10;
 const int _writeTimeoutMs = 10000;
+const int _readTimeoutMs = 1000;
 const int _readBufferSize = 16 * 1024;
 const int _bulkTransfer = 2;
 const int _transferRead = 1;
@@ -78,7 +78,10 @@ Map<String, Object?> _listUsbAdbDeviceRows(String libraryPath) {
   }
 }
 
-/// 打开 [device] 的 ADB 批量接口。读写在同一个后台 isolate 里，靠 libusb 事件循环完成。
+/// 打开 [device] 的 ADB 批量接口。
+///
+/// 读写在后台 isolate，避免堵住调用方事件循环。会话由本库持有：`close()`、
+/// USB 扩展随 server 收尾，以及 [NativeFinalizer] 都会释放接口。
 Future<AdbUsbTransport> openUsbAdbDevice(UsbAdbDevice device) async {
   final libraryPath = resolveLibusbLibraryPath();
   if (libraryPath == null) {
@@ -90,7 +93,13 @@ Future<AdbUsbTransport> openUsbAdbDevice(UsbAdbDevice device) async {
   bootstrap.close();
   final events = ReceivePort();
   final opened = Completer<Object?>();
-  final transport = AdbUsbTransport._(isolate, worker, events, opened);
+  final transport = AdbUsbTransport._(
+    libraryPath,
+    isolate,
+    worker,
+    events,
+    opened,
+  );
   worker.send(<Object?>['open', libraryPath, device.portPath, events.sendPort]);
   final Object? failure;
   try {
@@ -106,8 +115,9 @@ Future<AdbUsbTransport> openUsbAdbDevice(UsbAdbDevice device) async {
   return transport;
 }
 
-class AdbUsbTransport implements AdbTransport {
+class AdbUsbTransport implements Finalizable {
   AdbUsbTransport._(
+    this._libraryPath,
     this._isolate,
     this._worker,
     this._events,
@@ -122,10 +132,22 @@ class AdbUsbTransport implements AdbTransport {
             serialNumber = serial.trim();
           }
           final contextAddress = message.length > 2 ? message[2] : null;
-          final libraryPath = message.length > 3 ? message[3] : null;
-          if (contextAddress is int && libraryPath is String) {
-            _wakeLib = Libusb(DynamicLibrary.open(libraryPath));
-            _wakeContext = Pointer<libusb_context>.fromAddress(contextAddress);
+          final handleAddress = message.length > 3 ? message[3] : null;
+          final interfaceNumber = message.length > 4 ? message[4] : null;
+          if (contextAddress is int &&
+              handleAddress is int &&
+              interfaceNumber is int) {
+            _libusb = Libusb(DynamicLibrary.open(_libraryPath));
+            _context = Pointer<libusb_context>.fromAddress(contextAddress);
+            _handle = Pointer<libusb_device_handle>.fromAddress(handleAddress);
+            _interfaceNumber = interfaceNumber;
+            _handleFinalizer = NativeFinalizer(
+              DynamicLibrary.open(_libraryPath)
+                  .lookup<NativeFunction<Void Function(Pointer<Void>)>>(
+                    'libusb_close',
+                  ),
+            );
+            _handleFinalizer!.attach(this, _handle!.cast(), detach: this);
           }
           if (!opened.isCompleted) opened.complete(null);
         case 'data':
@@ -144,29 +166,30 @@ class AdbUsbTransport implements AdbTransport {
           }
         case 'closed':
           if (!opened.isCompleted) opened.complete('USB 设备在打开前已关闭。');
-          if (!_released.isCompleted) _released.complete();
           if (!_incoming.isClosed) unawaited(_incoming.close());
       }
     });
   }
 
+  final String _libraryPath;
   final Isolate _isolate;
   final SendPort _worker;
   final ReceivePort _events;
   final StreamController<Uint8List> _incoming = StreamController<Uint8List>();
-  final Completer<void> _released = Completer<void>();
   StreamSubscription<dynamic>? _subscription;
-  bool _closed = false;
-  Libusb? _wakeLib;
-  Pointer<libusb_context>? _wakeContext;
+  NativeFinalizer? _handleFinalizer;
+  Libusb? _libusb;
+  Pointer<libusb_context>? _context;
+  Pointer<libusb_device_handle>? _handle;
+  int _interfaceNumber = -1;
+  var _closed = false;
+  var _released = false;
 
   /// USB 字符串描述符里的序列号。`adb devices` 用它，而不是端口路径。
   String? serialNumber;
 
-  @override
   Stream<Uint8List> get stream => _incoming.stream;
 
-  @override
   Future<void> write(List<int> data) async {
     if (_closed) throw StateError('传输已关闭，无法写入');
     final reply = ReceivePort();
@@ -177,38 +200,43 @@ class AdbUsbTransport implements AdbTransport {
     if (result is String) throw AdbUsbException(result);
   }
 
-  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    _worker.send(<Object?>['close']);
-    _interruptWorker();
     try {
-      await _released.future.timeout(const Duration(seconds: 2));
-    } on TimeoutException {
-      // 取消传输后事件循环仍没退出时，强制结束 isolate。
-    }
+      _worker.send(<Object?>['close']);
+    } catch (_) {}
+    _interruptWorker();
+    // 持有会话的 isolate 立刻关掉接口，不等后台读写 isolate。
+    _handleFinalizer?.detach(this);
+    _handleFinalizer = null;
+    final libusb = _libusb;
+    final handle = _handle;
+    final context = _context;
+    _released = _releaseUsb(libusb, handle, _interfaceNumber, _released);
+    _handle = null;
     await _subscription?.cancel();
     _events.close();
     if (!_incoming.isClosed) await _incoming.close();
-    _wakeContext = null;
-    _wakeLib = null;
-    _isolate.kill();
+    _isolate.kill(priority: Isolate.immediate);
+    if (libusb != null && context != null) {
+      libusb.libusb_exit(context);
+    }
+    _libusb = null;
+    _context = null;
   }
 
-  /// 工作 isolate 堵在 `libusb_handle_events` 里时，靠它从别的线程把等待打断。
   void _interruptWorker() {
-    final libusb = _wakeLib;
-    final context = _wakeContext;
+    final libusb = _libusb;
+    final context = _context;
     if (libusb == null || context == null) return;
     libusb.libusb_interrupt_event_handler(context);
   }
 }
 
-/// 一台设备一个 isolate：提交批量传输后堵在 `libusb_handle_events`。
+/// 一台设备一个后台 isolate：提交批量传输后堵在 `libusb_handle_events`。
 ///
-/// 内核有数据或主 isolate 调用 `libusb_interrupt_event_handler` 时返回。
-/// 回调只把结果放进队列，回到 Dart 事件循环后再提交下一次传输。
+/// 设备句柄由 [AdbUsbTransport] 关闭；这里只做读写。
 Future<void> usbWorker(SendPort mainPort) async {
   final inbox = _Inbox();
   mainPort.send(inbox.port.sendPort);
@@ -221,6 +249,7 @@ Future<void> usbWorker(SendPort mainPort) async {
   Pointer<libusb_context>? context;
   Pointer<libusb_device_handle>? handle;
   var interfaceNumber = -1;
+  var handedOff = false;
   var released = false;
   _UsbEventLoop? loop;
   try {
@@ -239,17 +268,32 @@ Future<void> usbWorker(SendPort mainPort) async {
       endpointOut: openedDevice.match.endpointOut,
       maxPacketSize: openedDevice.match.maxPacketSize,
     );
-    events.send(<Object?>['ready', serial, context.address, libraryPath]);
+    _post(events, <Object?>[
+      'ready',
+      serial,
+      context.address,
+      handle.address,
+      interfaceNumber,
+    ]);
+    handedOff = true;
     await loop.run(inbox, events);
   } catch (error) {
-    events.send(<Object?>['error', '$error']);
+    _post(events, <Object?>['error', '$error']);
   } finally {
     loop?.dispose();
-    released = _releaseUsb(libusb, handle, interfaceNumber, released);
-    if (libusb != null && context != null) libusb.libusb_exit(context);
-    events.send(<Object?>['closed']);
+    if (!handedOff) {
+      released = _releaseUsb(libusb, handle, interfaceNumber, released);
+      if (libusb != null && context != null) libusb.libusb_exit(context);
+    }
+    _post(events, <Object?>['closed']);
     inbox.close();
   }
+}
+
+void _post(SendPort port, List<Object?> message) {
+  try {
+    port.send(message);
+  } catch (_) {}
 }
 
 /// 和 libusb 1.0 的 `struct libusb_transfer` 对齐。末尾的弹性数组不计入大小。
@@ -341,7 +385,9 @@ class _QueuedWrite {
   void finish(Object? result) {
     if (replied) return;
     replied = true;
-    reply.send(result);
+    try {
+      reply.send(result);
+    } catch (_) {}
   }
 }
 
@@ -515,13 +561,14 @@ class _UsbEventLoop {
   void _finishRead(SendPort events, _TransferDone done) {
     _readBusy = false;
     if (_closing || done.status == 3) return;
-    if (done.status != 0) {
+    if (done.status == 2) return;
+    if (usbBulkReadFailed(done.status)) {
       _report(events, _transferStatusText(done.status));
       return;
     }
     final bytes = done.bytes;
     if (bytes != null && bytes.isNotEmpty) {
-      events.send(<Object?>['data', bytes]);
+      _post(events, <Object?>['data', bytes]);
     }
   }
 
@@ -561,7 +608,7 @@ class _UsbEventLoop {
       endpoint: endpointIn,
       buffer: _readBuffer,
       length: _readBufferSize,
-      timeout: 0,
+      timeout: _readTimeoutMs,
       tag: _transferRead,
     );
     if (code != 0) {
@@ -641,7 +688,48 @@ class _UsbEventLoop {
     _closing = true;
     if (_reported) return;
     _reported = true;
-    events.send(<Object?>['error', 'USB 传输失败（$message）']);
+    _post(events, <Object?>['error', 'USB 传输失败（$message）']);
+  }
+}
+
+/// 单订阅端口上的消息队列。一次 [take] 不会把端口听第二次。
+class _Inbox {
+  _Inbox() {
+    attach(port);
+  }
+
+  final ReceivePort port = ReceivePort();
+  final List<List<Object?>> _pending = <List<Object?>>[];
+  Completer<void>? _waiter;
+
+  void attach(ReceivePort source) {
+    source.listen((Object? message) {
+      if (message is! List || message.isEmpty) return;
+      _pending.add(message.cast<Object?>());
+      final waiter = _waiter;
+      if (waiter != null && !waiter.isCompleted) waiter.complete();
+    });
+  }
+
+  List<List<Object?>> drain() {
+    if (_pending.isEmpty) return const <List<Object?>>[];
+    final messages = List<List<Object?>>.of(_pending);
+    _pending.clear();
+    return messages;
+  }
+
+  Future<List<Object?>> take() async {
+    while (_pending.isEmpty) {
+      final gate = Completer<void>();
+      _waiter = gate;
+      if (_pending.isNotEmpty) break;
+      await gate.future;
+    }
+    return _pending.removeAt(0);
+  }
+
+  void close() {
+    port.close();
   }
 }
 
@@ -687,47 +775,6 @@ String? _usbSerialNumber(Libusb libusb, Pointer<libusb_device_handle> handle) {
   } finally {
     calloc.free(descriptor);
     calloc.free(buffer);
-  }
-}
-
-/// 单订阅端口上的消息队列。一次 [take] 不会把端口听第二次。
-class _Inbox {
-  _Inbox() {
-    attach(port);
-  }
-
-  final ReceivePort port = ReceivePort();
-  final List<List<Object?>> _pending = <List<Object?>>[];
-  Completer<void>? _waiter;
-
-  void attach(ReceivePort source) {
-    source.listen((Object? message) {
-      if (message is! List || message.isEmpty) return;
-      _pending.add(message.cast<Object?>());
-      final waiter = _waiter;
-      if (waiter != null && !waiter.isCompleted) waiter.complete();
-    });
-  }
-
-  List<List<Object?>> drain() {
-    if (_pending.isEmpty) return const <List<Object?>>[];
-    final messages = List<List<Object?>>.of(_pending);
-    _pending.clear();
-    return messages;
-  }
-
-  Future<List<Object?>> take() async {
-    while (_pending.isEmpty) {
-      final gate = Completer<void>();
-      _waiter = gate;
-      if (_pending.isNotEmpty) break;
-      await gate.future;
-    }
-    return _pending.removeAt(0);
-  }
-
-  void close() {
-    port.close();
   }
 }
 
@@ -917,6 +964,9 @@ void _prepareInterface(
   }
 }
 
+/// 批量读结束。超时和取消不是断线，设备离开或传输失败才是。
+bool usbBulkReadFailed(int status) => status != 0 && status != 2 && status != 3;
+
 String _transferStatusText(int status) {
   return switch (status) {
     0 => '完成',
@@ -934,9 +984,7 @@ String _claimMessage(Libusb libusb, int code, [int osError = 0]) {
   final name = libusbErrorText(libusb, code);
   if (code == _libusbErrorAccess) {
     final detail = osError == 0 ? name : '$name，Windows 错误 $osError';
-    return '无法打开 USB 接口（$detail）。'
-        '接口驱动已经是 WinUSB，Windows 仍然拒绝打开这个设备。'
-        '请确认没有其他程序占用这台手机。';
+    return '无法打开 USB 接口（$detail）。这块接口正被占用。';
   }
   if (code == _libusbErrorBusy) {
     return '无法打开 USB 接口（$name）。请先结束正在占用这台手机的程序。';

@@ -1,8 +1,9 @@
 import 'dart:io';
 
-import 'package:adb_usb/adb_usb.dart';
-import 'package:adb_usb/src/adb_usb_session.dart' show usbTransferLayout;
-import 'package:adb_usb/src/libusb_loader.dart' show windowsLibusbCandidates;
+import 'package:libadb/src/adb_usb_match.dart';
+import 'package:libadb/src/adb_usb_session.dart'
+    show usbBulkReadFailed, usbTransferLayout;
+import 'package:libadb/src/libusb_loader.dart' show windowsLibusbCandidates;
 import 'package:test/test.dart';
 
 void main() {
@@ -56,7 +57,7 @@ void main() {
       'C:',
       'repo',
       'packages',
-      'adb_usb',
+      'libadb',
       'vendor',
       'windows',
       'x64',
@@ -67,7 +68,7 @@ void main() {
       'C:',
       'repo',
       'packages',
-      'adb_usb',
+      'libadb',
       'vendor',
       'windows',
       'arm64',
@@ -77,6 +78,13 @@ void main() {
       windowsLibusbCandidates(executable, architecture: 'arm64'),
       contains(armLibrary),
     );
+  });
+
+  test('USB 读超时不是断线，设备离开才是', () {
+    expect(usbBulkReadFailed(0), isFalse);
+    expect(usbBulkReadFailed(2), isFalse);
+    expect(usbBulkReadFailed(3), isFalse);
+    expect(usbBulkReadFailed(5), isTrue);
   });
 
   test('包长整数倍的写入需要零长度包', () {

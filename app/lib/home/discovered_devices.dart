@@ -96,6 +96,47 @@ List<MdnsService> mergeDiscoveredServices(
 String discoveredServiceKey(MdnsService service) =>
     '${service.serviceType}\n${normalizeHost(service.addressText)}\n${service.port}';
 
+/// 一轮查询里再次出现的服务留下。
+///
+/// [heard] 为真时，这一轮的结果就是当前列表，没再出现的服务马上去掉。
+/// 采集时间到且没有应答时，连续 [goneAfter] 轮没再出现才去掉，避免一包丢失就把还在的设备抹掉。
+List<MdnsService> settleDiscoveredServices({
+  required Iterable<MdnsService> current,
+  required Iterable<MdnsService> confirmed,
+  required Map<String, int> misses,
+  required bool heard,
+  int goneAfter = 2,
+}) {
+  if (heard) {
+    misses.clear();
+    return List<MdnsService>.of(confirmed);
+  }
+  final confirmedKeys = <String>{
+    for (final service in confirmed) discoveredServiceKey(service),
+  };
+  final next = <MdnsService>[];
+  final live = <String>{};
+  for (final service in current) {
+    final key = discoveredServiceKey(service);
+    if (confirmedKeys.contains(key)) {
+      misses.remove(key);
+      next.add(service);
+      live.add(key);
+      continue;
+    }
+    final count = (misses[key] ?? 0) + 1;
+    if (count >= goneAfter) {
+      misses.remove(key);
+      continue;
+    }
+    misses[key] = count;
+    next.add(service);
+    live.add(key);
+  }
+  misses.removeWhere((key, _) => !live.contains(key));
+  return next;
+}
+
 String discoveredServiceTitle(MdnsService service) {
   final name = service.txt['name']?.replaceAll('_', ' ');
   if (name != null && name.isNotEmpty) return name;

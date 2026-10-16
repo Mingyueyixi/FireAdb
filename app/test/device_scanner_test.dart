@@ -113,8 +113,6 @@ void main() {
       hostClient: _FakeAdbHostClient(const <AdbDeviceInfo>[
         AdbDeviceInfo('emulator-5554', 'device'),
       ]),
-      listUsbDevices: () async => const <UsbAdbDevice>[],
-      usbSupported: false,
       discoverServices: (onUpdate) {
         if (!holdDiscovery) return Future.value(const <MdnsService>[]);
         onUpdate?.call(<MdnsService>[_service]);
@@ -168,4 +166,9 @@ class _FakeAdbHostClient extends AdbHostClient {
 
   @override
   Future<List<AdbDeviceInfo>> devices({bool long = false}) async => _devices;
+
+  @override
+  Stream<List<AdbDeviceInfo>> trackDevices({bool long = false}) {
+    return const Stream<List<AdbDeviceInfo>>.empty();
+  }
 }

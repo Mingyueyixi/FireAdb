@@ -8,7 +8,7 @@ import '../hook/build.dart' as libusb_hook;
 void main() {
   Future<void> inPackage(Future<void> Function() body) async {
     final previous = Directory.current;
-    final package = Directory('packages/adb_usb');
+    final package = Directory('packages/libadb');
     if (package.existsSync()) Directory.current = package.absolute;
     try {
       await body();
@@ -25,7 +25,7 @@ void main() {
         targetArchitecture: Architecture.x64,
         check: (input, output) {
           final asset = output.assets.code.single;
-          expect(asset.id, 'package:adb_usb/src/libusb.dart');
+          expect(asset.id, 'package:libadb/src/libusb.dart');
           expect(asset.linkMode, isA<DynamicLoadingBundled>());
           expect(asset.file!.pathSegments.last, 'libusb-1.0.dll');
           expect(File.fromUri(asset.file!).existsSync(), isTrue);

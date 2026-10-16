@@ -19,7 +19,6 @@ void main() {
     Get.put<AppSettingsStore>(AppSettingsStore(), permanent: true);
     final controller = HomeController(
       hostClient: _FakeAdbHostClient(),
-      listUsbDevices: () async => const <UsbAdbDevice>[],
       discoverServices: (onUpdate) async => const <MdnsService>[],
     );
     Get.put<HomeController>(controller, permanent: true);
@@ -56,4 +55,9 @@ class _FakeAdbHostClient extends AdbHostClient {
   @override
   Future<List<AdbDeviceInfo>> devices({bool long = false}) async =>
       const <AdbDeviceInfo>[];
+
+  @override
+  Stream<List<AdbDeviceInfo>> trackDevices({bool long = false}) {
+    return const Stream<List<AdbDeviceInfo>>.empty();
+  }
 }

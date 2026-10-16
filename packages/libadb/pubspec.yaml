@@ -1,5 +1,5 @@
 name: libadb
-description: ADB 薄入口。协议在 adb_core，桌面 USB 在 adb_usb，本包只负责启动本机 Server 并在桌面挂上 USB。
+description: 本机 ADB Server。协议在 adb_core，桌面 USB 在本包内随 server 一起初始化。
 version: 0.1.0
 publish_to: none
 resolution: workspace
@@ -10,8 +10,10 @@ environment:
 dependencies:
   adb_core:
     path: ../adb_core
-  adb_usb:
-    path: ../adb_usb
+  code_assets: 1.2.1
+  dart_libusb: ^1.0.1
+  ffi: ^2.1.0
+  hooks: 2.0.2
 
 dev_dependencies:
   lints: ^6.0.0

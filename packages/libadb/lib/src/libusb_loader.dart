@@ -79,7 +79,7 @@ List<String> windowsLibusbCandidates(
   for (var depth = 0; depth < 10; depth++) {
     if (suffix != null) {
       candidates.add(
-        '${current.path}${separator}packages${separator}adb_usb'
+        '${current.path}${separator}packages${separator}libadb'
         '$separator$suffix',
       );
     }

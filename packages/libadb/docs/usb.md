@@ -53,10 +53,10 @@ Linux、macOS 按系统库名加载 libusb。上游没有发布这两套动态�
 
 Windows 随包文件来自官方 libusb **1.0.29** 的 `libusb-1.0.29.7z`，许可证是 LGPL-2.1。对照源码在 `third_party/libusb`，固定为标签 `v1.0.29`（上游 [libusb/libusb](https://github.com/libusb/libusb/releases/tag/v1.0.29)）。
 
-- x64：`VS2022/MS64/dll/libusb-1.0.dll`，放在 `packages/adb_usb/vendor/windows/x64/`
-- ARM64：`MinGW-llvm-aarch64/dll/libusb-1.0.dll`，放在 `packages/adb_usb/vendor/windows/arm64/`。同一份压缩包的 VS2022 目录没有 ARM64 构建
+- x64：`VS2022/MS64/dll/libusb-1.0.dll`，放在 `packages/libadb/vendor/windows/x64/`
+- ARM64：`MinGW-llvm-aarch64/dll/libusb-1.0.dll`，放在 `packages/libadb/vendor/windows/arm64/`。同一份压缩包的 VS2022 目录没有 ARM64 构建
 
-`hook/build.dart` 按目标系统登记代码资源，资源 id 是 `package:adb_usb/src/libusb.dart`：
+`hook/build.dart` 按目标系统登记代码资源，资源 id 是 `package:libadb/src/libusb.dart`：
 
 | 目标 | 钩子做什么 |
 |---|---|

@@ -4,7 +4,7 @@
 /// smart socket：`host:devices`、`host:transport`，以及把后续的
 /// `shell:` / `exec:` / `sync:` 转到已经握完手的 [AdbConnection]。
 /// `forward:` 由本机监听端口再打开设备上的目标服务，不把这条命令本身 OPEN 给设备。
-/// USB 枚举不在这个库里，由调用方把设备登记进来。
+/// 额外的连接方式通过 [AdbDeviceExtension] 接入，写入同一份 `host:devices`。
 library;
 
 import 'dart:async';
@@ -14,6 +14,7 @@ import 'dart:io';
 import 'adb_auth_key.dart';
 import 'adb_connection.dart';
 import 'adb_device.dart';
+import 'adb_device_extension.dart';
 import 'adb_smart_socket.dart';
 import 'adb_stream_reader.dart';
 import 'adb_tcp_transport.dart';
@@ -106,6 +107,9 @@ class AdbServer {
   final Set<int> _emulatorBusy = <int>{};
   Iterable<int> _emulatorPorts = adbEmulatorPorts();
   Future<AdbTransport> Function(int port) _openEmulator = _openLocalEmulator;
+  List<AdbDeviceExtension> _extensions = const <AdbDeviceExtension>[];
+  final Map<AdbDeviceExtension, Map<String, String>> _extensionSerials =
+      <AdbDeviceExtension, Map<String, String>>{};
 
   /// `host:kill` 时通知外面放开 USB。Server 自己会关掉监听。
   void Function()? onKilled;
@@ -123,6 +127,7 @@ class AdbServer {
     bool scanEmulators = true,
     Iterable<int>? emulatorPorts,
     Future<AdbTransport> Function(int port)? openEmulator,
+    List<AdbDeviceExtension> extensions = const <AdbDeviceExtension>[],
   }) async {
     if (emulatorPorts != null) _emulatorPorts = emulatorPorts;
     if (openEmulator != null) _openEmulator = openEmulator;
@@ -131,11 +136,34 @@ class AdbServer {
       port,
     );
     _socket!.listen(_onClient);
-    if (!scanEmulators) return;
-    _emulatorTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+    if (scanEmulators) {
+      _emulatorTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+        unawaited(_scanEmulators());
+      });
       unawaited(_scanEmulators());
-    });
-    unawaited(_scanEmulators());
+    }
+    _useExtensions(extensions);
+  }
+
+  /// 换掉扩展连接方式。不在新列表里的来源会从 `host:devices` 去掉。
+  void _useExtensions(List<AdbDeviceExtension> extensions) {
+    if (_closed) return;
+    final next = List<AdbDeviceExtension>.of(extensions);
+    for (final deviceExtension in _extensions) {
+      if (next.contains(deviceExtension)) continue;
+      unawaited(deviceExtension.cancel());
+      final serials = _extensionSerials.remove(deviceExtension);
+      if (serials == null) continue;
+      for (final serial in serials.values) {
+        remove(serial);
+      }
+    }
+    final previous = _extensions;
+    _extensions = next;
+    for (final deviceExtension in next) {
+      if (previous.contains(deviceExtension)) continue;
+      deviceExtension.listen(_ExtensionListener(this, deviceExtension));
+    }
   }
 
   /// 端口空闲时启动，已被占用时返回 null（外面已有官方 adb server）。
@@ -144,6 +172,7 @@ class AdbServer {
     int port = adbServerPort,
     List<AdbRsaKeyPair> signers = const <AdbRsaKeyPair>[],
     bool scanEmulators = true,
+    List<AdbDeviceExtension> extensions = const <AdbDeviceExtension>[],
   }) async {
     final server = AdbServer(signers: signers);
     try {
@@ -151,6 +180,7 @@ class AdbServer {
         address: address,
         port: port,
         scanEmulators: scanEmulators,
+        extensions: extensions,
       );
       return server;
     } on SocketException {
@@ -195,6 +225,16 @@ class AdbServer {
     _closed = true;
     _emulatorTimer?.cancel();
     _emulatorTimer = null;
+    for (final deviceExtension in _extensions) {
+      await deviceExtension.cancel();
+    }
+    for (final serials in _extensionSerials.values) {
+      for (final serial in serials.values) {
+        remove(serial);
+      }
+    }
+    _extensionSerials.clear();
+    _extensions = const <AdbDeviceExtension>[];
     await _dropForwards();
     final emulators = _devices.values
         .where((device) => device.serial.startsWith('emulator-'))
@@ -287,6 +327,37 @@ class AdbServer {
             _bannerValue(banner, 'ro.product.device') ?? existing?.deviceName,
       ),
     );
+  }
+
+  void _acceptScan(
+    AdbDeviceExtension deviceExtension,
+    List<AdbScannedDevice> devices,
+  ) {
+    if (_closed || !_extensions.contains(deviceExtension)) return;
+    final previous =
+        _extensionSerials[deviceExtension] ?? const <String, String>{};
+    final next = <String, String>{};
+    for (final scanned in devices) {
+      final oldSerial = previous[scanned.id];
+      if (oldSerial != null && oldSerial != scanned.serial) remove(oldSerial);
+      upsert(
+        AdbServerDevice(
+          connection: scanned.connection,
+          serial: scanned.serial,
+          state: scanned.state,
+          devPath: scanned.devPath,
+          usb: scanned.usb,
+          product: scanned.product,
+          model: scanned.model,
+          deviceName: scanned.deviceName,
+        ),
+      );
+      next[scanned.id] = scanned.serial;
+    }
+    for (final entry in previous.entries) {
+      if (!next.containsKey(entry.key)) remove(entry.value);
+    }
+    _extensionSerials[deviceExtension] = next;
   }
 
   Future<void> _onClient(Socket socket) async {
@@ -647,12 +718,14 @@ class AdbServer {
     final fromClient = client.listen(
       (List<int> data) {
         unawaited(
-          stream.write(data).then<void>(
-            (_) {},
-            onError: (Object _, StackTrace _) {
-              unawaited(stream.close());
-            },
-          ),
+          stream
+              .write(data)
+              .then<void>(
+                (_) {},
+                onError: (Object _, StackTrace _) {
+                  unawaited(stream.close());
+                },
+              ),
         );
       },
       onDone: () {
@@ -1114,6 +1187,18 @@ Future<AdbTransport> _openLocalEmulator(int port) {
     port,
     connectTimeout: const Duration(milliseconds: 300),
   );
+}
+
+class _ExtensionListener implements AdbScanListener {
+  _ExtensionListener(this._server, this._deviceExtension);
+
+  final AdbServer _server;
+  final AdbDeviceExtension _deviceExtension;
+
+  @override
+  void onScan(List<AdbScannedDevice> devices) {
+    _server._acceptScan(_deviceExtension, devices);
+  }
 }
 
 String? _bannerValue(String banner, String key, {bool alphanumeric = false}) {

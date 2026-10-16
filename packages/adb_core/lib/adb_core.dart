@@ -1,11 +1,12 @@
 /// adb_core：纯 Dart 的 ADB 引擎（协议层）。
 ///
-/// 不含任何平台相关代码，可被 Flutter/Dart 应用与 [package:adb_usb] 复用。
+/// 不含任何平台相关代码。桌面 USB 在 libadb 里，随本机 server 一起启动。
 library;
 
 export 'src/adb_auth_key.dart';
 export 'src/adb_commands.dart';
 export 'src/adb_connection.dart';
+export 'src/adb_device_extension.dart';
 export 'src/adb_der.dart';
 export 'src/adb_device.dart';
 export 'src/adb_exceptions.dart';

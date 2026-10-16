@@ -232,8 +232,8 @@ class ConnectionManager extends GetxService {
       port: port,
       signers: _signers,
       onKilled: _onLocalServerKilled,
-      onUsbError: _onLocalUsbError,
     );
+    local?.listenUsbError(_onLocalUsbError);
     if (local == null) {
       log.info('127.0.0.1:$port 已有 ADB Server，直接使用它列出的设备');
       return;
@@ -427,7 +427,7 @@ class ConnectionManager extends GetxService {
   Future<AdbDevice> connectUsb(UsbAdbDevice usb) async {
     await init();
     _resolveSigners();
-    final transport = await openUsbAdbDevice(usb);
+    final transport = await openUsbAdbTransport(usb);
     final connection = AdbConnection(transport, signers: _signers);
     try {
       await connection.connect();

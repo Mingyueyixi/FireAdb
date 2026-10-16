@@ -64,35 +64,6 @@ Future<void> connectManualInput(
   await connectToHost(context, controller, host, port);
 }
 
-Future<void> connectUsbDevice(
-  BuildContext context,
-  HomeController controller,
-  UsbAdbDevice device,
-) async {
-  final l10n = context.l10n;
-  final messenger = ScaffoldMessenger.of(context);
-  final theme = Theme.of(context);
-  try {
-    final connected = await controller.connectUsb(device);
-    showAppMessage(
-      messenger,
-      theme,
-      title: l10n.homeConnectionSucceeded,
-      message: l10n.homeConnectedDevice(connected.serial),
-    );
-    openWorkspace(connected.serial);
-  } catch (error, stackTrace) {
-    log.severe('连接 USB 设备失败：${device.address}', error, stackTrace);
-    showAppMessage(
-      messenger,
-      theme,
-      title: l10n.homeConnectionFailed,
-      message: '$error',
-      isError: true,
-    );
-  }
-}
-
 Future<void> connectListedAdbDevice(
   BuildContext context,
   HomeController controller,
@@ -139,17 +110,6 @@ Future<void> connectHistoryProfile(
   if (host != null && port != null) {
     await connectToHost(context, controller, host, port);
     return;
-  }
-
-  final usbAddress = profile.usbAddress;
-  if (usbAddress != null) {
-    for (final device in controller.usbDevices) {
-      if (device.address == usbAddress ||
-          device.serialNumber == profile.serial) {
-        await connectUsbDevice(context, controller, device);
-        return;
-      }
-    }
   }
 
   final adbSerial = profile.adbSerial;
