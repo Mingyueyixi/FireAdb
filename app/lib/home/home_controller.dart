@@ -59,7 +59,6 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   Worker? _intervalWorker;
   Worker? _backgroundRefreshWorker;
   var _deviceRefreshGeneration = 0;
-  final Map<String, int> _mdnsMisses = <String, int>{};
   final MdnsBrowser _wirelessBrowser = MdnsBrowser();
   late final DeviceScanner _deviceScanner;
   var _pageVisible = true;
@@ -217,7 +216,6 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     required bool includeMdns,
     bool manual = false,
   }) {
-    List<MdnsService> kept = const <MdnsService>[];
     return _deviceScanner.run(
       includeAdb: adbServerSupported.value,
       // USB 由 adb server 扫进 host:devices，首页不再单独枚举。
@@ -227,16 +225,14 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         if (!mdnsStarted) return;
         scanning.value = true;
         scanError.value = null;
-        kept = List<MdnsService>.of(discovered);
         if (manual) log.info('开始扫描无线设备');
       },
       onListed: _applyListed,
       onMdns: (services) {
         if (isClosed) return;
-        discovered.assignAll(mergeDiscoveredServices(kept, services));
+        discovered.assignAll(services);
       },
-      onRoundComplete: (round) =>
-          _finishDeviceScan(round, kept: kept, manual: manual),
+      onRoundComplete: (round) => _finishDeviceScan(round, manual: manual),
       isCancelled: () => isClosed,
     );
   }
@@ -288,27 +284,13 @@ class HomeController extends GetxController with WidgetsBindingObserver {
         );
   }
 
-  void _finishDeviceScan(
-    DeviceScanRound round, {
-    required List<MdnsService> kept,
-    required bool manual,
-  }) {
+  void _finishDeviceScan(DeviceScanRound round, {required bool manual}) {
     if (!round.includedMdns) return;
-    if (round.cancelled || isClosed) {
-      discovered.assignAll(kept);
-    } else if (round.mdnsError != null) {
+    if (round.mdnsError != null) {
       log.severe('mDNS 设备扫描失败', round.mdnsError, round.mdnsStackTrace);
       scanError.value = '${round.mdnsError}';
-      discovered.assignAll(kept);
-    } else {
-      discovered.assignAll(
-        settleDiscoveredServices(
-          current: kept,
-          confirmed: round.services,
-          misses: _mdnsMisses,
-          heard: !round.timedOut,
-        ),
-      );
+    } else if (!round.cancelled && !isClosed) {
+      discovered.assignAll(round.services);
     }
     if (manual &&
         !round.cancelled &&

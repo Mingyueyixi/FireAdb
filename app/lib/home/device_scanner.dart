@@ -25,7 +25,7 @@ class ListedDeviceScan {
 
 /// 一轮 mDNS 采集的最终结果。
 ///
-/// [timedOut] 表示监听时间到了、这一轮没有新应答。这不是「没有设备」。
+/// [timedOut] 表示监听时间到了仍没有应答；[services] 就是这一轮看到的设备。
 class MdnsDiscoverResult {
   const MdnsDiscoverResult({
     this.services = const <MdnsService>[],
