@@ -3,68 +3,87 @@ import 'dart:io';
 
 import 'package:logging/logging.dart';
 
-/// 一次启动对应一个文件：`logs/fire_adb-yyyy-MM-dd_HH-mm-ss.log`。
+/// 一次 OS 进程对应一个文件：`logs/fire_adb-yyyy-MM-dd_HH-mm-ss.p<pid>.log`。
+///
+/// 热重启同 PID 续写同一文件；新进程新建。
 class FileLogStore {
-  FileLogStore._(this.directory, this._file, this._sink);
+  FileLogStore._(this.directory, this._file, this.continued);
 
   final Directory directory;
   final File _file;
-  final IOSink _sink;
-  Future<void>? _flushing;
+  final bool continued;
+  Future<void>? _queue;
 
   File get file => _file;
 
   static Future<FileLogStore> openSession(
     Directory directory,
-    DateTime started,
-  ) async {
+    DateTime started, {
+    int? processId,
+    bool forceNew = false,
+  }) async {
     await directory.create(recursive: false);
-    final file = File(
-      '${directory.path}${Platform.pathSeparator}${sessionLogFileName(started)}',
-    );
-    return FileLogStore._(
-      directory,
-      file,
-      file.openWrite(mode: FileMode.append),
-    );
+    final pid = processId ?? pidOfThisProcess();
+    File file;
+    var continued = false;
+    if (!forceNew) {
+      final existing = _logFileForProcess(directory, pid);
+      if (existing != null) {
+        file = existing;
+        continued = true;
+      } else {
+        file = File(
+          '${directory.path}${Platform.pathSeparator}'
+          '${sessionLogFileName(started, processId: pid)}',
+        );
+      }
+    } else {
+      file = File(
+        '${directory.path}${Platform.pathSeparator}'
+        '${sessionLogFileName(started, processId: pid)}',
+      );
+    }
+    return FileLogStore._(directory, file, continued);
   }
 
   void write(LogRecord record) => writeLine(formatLogRecord(record));
 
   void writeLine(String line) {
-    try {
-      _sink.writeln(line);
-      flush();
-    } catch (_) {
-      // 写文件失败时仍保留控制台和内存中的日志。
-    }
+    _queue = (_queue ?? Future<void>.value()).then((_) async {
+      try {
+        await _file.writeAsString(
+          '$line\n',
+          mode: FileMode.append,
+          flush: true,
+        );
+      } catch (_) {
+        // 写文件失败时仍保留控制台和内存中的日志。
+      }
+    });
   }
 
-  Future<void> flush() {
-    if (_flushing != null) return _flushing!;
-    _flushing = _sink
-        .flush()
-        .then<void>((_) {}, onError: (Object _) {})
-        .whenComplete(() => _flushing = null);
-    return _flushing!;
+  Future<void> flush() async {
+    await _queue;
   }
 
   Future<void> close() async {
-    await _flushing;
-    await _sink.close();
+    await _queue;
   }
 }
 
-String sessionLogFileName(DateTime time) {
+int pidOfThisProcess() => pid;
+
+String sessionLogFileName(DateTime time, {required int processId}) {
   String two(int value) => value.toString().padLeft(2, '0');
   return 'fire_adb-${time.year}-${two(time.month)}-${two(time.day)}'
-      '_${two(time.hour)}-${two(time.minute)}-${two(time.second)}.log';
+      '_${two(time.hour)}-${two(time.minute)}-${two(time.second)}'
+      '.p$processId.log';
 }
 
-/// 从 `fire_adb-yyyy-MM-dd_HH-mm-ss.log` 或旧的按日文件名读出开始时间。
+/// 从带 `.pPID` 或旧文件名读出开始时间。
 DateTime? logFileStarted(String name) {
   final session = RegExp(
-    r'^fire_adb-(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})\.log$',
+    r'^fire_adb-(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})(?:\.p\d+)?\.log$',
   ).firstMatch(name);
   if (session != null) {
     return _dateFromMatch(session, withClock: true);
@@ -73,6 +92,12 @@ DateTime? logFileStarted(String name) {
       .firstMatch(name);
   if (daily == null) return null;
   return _dateFromMatch(daily, withClock: false);
+}
+
+int? logFileProcessId(String name) {
+  final match = RegExp(r'\.p(\d+)\.log$').firstMatch(name);
+  if (match == null) return null;
+  return int.tryParse(match.group(1)!);
 }
 
 DateTime? _dateFromMatch(RegExpMatch match, {required bool withClock}) {
@@ -89,6 +114,24 @@ DateTime? _dateFromMatch(RegExpMatch match, {required bool withClock}) {
     return null;
   }
   return time;
+}
+
+File? _logFileForProcess(Directory directory, int processId) {
+  if (!directory.existsSync()) return null;
+  File? newest;
+  DateTime? newestStarted;
+  for (final entity in directory.listSync()) {
+    if (entity is! File) continue;
+    final name = _fileName(entity);
+    if (logFileProcessId(name) != processId) continue;
+    final started = logFileStarted(name);
+    if (started == null) continue;
+    if (newestStarted == null || started.isAfter(newestStarted)) {
+      newest = entity;
+      newestStarted = started;
+    }
+  }
+  return newest;
 }
 
 /// 删掉早于 [retentionDays] 的日志。正在写入的 [keepName] 保留。

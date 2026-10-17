@@ -41,9 +41,22 @@ Future<FileLogStore?> attachFileLogStore() async {
     final store = await FileLogStore.openSession(
       Directory(path),
       DateTime.now(),
+      processId: pidOfThisProcess(),
     );
     _fileStore = store;
+    if (store.continued) {
+      try {
+        final existing = await store.file.readAsLines();
+        for (final line in existing) {
+          if (line.isNotEmpty) sessionLog.add(line);
+        }
+      } catch (_) {}
+    }
     log.info('日志文件：${store.file.path}');
+    log.info(
+      '初始化 进程 ${pidOfThisProcess()} '
+      '${store.continued ? '热重启，续写原日志' : '新进程，新建日志'}',
+    );
     return store;
   } catch (error, stackTrace) {
     log.severe('打开日志文件失败', error, stackTrace);
@@ -106,7 +119,12 @@ Future<void> deleteSavedLogs() async {
   if (current != null) await current.close();
   await deleteAllLogFiles(Directory(path));
   logDirectoryPath = path;
-  _fileStore = await FileLogStore.openSession(Directory(path), DateTime.now());
+  _fileStore = await FileLogStore.openSession(
+    Directory(path),
+    DateTime.now(),
+    processId: pidOfThisProcess(),
+    forceNew: true,
+  );
   log.info('日志文件已清理');
 }
 
