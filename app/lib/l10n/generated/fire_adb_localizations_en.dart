@@ -372,7 +372,15 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get workspaceDeviceDisconnectedBody =>
-      'The connection was lost (for example after unplugging USB or running adb tcpip). Return home and connect again.';
+      'The connection was lost (for example after unplugging USB or running adb tcpip). When the device reappears in the list it will reconnect automatically and this dialog will close. You can also reconnect manually, dismiss the dialog, or go home. Pages already open stay readable while offline.';
+
+  @override
+  String workspaceDeviceOfflineName(String name) {
+    return '$name (offline)';
+  }
+
+  @override
+  String get workspaceReconnect => 'Reconnect';
 
   @override
   String get workspaceSwitchToOtherDevice => 'Switch to another device';

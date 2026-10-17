@@ -26,15 +26,29 @@ class WorkspacePage extends GetView<WorkspaceController> {
     );
   }
 
+  String _deviceLabel(
+    BuildContext context,
+    ConnectionManager manager,
+    String serial,
+  ) {
+    final name = manager.profileOf(serial)?.displayName ??
+        controller.rosterProfile(serial)?.displayName ??
+        serial;
+    if (manager.isConnected(serial)) return name;
+    return context.l10n.workspaceDeviceOfflineName(name);
+  }
+
   Widget _deviceTitle(BuildContext context) {
     final serial = controller.selectedSerial.value;
-    final name =
-        Get.find<ConnectionManager>().profileOf(serial)?.displayName ?? serial;
+    final manager = Get.find<ConnectionManager>();
     return TextButton.icon(
       onPressed: () => showWorkspaceDeviceSwitcher(context),
       iconAlignment: IconAlignment.end,
       icon: const Icon(Icons.arrow_drop_down),
-      label: Text(name, overflow: TextOverflow.ellipsis),
+      label: Text(
+        _deviceLabel(context, manager, serial),
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 
@@ -93,7 +107,11 @@ class WorkspacePage extends GetView<WorkspaceController> {
     Widget cache,
     ConnectionManager manager,
   ) {
-    final selectedIndex = serials.indexOf(controller.selectedSerial.value);
+    // destinations 为空时 selectedIndex 必须为 null，否则 NavigationRail 会断言。
+    final rawIndex = serials.indexOf(controller.selectedSerial.value);
+    final selectedIndex = serials.isEmpty
+        ? null
+        : (rawIndex < 0 ? 0 : rawIndex);
     return Scaffold(
       appBar: AppBar(
         leading: _homeButton(context),
@@ -104,18 +122,34 @@ class WorkspacePage extends GetView<WorkspaceController> {
         children: <Widget>[
           NavigationRail(
             selectedIndex: selectedIndex,
-            onDestinationSelected: (i) => controller.selectSerial(serials[i]),
+            onDestinationSelected: serials.isEmpty
+                ? null
+                : (i) => controller.selectSerial(serials[i]),
             labelType: NavigationRailLabelType.all,
             scrollable: true,
             trailingAtBottom: true,
             trailing: _connectDeviceButton(context),
             destinations: <NavigationRailDestination>[
-              for (final s in serials)
+              if (serials.isEmpty)
                 NavigationRailDestination(
-                  icon: const Icon(Icons.smartphone),
-                  selectedIcon: const Icon(Icons.phone_android),
-                  label: Text(manager.profileOf(s)?.displayName ?? s),
-                ),
+                  icon: const Icon(Icons.smartphone_outlined),
+                  label: Text(context.l10n.workspaceConnectDevice),
+                )
+              else
+                for (final s in serials)
+                  NavigationRailDestination(
+                    icon: Icon(
+                      manager.isConnected(s)
+                          ? Icons.smartphone
+                          : Icons.smartphone_outlined,
+                    ),
+                    selectedIcon: Icon(
+                      manager.isConnected(s)
+                          ? Icons.phone_android
+                          : Icons.phonelink_erase,
+                    ),
+                    label: Text(_deviceLabel(context, manager, s)),
+                  ),
             ],
           ),
           const VerticalDivider(width: 1),
@@ -198,45 +232,24 @@ class WorkspacePage extends GetView<WorkspaceController> {
     );
   }
 
-  Widget _buildDisconnected(BuildContext context, List<String> serials) {
-    final hasAny = serials.isNotEmpty;
-    final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(
-        leading: _homeButton(context),
-        title: const Text('FireAdb'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(Icons.usb_off, size: 64, color: scheme.outline),
-            const SizedBox(height: 16),
-            Text(context.l10n.workspaceDeviceDisconnectedTitle),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: () => showWorkspaceDeviceSwitcher(context),
-              child: Text(
-                hasAny
-                    ? context.l10n.workspaceSwitchToOtherDevice
-                    : context.l10n.workspaceConnectDevice,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  /// 本次工作区出现过的设备都留在栏里。断线的标成离线，其它连接不受影响。
+  List<String> _displaySerials(ConnectionManager manager) {
+    final serials = controller.roster
+        .where((serial) => serial.isNotEmpty)
+        .toList();
+    for (final profile in manager.profiles) {
+      if (profile.serial.isEmpty || serials.contains(profile.serial)) continue;
+      serials.add(profile.serial);
+    }
+    return serials;
   }
 
   @override
   Widget build(BuildContext context) {
     final manager = Get.find<ConnectionManager>();
     return Obx(() {
-      final serials = manager.profiles.map((p) => p.serial).toList();
+      final serials = _displaySerials(manager);
       final cache = _featureCache(serials);
-      if (!serials.contains(controller.selectedSerial.value)) {
-        return _keepCache(_buildDisconnected(context, serials), cache);
-      }
       if (isWide(context)) {
         return _buildWide(context, serials, cache, manager);
       }

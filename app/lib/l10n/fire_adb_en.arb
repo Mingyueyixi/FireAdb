@@ -173,7 +173,16 @@
   "workspaceBackToHome": "Back to home",
   "workspaceFeatures": "Features",
   "workspaceDeviceDisconnectedTitle": "Device disconnected",
-  "workspaceDeviceDisconnectedBody": "The connection was lost (for example after unplugging USB or running adb tcpip). Return home and connect again.",
+  "workspaceDeviceDisconnectedBody": "The connection was lost (for example after unplugging USB or running adb tcpip). When the device reappears in the list it will reconnect automatically and this dialog will close. You can also reconnect manually, dismiss the dialog, or go home. Pages already open stay readable while offline.",
+  "workspaceDeviceOfflineName": "{name} (offline)",
+  "@workspaceDeviceOfflineName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "workspaceReconnect": "Reconnect",
   "workspaceSwitchToOtherDevice": "Switch to another device",
   "workspaceBackToConnections": "Back to connections",
   "workspaceDevices": "Devices",

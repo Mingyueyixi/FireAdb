@@ -29,7 +29,9 @@ class ConnectionManager extends GetxService {
   Future<void> Function(String serial)? afterDisconnect;
 
   /// 传输意外掉线（拔线 / `adb tcpip` 等）后调用。由应用层提示并回首页。
-  void Function(String serial)? onUnexpectedDisconnect;
+  ///
+  /// [profile] 是断开前的副本，便于无线会话按地址重连，并在侧栏保留名称。
+  void Function(String serial, {DeviceProfile? profile})? onUnexpectedDisconnect;
 
   var _skipAfterConnect = 0;
 
@@ -296,7 +298,7 @@ class ConnectionManager extends GetxService {
   /// 与 [MdnsBrowser.discover] 的区别：
   /// - 本方法：直接 TCP 握手，**不依赖 mDNS**，只要端口通即可连
   /// - mDNS 发现：仅能发现**主动广播** `_adb-tls-pairing._tcp` 等服务的设备
-  Future<AdbDevice> connectHost(
+  Future<ConnectedDevice> connectHost(
     String host,
     int port, {
     bool rememberManual = true,
@@ -304,16 +306,23 @@ class ConnectionManager extends GetxService {
     await init();
     _resolveSigners();
     final device = await adbConnectTcp(host, port: port, signers: _signers);
-    final connected = ConnectedDevice.direct(device);
+    // 部分设备 CNXN 是 `device::...`，banner 序列号为空。用 host:port 登记，
+    // 并写回连接，避免后续页面再读到空的 AdbDevice.serial。
+    final bannerSerial = device.serial.trim();
+    final serial = bannerSerial.isNotEmpty ? bannerSerial : '$host:$port';
+    device.connection.fillEmptySerial(serial);
+    final connected = ConnectedDevice.direct(device, serial: serial);
     final profile = DeviceProfile(
-      serial: device.serial,
+      serial: serial,
       host: host,
       port: port,
       label: _savedHostLabel(host, port) ?? host,
+      adbSerial: bannerSerial.isEmpty ? null : bannerSerial,
     );
     if (rememberManual) await rememberManualEndpoint(host, port);
     await _registerConnection(profile, connected);
-    return device;
+    // 返回登记用的 ConnectedDevice，不要把 banner 空序列号交给 openWorkspace。
+    return connected;
   }
 
   /// 用手机上的配对码完成无线调试配对。成功后，同一把密钥可以连 TLS 端口。
@@ -455,7 +464,7 @@ class ConnectionManager extends GetxService {
   }
 
   /// 直接打开 USB 上的 ADB 接口，不经过本机 adb server。
-  Future<AdbDevice> connectUsb(UsbAdbDevice usb) async {
+  Future<ConnectedDevice> connectUsb(UsbAdbDevice usb) async {
     await init();
     _resolveSigners();
     final transport = await openUsbAdbTransport(usb);
@@ -467,14 +476,24 @@ class ConnectionManager extends GetxService {
       rethrow;
     }
     final device = AdbDevice(connection);
+    // 与 TCP 相同：CNXN 可能是 `device::...` 空序列号。优先 USB 描述符，再回退总线地址。
+    final bannerSerial = device.serial.trim();
+    final usbSerial = usb.serialNumber?.trim() ?? '';
+    final serial = bannerSerial.isNotEmpty
+        ? bannerSerial
+        : (usbSerial.isNotEmpty ? usbSerial : usb.address);
+    device.connection.fillEmptySerial(serial);
     final profile = DeviceProfile(
-      serial: device.serial,
+      serial: serial,
       label: usb.productName ?? usb.address,
-      adbSerial: device.serial,
+      adbSerial: bannerSerial.isNotEmpty
+          ? bannerSerial
+          : (usbSerial.isEmpty ? null : usbSerial),
       usbAddress: usb.address,
     );
-    await _registerConnection(profile, ConnectedDevice.direct(device));
-    return device;
+    final connected = ConnectedDevice.direct(device, serial: serial);
+    await _registerConnection(profile, connected);
+    return connected;
   }
 
   /// adbd 因 root / unroot 重启后，按原来的地址把直连设备接回来。
@@ -492,14 +511,14 @@ class ConnectionManager extends GetxService {
       final adbSerial = profile.adbSerial;
       await disconnect(serial);
       if (host != null && port != null) {
-        final adb = await connectHost(host, port, rememberManual: false);
-        return deviceOf(adb.serial);
+        await connectHost(host, port, rememberManual: false);
+        return deviceOf(serial) ?? deviceOf('$host:$port');
       }
       if (usbAddress == null && adbSerial == null) return null;
       final usb = await _matchUsb(usbAddress, adbSerial);
       if (usb == null) return null;
-      final adb = await connectUsb(usb);
-      return deviceOf(adb.serial);
+      final connected = await connectUsb(usb);
+      return deviceOf(serial) ?? connected;
     } finally {
       _skipAfterConnect--;
     }
@@ -518,6 +537,12 @@ class ConnectionManager extends GetxService {
     String serial, {
     bool unexpected = false,
   }) async {
+    if (serial.isEmpty) {
+      log.warning('忽略空序列号的 disconnect');
+      return;
+    }
+    final profile = _profiles[serial];
+    final endpoint = _adbEndpoint(serial);
     final device = _devices.remove(serial);
     _profiles.remove(serial);
     if (device != null) {
@@ -536,7 +561,16 @@ class ConnectionManager extends GetxService {
       }
     }
     if (unexpected) {
-      onUnexpectedDisconnect?.call(serial);
+      final remembered = profile ??
+          (endpoint == null
+              ? null
+              : DeviceProfile(
+                  serial: serial,
+                  host: endpoint.$1,
+                  port: endpoint.$2,
+                  label: serial,
+                ));
+      onUnexpectedDisconnect?.call(serial, profile: remembered);
     }
   }
 
@@ -550,19 +584,42 @@ class ConnectionManager extends GetxService {
     DeviceProfile profile,
     ConnectedDevice device,
   ) async {
-    _profiles[profile.serial] = profile;
-    _devices[device.serial] = device;
-    _watchTransport(device);
-    await _remember(profile);
+    final serial = profile.serial.isNotEmpty
+        ? profile.serial
+        : device.serial;
+    if (serial.isEmpty) {
+      try {
+        await device.close();
+      } catch (_) {}
+      throw StateError('无法登记空序列号的设备连接');
+    }
+    if (device.serial.isNotEmpty && device.serial != serial) {
+      log.warning(
+        '连接序列号不一致：profile=$serial device=${device.serial}，以 profile 为准',
+      );
+    }
+    _profiles[serial] = profile.serial == serial
+        ? profile
+        : DeviceProfile(
+            serial: serial,
+            host: profile.host,
+            port: profile.port,
+            label: profile.label,
+            adbSerial: profile.adbSerial ?? device.serial,
+            usbAddress: profile.usbAddress,
+          );
+    _devices[serial] = device;
+    _watchTransport(device, serial);
+    await _remember(_profiles[serial]!);
     final hook = afterConnect;
     if (hook != null && _skipAfterConnect == 0) {
-      await hook(device.serial);
+      await hook(serial);
     }
-    if (deviceOf(profile.serial) == null) {
+    if (deviceOf(serial) == null) {
       throw StateError('adb root 后设备没有连上');
     }
-    final current = deviceOf(profile.serial);
-    final currentProfile = profileOf(profile.serial);
+    final current = deviceOf(serial);
+    final currentProfile = profileOf(serial);
     if (current != null &&
         currentProfile != null &&
         !currentProfile.hasDeviceName) {
@@ -571,16 +628,20 @@ class ConnectionManager extends GetxService {
   }
 
   /// USB/`adb tcpip` 导致传输断开时，从已连接表里摘掉；应用层负责提示与回首页。
-  void _watchTransport(ConnectedDevice device) {
+  void _watchTransport(ConnectedDevice device, String serial) {
     final adb = device.adbConnection;
     if (adb == null) return;
+    if (serial.isEmpty) {
+      log.warning('跳过空序列号的传输监听');
+      return;
+    }
     void onState(AdbConnectionState state) {
       if (state != AdbConnectionState.offline) return;
-      if (deviceOf(device.serial) != device) return;
+      if (deviceOf(serial) != device) return;
       log.warning(
-        '设备传输已断开 ${device.serial}（常见于 adb tcpip / 拔线），清除会话',
+        '设备传输已断开 $serial（常见于 adb tcpip / 拔线），清除会话',
       );
-      unawaited(disconnect(device.serial, unexpected: true));
+      unawaited(disconnect(serial, unexpected: true));
     }
 
     adb.addOnStateChanged(onState);

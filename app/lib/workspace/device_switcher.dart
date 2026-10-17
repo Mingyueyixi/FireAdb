@@ -33,8 +33,13 @@ class _DeviceSwitcherSheetState extends State<_DeviceSwitcherSheet> {
   String? _connectingId;
 
   Future<void> _switchTo(String serial) async {
+    final key = serial.trim();
+    if (key.isEmpty) {
+      log.warning('拒绝切换到空序列号');
+      return;
+    }
     Navigator.pop(context);
-    Get.find<WorkspaceController>().selectSerial(serial);
+    Get.find<WorkspaceController>().selectSerial(key);
   }
 
   Future<void> _connectAdb(AdbDeviceInfo info) async {

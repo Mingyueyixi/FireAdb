@@ -69,6 +69,9 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   var _appForeground = true;
   var _refreshing = true;
 
+  /// 工作区等待自动重连时为 true：连接页虽在后台，仍继续扫列表 / mDNS。
+  var _reconnectProbe = false;
+
   ConnectionManager get manager => Get.find<ConnectionManager>();
 
   AppSettingsStore get _settings => Get.find<AppSettingsStore>();
@@ -132,14 +135,28 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   }
 
   bool get _allowsAutoRefresh =>
-      _settings.refreshInBackground.value || (_pageVisible && _appForeground);
+      _settings.refreshInBackground.value ||
+      _reconnectProbe ||
+      (_pageVisible && _appForeground);
+
+  /// 工作区掉线等待重连时打开：即使离开连接页也继续刷新 / mDNS。
+  void setReconnectProbe(bool active) {
+    if (isClosed) return;
+    if (_reconnectProbe == active) return;
+    _reconnectProbe = active;
+    _syncRefreshGate();
+  }
 
   void _syncRefreshGate() {
     final allow = _allowsAutoRefresh;
-    if (allow == _refreshing) return;
+    // 等待重连时即使关掉了「自动刷新」，仍要扫列表 / mDNS。
+    final refreshEnabled =
+        _settings.autoRefreshDevices.value || _reconnectProbe;
+    final gateChanged = allow != _refreshing;
     _refreshing = allow;
-    _applyDeviceAutoRefresh(_settings.autoRefreshDevices.value);
-    if (!allow || !_settings.autoRefreshDevices.value || isClosed) return;
+    _applyDeviceAutoRefresh(refreshEnabled);
+    if (!allow || !refreshEnabled || isClosed) return;
+    if (!gateChanged && !_reconnectProbe) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (isClosed || !_allowsAutoRefresh) return;
       unawaited(_refreshNowAndReschedule());
@@ -315,7 +332,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     }
   }
 
-  Future<AdbDevice> connect(String host, int port) async {
+  Future<ConnectedDevice> connect(String host, int port) async {
     connecting.value = true;
     try {
       return await manager.connectHost(host, port);

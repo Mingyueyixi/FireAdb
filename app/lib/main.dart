@@ -7,6 +7,7 @@ import 'app_locale_controller.dart';
 import 'app_shell/app_shell.dart';
 import 'apps/data/source/fire_app_service.dart';
 import 'connection/connection_manager.dart';
+import 'connection/model/device_profile.dart';
 import 'home/home_controller.dart';
 import 'l10n/generated/fire_adb_localizations.dart';
 import 'log/app_log.dart';
@@ -39,10 +40,18 @@ Future<void> main() async {
   final deviceRoot = DeviceRootStore();
   await deviceRoot.load();
   Get.put<DeviceRootStore>(deviceRoot, permanent: true);
-  manager.afterConnect = activateSavedAdbRoot;
+  manager.afterConnect = (serial) async {
+    await activateSavedAdbRoot(serial);
+    dismissUnexpectedDisconnectDialog();
+    if (Get.isRegistered<WorkspaceController>()) {
+      Get.find<WorkspaceController>().notifySessionRestored(serial);
+    }
+  };
   manager.afterDisconnect = releaseFireAppService;
-  manager.onUnexpectedDisconnect = (serial) {
-    unawaited(handleUnexpectedDeviceDisconnect(serial));
+  manager.onUnexpectedDisconnect = (serial, {DeviceProfile? profile}) {
+    unawaited(
+      handleUnexpectedDeviceDisconnect(serial, profile: profile),
+    );
   };
   Get.put<HomeController>(HomeController(), permanent: true);
   runApp(const FireAdbApp());

@@ -38,7 +38,14 @@ class _AppsPageState extends State<AppsPage> {
 
   @override
   void dispose() {
-    unawaited(Get.delete<AppsController>(tag: widget.serial, force: true));
+    // sessionEpoch 重建时新旧页同 tag：晚一帧再删，且只删自己那份，避免误删新实例。
+    final tag = widget.serial;
+    final mine = controller;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!Get.isRegistered<AppsController>(tag: tag)) return;
+      if (!identical(Get.find<AppsController>(tag: tag), mine)) return;
+      unawaited(Get.delete<AppsController>(tag: tag, force: true));
+    });
     super.dispose();
   }
 

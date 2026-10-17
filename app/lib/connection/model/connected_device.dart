@@ -5,8 +5,8 @@ import 'dart:typed_data';
 import 'package:libadb/libadb.dart';
 
 class ConnectedDevice {
-  ConnectedDevice.direct(AdbDevice device)
-    : serial = device.serial,
+  ConnectedDevice.direct(AdbDevice device, {String? serial})
+    : serial = _listedSerial(serial, device.serial),
       _device = device,
       _hostClient = null,
       _adbSerial = null,
@@ -29,6 +29,12 @@ class ConnectedDevice {
       _ownsConnection = false;
 
   final String serial;
+
+  static String _listedSerial(String? preferred, String banner) {
+    final chosen = preferred?.trim();
+    if (chosen != null && chosen.isNotEmpty) return chosen;
+    return banner;
+  }
   final AdbDevice? _device;
   AdbHostClient? _hostClient;
   final String? _adbSerial;

@@ -9,6 +9,7 @@ import '../l10n/fire_adb_localizations_ext.dart';
 import '../log/app_log.dart';
 import '../shell/device_root.dart';
 import '../shell/device_root_store.dart';
+import '../workspace/workspace_controller.dart';
 
 /// 设备基本信息面板（连接后按需读取 getprop）。
 class DeviceOverviewPage extends StatefulWidget {
@@ -46,6 +47,7 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
   String? _suError;
   late final TextEditingController _suController;
   late final FocusNode _suFocus;
+  Worker? _sessionWorker;
 
   DeviceRootStore get _root => Get.find<DeviceRootStore>();
 
@@ -56,11 +58,19 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
       text: _root.of(widget.serial).suCommand,
     );
     _suFocus = FocusNode()..addListener(_onSuFocus);
+    if (Get.isRegistered<WorkspaceController>()) {
+      final workspace = Get.find<WorkspaceController>();
+      _sessionWorker = ever(workspace.restoredSerial, (serial) {
+        if (!mounted || serial != widget.serial) return;
+        unawaited(_load());
+      });
+    }
     _load();
   }
 
   @override
   void dispose() {
+    _sessionWorker?.dispose();
     _suFocus
       ..removeListener(_onSuFocus)
       ..dispose();
@@ -76,8 +86,12 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
   Future<void> _load() async {
     final device = _manager.deviceOf(widget.serial);
     if (device == null) {
+      if (!mounted) return;
       setState(() => _error = const _DeviceNotConnectedException());
       return;
+    }
+    if (mounted) {
+      setState(() => _error = null);
     }
     try {
       final props = await device.getProperties().timeout(
@@ -87,6 +101,7 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
       setState(() {
         _props = props;
         _loaded = true;
+        _error = null;
       });
     } catch (error, stackTrace) {
       log.severe('读取设备信息失败：${widget.serial}', error, stackTrace);

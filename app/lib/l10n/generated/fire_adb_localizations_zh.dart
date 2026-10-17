@@ -355,7 +355,15 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get workspaceDeviceDisconnectedBody =>
-      '与设备的连接已中断（例如拔线或 adb tcpip）。请返回主页后重新连接。';
+      '与设备的连接已中断（例如拔线或 adb tcpip）。设备重新出现在列表后会自动重连并关闭本提示；也可手动重连、关闭提示，或返回主页。离线期间仍可查看已打开的页面。';
+
+  @override
+  String workspaceDeviceOfflineName(String name) {
+    return '$name（离线）';
+  }
+
+  @override
+  String get workspaceReconnect => '重连';
 
   @override
   String get workspaceSwitchToOtherDevice => '切换到其他设备';

@@ -728,8 +728,20 @@ abstract class FireAdbLocalizations {
   /// No description provided for @workspaceDeviceDisconnectedBody.
   ///
   /// In zh, this message translates to:
-  /// **'与设备的连接已中断（例如拔线或 adb tcpip）。请返回主页后重新连接。'**
+  /// **'与设备的连接已中断（例如拔线或 adb tcpip）。设备重新出现在列表后会自动重连并关闭本提示；也可手动重连、关闭提示，或返回主页。离线期间仍可查看已打开的页面。'**
   String get workspaceDeviceDisconnectedBody;
+
+  /// No description provided for @workspaceDeviceOfflineName.
+  ///
+  /// In zh, this message translates to:
+  /// **'{name}（离线）'**
+  String workspaceDeviceOfflineName(String name);
+
+  /// No description provided for @workspaceReconnect.
+  ///
+  /// In zh, this message translates to:
+  /// **'重连'**
+  String get workspaceReconnect;
 
   /// No description provided for @workspaceSwitchToOtherDevice.
   ///

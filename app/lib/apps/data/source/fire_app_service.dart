@@ -486,8 +486,13 @@ class _FireAppHub {
       try {
         return await _listBody(device, onCatalog, onNames);
       } catch (error) {
+        // 重连后首轮偶发半截超时：丢掉死会话再拉一次。
         await _dropShell();
-        rethrow;
+        try {
+          return await _listBody(device, onCatalog, onNames);
+        } catch (_) {
+          rethrow;
+        }
       } finally {
         _scheduleIdle();
       }

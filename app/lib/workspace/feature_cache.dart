@@ -44,7 +44,11 @@ class _FeatureCacheState extends State<FeatureCache> {
   }
 
   void _sync() {
-    final alive = widget.serials.toSet();
+    // 当前选中设备即使已从已连接表摘掉，也保留页面，方便离线后仍能回看信息。
+    final alive = <String>{
+      ...widget.serials,
+      if (widget.serial.isNotEmpty) widget.serial,
+    };
     _pages.removeWhere((page) => !alive.contains(page.serial));
     if (!alive.contains(widget.serial)) return;
     final exists = _pages.any(

@@ -229,7 +229,12 @@ Future<void> pairFromQr(BuildContext context, HomeController controller) async {
 }
 
 void openWorkspace(String serial) {
-  Get.toNamed<void>('/workspace', arguments: serial);
+  final key = serial.trim();
+  if (key.isEmpty) {
+    log.warning('拒绝打开空序列号的工作区');
+    return;
+  }
+  Get.toNamed<void>('/workspace', arguments: key);
 }
 
 Future<void> setHomeAutoRefresh(

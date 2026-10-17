@@ -38,7 +38,13 @@ class _FilesPageState extends State<FilesPage> {
 
   @override
   void dispose() {
-    unawaited(Get.delete<FilesController>(tag: widget.serial, force: true));
+    final tag = widget.serial;
+    final mine = controller;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!Get.isRegistered<FilesController>(tag: tag)) return;
+      if (!identical(Get.find<FilesController>(tag: tag), mine)) return;
+      unawaited(Get.delete<FilesController>(tag: tag, force: true));
+    });
     super.dispose();
   }
 

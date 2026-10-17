@@ -251,6 +251,14 @@ class AdbConnection {
   /// CNXN banner 里的 `features=`。官方 `adb shell` 会先查 `host:features`。
   String get features => _features;
   String get deviceSerial => _deviceSerial;
+
+  /// CNXN 为 `device::` 时 banner 序列号为空。登记会话前补上地址，
+  /// 让 [AdbDevice.serial] 与应用层会话键一致。已有序列号时不覆盖。
+  void fillEmptySerial(String serial) {
+    final value = serial.trim();
+    if (value.isEmpty || _deviceSerial.isNotEmpty) return;
+    _deviceSerial = value;
+  }
   bool get isConnected => _connected;
 
   final Completer<void> _connectCompleter = Completer<void>();
