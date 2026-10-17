@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'app_locale_controller.dart';
 import 'app_shell/app_shell.dart';
+import 'apps/data/source/fire_app_service.dart';
 import 'connection/connection_manager.dart';
 import 'home/home_controller.dart';
 import 'l10n/generated/fire_adb_localizations.dart';
@@ -11,6 +14,7 @@ import 'settings/app_settings_store.dart';
 import 'settings/settings_page.dart';
 import 'shell/device_root.dart';
 import 'shell/device_root_store.dart';
+import 'workspace/device_disconnect_ui.dart';
 import 'workspace/workspace_controller.dart';
 import 'workspace/workspace_page.dart';
 
@@ -36,6 +40,10 @@ Future<void> main() async {
   await deviceRoot.load();
   Get.put<DeviceRootStore>(deviceRoot, permanent: true);
   manager.afterConnect = activateSavedAdbRoot;
+  manager.afterDisconnect = releaseFireAppService;
+  manager.onUnexpectedDisconnect = (serial) {
+    unawaited(handleUnexpectedDeviceDisconnect(serial));
+  };
   Get.put<HomeController>(HomeController(), permanent: true);
   runApp(const FireAdbApp());
 }

@@ -371,6 +371,10 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String get workspaceDeviceDisconnectedTitle => 'Device disconnected';
 
   @override
+  String get workspaceDeviceDisconnectedBody =>
+      'The connection was lost (for example after unplugging USB or running adb tcpip). Return home and connect again.';
+
+  @override
   String get workspaceSwitchToOtherDevice => 'Switch to another device';
 
   @override

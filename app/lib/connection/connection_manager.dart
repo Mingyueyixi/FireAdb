@@ -24,6 +24,13 @@ class ConnectionManager extends GetxService {
 
   /// 新连接登记后调用。用来按设备尝试 adb root，失败则保持普通连接。
   Future<void> Function(String serial)? afterConnect;
+
+  /// 任意断开后调用（含手动断开）。用来释放按 serial 缓存的设备侧资源。
+  Future<void> Function(String serial)? afterDisconnect;
+
+  /// 传输意外掉线（拔线 / `adb tcpip` 等）后调用。由应用层提示并回首页。
+  void Function(String serial)? onUnexpectedDisconnect;
+
   var _skipAfterConnect = 0;
 
   final RxMap<String, ConnectedDevice> _devices =
@@ -401,9 +408,16 @@ class ConnectionManager extends GetxService {
     final existingProfile = profileForAdbDevice(info);
     if (existingProfile != null) {
       final existingDevice = _devices[existingProfile.serial];
-      if (existingDevice != null) {
+      // `adb tcpip` 等会重启 adbd：USB 会话已死，不能把僵尸 ConnectedDevice 交回去。
+      if (existingDevice != null && existingDevice.isConnected) {
         await _remember(existingProfile);
         return existingDevice;
+      }
+      if (existingDevice != null) {
+        log.info(
+          '丢弃已断开的会话 ${existingProfile.serial}，准备重新连接',
+        );
+        await disconnect(existingProfile.serial);
       }
     }
 
@@ -500,7 +514,10 @@ class ConnectionManager extends GetxService {
     return null;
   }
 
-  Future<void> disconnect(String serial) async {
+  Future<void> disconnect(
+    String serial, {
+    bool unexpected = false,
+  }) async {
     final device = _devices.remove(serial);
     _profiles.remove(serial);
     if (device != null) {
@@ -509,6 +526,17 @@ class ConnectionManager extends GetxService {
       } catch (error, stackTrace) {
         log.severe('关闭 ADB 设备连接失败：$serial', error, stackTrace);
       }
+    }
+    final after = afterDisconnect;
+    if (after != null) {
+      try {
+        await after(serial);
+      } catch (error, stackTrace) {
+        log.severe('断开后清理失败：$serial', error, stackTrace);
+      }
+    }
+    if (unexpected) {
+      onUnexpectedDisconnect?.call(serial);
     }
   }
 
@@ -524,6 +552,7 @@ class ConnectionManager extends GetxService {
   ) async {
     _profiles[profile.serial] = profile;
     _devices[device.serial] = device;
+    _watchTransport(device);
     await _remember(profile);
     final hook = afterConnect;
     if (hook != null && _skipAfterConnect == 0) {
@@ -539,6 +568,22 @@ class ConnectionManager extends GetxService {
         !currentProfile.hasDeviceName) {
       unawaited(_refreshDeviceName(currentProfile, current));
     }
+  }
+
+  /// USB/`adb tcpip` 导致传输断开时，从已连接表里摘掉；应用层负责提示与回首页。
+  void _watchTransport(ConnectedDevice device) {
+    final adb = device.adbConnection;
+    if (adb == null) return;
+    void onState(AdbConnectionState state) {
+      if (state != AdbConnectionState.offline) return;
+      if (deviceOf(device.serial) != device) return;
+      log.warning(
+        '设备传输已断开 ${device.serial}（常见于 adb tcpip / 拔线），清除会话',
+      );
+      unawaited(disconnect(device.serial, unexpected: true));
+    }
+
+    adb.addOnStateChanged(onState);
   }
 
   String? _savedHostLabel(String host, int port) {

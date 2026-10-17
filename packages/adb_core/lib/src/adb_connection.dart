@@ -216,6 +216,18 @@ class AdbConnection {
   /// 握手状态变化。本机 ADB Server 用它把设备标成 `unauthorized` 或 `device`。
   final void Function(AdbConnectionState state)? onStateChanged;
 
+  final List<void Function(AdbConnectionState)> _stateListeners =
+      <void Function(AdbConnectionState)>[];
+
+  /// 额外监听连接状态（例如 UI 在 USB/`tcpip` 掉线后清掉僵尸会话）。
+  void addOnStateChanged(void Function(AdbConnectionState state) listener) {
+    _stateListeners.add(listener);
+  }
+
+  void removeOnStateChanged(void Function(AdbConnectionState state) listener) {
+    _stateListeners.remove(listener);
+  }
+
   late AdbSizedReader _reader;
   Tls13Connection? _tls;
   final Map<int, AdbStream> _streams = {};
@@ -298,12 +310,18 @@ class AdbConnection {
   }
 
   Future<void> _writePacked(Uint8List bytes) async {
-    final tls = _tls;
-    if (tls == null) {
-      await _transport.write(bytes);
-    } else {
-      tls.writeApplicationData(bytes);
-      await tls.flush();
+    try {
+      final tls = _tls;
+      if (tls == null) {
+        await _transport.write(bytes);
+      } else {
+        tls.writeApplicationData(bytes);
+        await tls.flush();
+      }
+    } catch (e) {
+      // USB/`adb tcpip` 会先把写路径打成 transport closed，读循环未必已退出。
+      _setState(AdbConnectionState.offline);
+      rethrow;
     }
   }
 
@@ -459,7 +477,16 @@ class AdbConnection {
   void _setState(AdbConnectionState value) {
     if (_state == value) return;
     _state = value;
+    // Transport 死后不能再当已连接：否则 UI 会一直拿僵尸会话报 transport closed。
+    if (value == AdbConnectionState.offline) {
+      _connected = false;
+    }
     onStateChanged?.call(value);
+    for (final listener in List<void Function(AdbConnectionState)>.of(
+      _stateListeners,
+    )) {
+      listener(value);
+    }
   }
 
   void _onOkay(AdbMessage msg) {
@@ -577,6 +604,7 @@ class AdbConnection {
   }
 
   Future<void> close() async {
+    _setState(AdbConnectionState.offline);
     for (final s in _streams.values.toList()) {
       s._onPeerClose();
     }

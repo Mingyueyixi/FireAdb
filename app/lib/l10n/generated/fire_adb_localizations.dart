@@ -725,6 +725,12 @@ abstract class FireAdbLocalizations {
   /// **'设备已断开连接'**
   String get workspaceDeviceDisconnectedTitle;
 
+  /// No description provided for @workspaceDeviceDisconnectedBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'与设备的连接已中断（例如拔线或 adb tcpip）。请返回主页后重新连接。'**
+  String get workspaceDeviceDisconnectedBody;
+
   /// No description provided for @workspaceSwitchToOtherDevice.
   ///
   /// In zh, this message translates to:

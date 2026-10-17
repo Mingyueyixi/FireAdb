@@ -354,6 +354,10 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get workspaceDeviceDisconnectedTitle => '设备已断开连接';
 
   @override
+  String get workspaceDeviceDisconnectedBody =>
+      '与设备的连接已中断（例如拔线或 adb tcpip）。请返回主页后重新连接。';
+
+  @override
   String get workspaceSwitchToOtherDevice => '切换到其他设备';
 
   @override

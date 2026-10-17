@@ -43,6 +43,9 @@ class ConnectedDevice {
 
   bool get isConnected => _device?.isConnected ?? true;
 
+  /// 直连/本机 Server 共享会话时的底层连接；viaHost 为 null。
+  AdbConnection? get adbConnection => _device?.connection;
+
   /// 连接由本机 adb server 持有时，root 后由 server 重新接上设备。
   bool get usesHost => !_ownsConnection;
 

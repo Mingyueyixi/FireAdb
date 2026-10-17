@@ -448,6 +448,13 @@ final _hubs = <String, _FireAppHub>{};
 _FireAppHub _hub(ConnectedDevice device) =>
     _hubs.putIfAbsent(device.serial, _FireAppHub.new);
 
+/// 设备断开时由连接层调用：关掉长活 FAAS exec，避免下次同 serial 复用死流。
+Future<void> releaseFireAppService(String serial) async {
+  final hub = _hubs.remove(serial);
+  if (hub == null) return;
+  await hub.dispose();
+}
+
 class _FireAppHub {
   Future<void> _chain = Future<void>.value();
   ConnectedShell? _shell;
@@ -459,6 +466,12 @@ class _FireAppHub {
   var _session = 0;
   var _listenEpoch = 0;
   Timer? _idle;
+
+  Future<void> dispose() async {
+    _epoch++;
+    _bumpSession();
+    await _run(() => _dropShell());
+  }
 
   Future<FireAppListLoad> list(
     ConnectedDevice device, {
