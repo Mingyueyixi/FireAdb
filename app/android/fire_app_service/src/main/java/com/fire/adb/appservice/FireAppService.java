@@ -27,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 桌面端经 {@code exec:} 拉起。主线程读标准输入上的命令，读到 {@code QUIT} 或结束就退出。
@@ -71,7 +72,7 @@ public final class FireAppService {
         DataOutputStream out = new DataOutputStream(
                 new BufferedOutputStream(new FileOutputStream(FileDescriptor.out)));
         try {
-            run(out);
+            run(out, args);
         } catch (Throwable error) {
             error.printStackTrace();
             try {
@@ -82,7 +83,19 @@ public final class FireAppService {
         }
     }
 
-    private static void run(DataOutputStream out) throws Exception {
+    private static boolean hasArg(String[] args, String name) {
+        if (args == null) {
+            return false;
+        }
+        for (String arg : args) {
+            if (name.equals(arg)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void run(DataOutputStream out, String[] args) throws Exception {
         if (Looper.myLooper() == null) {
             Looper.prepareMainLooper();
         }
@@ -91,6 +104,15 @@ public final class FireAppService {
         Map<String, PackageInfo> byPackage = new HashMap<String, PackageInfo>();
         writeHeader(out, TYPE_READY);
         out.flush();
+
+        // One-shot LIST via argv: host opens `exec:... FireAppService LIST`.
+        // Avoids stdin round-trips on a reused process (host saw "LIST sent"
+        // then 5s of 0 bytes while the warm process sat in a bad state).
+        if (hasArg(args, "LIST")) {
+            writeList(out, context, manager);
+            out.flush();
+            return;
+        }
 
         BufferedReader input = new BufferedReader(
                 new InputStreamReader(new FileInputStream(FileDescriptor.in), StandardCharsets.UTF_8));
@@ -171,9 +193,20 @@ public final class FireAppService {
             }
             apps.add(info);
         }
+        // Resolve labels on a side thread while the catalog is written, then
+        // stream each LABEL as soon as it is ready. Never join() before the
+        // first LABEL — that silent window made the host's 5s idle timeout
+        // fire with "已收 620 包名、0 名称" even though USB was fine.
         final String[] labels = new String[apps.size()];
-        Thread naming = new Thread(() -> fillLabels(manager, apps, labels), "fire-app-labels");
+        // Prefix length of indices whose label slot is published (happens-before
+        // via AtomicInteger). Plain boolean[] is not cross-thread visible.
+        final AtomicInteger labelsReadyThrough = new AtomicInteger(0);
+        Thread naming =
+                new Thread(
+                        () -> fillLabels(manager, apps, labels, labelsReadyThrough),
+                        "fire-app-labels");
         naming.start();
+        int written = 0;
         for (PackageInfo info : apps) {
             ApplicationInfo app = info.applicationInfo;
             writeHeader(out, TYPE_APP);
@@ -184,24 +217,38 @@ public final class FireAppService {
             out.writeByte(flagsOf(app));
             writeString(out, apkPaths(app));
             out.writeLong(apkBytes(app));
+            written++;
+            // Flush early so the host idle timer sees catalog bytes while the
+            // rest of the list is still being packed (ADB stream window is 1).
+            if (written == 1 || (written & 15) == 0) {
+                out.flush();
+            }
         }
         writeHeader(out, TYPE_CATALOG_DONE);
         out.flush();
         long catalog = SystemClock.elapsedRealtime();
-        try {
-            naming.join();
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-        }
-        long named = SystemClock.elapsedRealtime();
         int labelCount = 0;
-        for (int index = 0; index < apps.size(); index++) {
-            String label = labels[index];
+        int next = 0;
+        while (next < apps.size()) {
+            if (next >= labelsReadyThrough.get()) {
+                if (!naming.isAlive()) {
+                    break;
+                }
+                try {
+                    Thread.sleep(5);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+                continue;
+            }
+            String label = labels[next];
+            String packageName = apps.get(next).packageName;
+            next++;
             if (label == null) {
                 continue;
             }
             label = label.trim();
-            String packageName = apps.get(index).packageName;
             if (label.length() == 0 || label.equals(packageName)) {
                 continue;
             }
@@ -209,7 +256,17 @@ public final class FireAppService {
             writeString(out, packageName);
             writeString(out, label);
             labelCount++;
+            // Keep the host idle timer fed while the rest of the names resolve.
+            if ((labelCount & 15) == 0) {
+                out.flush();
+            }
         }
+        try {
+            naming.join();
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        long named = SystemClock.elapsedRealtime();
         writeHeader(out, TYPE_LABELS_DONE);
         out.flush();
         long finished = SystemClock.elapsedRealtime();
@@ -231,15 +288,20 @@ public final class FireAppService {
     }
 
     private static void fillLabels(
-            PackageManager manager, List<PackageInfo> apps, String[] labels) {
+            PackageManager manager,
+            List<PackageInfo> apps,
+            String[] labels,
+            AtomicInteger labelsReadyThrough) {
         try {
             for (int index = 0; index < apps.size(); index++) {
                 PackageInfo info = apps.get(index);
                 ApplicationInfo app = info.applicationInfo;
                 labels[index] = app == null ? info.packageName : labelOf(manager, app);
+                labelsReadyThrough.set(index + 1);
             }
         } catch (Throwable error) {
             Log.w(ICON_LOG_TAG, "读取应用名失败", error);
+            labelsReadyThrough.set(apps.size());
         }
     }
 

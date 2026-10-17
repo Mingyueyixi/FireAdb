@@ -35,6 +35,7 @@ void main(List<String> args) async {
           file: bundled,
         ),
       );
+      await _bundleFireUsb(input, output, directory);
       return;
     }
     output.assets.code.add(
@@ -44,5 +45,38 @@ void main(List<String> args) async {
         linkMode: DynamicLoadingSystem(Uri(path: plan.systemName!)),
       ),
     );
+    await _bundleFireUsb(input, output, Directory.fromUri(input.outputDirectory));
   });
+}
+
+/// Optional process-owned USB helper. Present on Windows after build_fire_usb.ps1.
+Future<void> _bundleFireUsb(
+  BuildInput input,
+  BuildOutputBuilder output,
+  Directory directory,
+) async {
+  final os = input.config.code.targetOS.name;
+  final arch = input.config.code.targetArchitecture.name;
+  final fileName = switch (os) {
+    'windows' => 'fire_usb.dll',
+    'macos' => 'libfire_usb.dylib',
+    'linux' => 'libfire_usb.so',
+    _ => null,
+  };
+  if (fileName == null) return;
+  final relative = 'vendor/$os/$arch/$fileName';
+  final source = input.packageRoot.resolve(relative);
+  if (!File.fromUri(source).existsSync()) return;
+  output.dependencies.add(source);
+  directory.createSync(recursive: true);
+  final bundled = directory.uri.resolve(fileName);
+  await File.fromUri(source).copy(bundled.toFilePath());
+  output.assets.code.add(
+    CodeAsset(
+      package: input.packageName,
+      name: 'src/fire_usb.dart',
+      linkMode: DynamicLoadingBundled(),
+      file: bundled,
+    ),
+  );
 }

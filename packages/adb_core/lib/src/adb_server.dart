@@ -120,6 +120,9 @@ class AdbServer {
 
   Iterable<AdbServerDevice> get devices => _devices.values;
 
+  /// Look up a registered device by serial, `devPath`, or `usb:<path>`.
+  AdbServerDevice? findDevice(String key) => _find(key);
+
   /// 绑定 [port]。端口已被占用时抛 [SocketException]。
   Future<void> start({
     InternetAddress? address,

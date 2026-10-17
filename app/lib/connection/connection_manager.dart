@@ -410,7 +410,23 @@ class ConnectionManager extends GetxService {
     if (!info.isOnline) {
       throw StateError('设备 ${info.serial} 当前状态为 ${info.state}，无法连接');
     }
-    final device = ConnectedDevice.viaHost(hostClient, info.serial);
+    // Prefer the LocalAdb AdbConnection directly. viaHost only flushes
+    // localhost TCP, so LIST can return before the USB bridge delivers it;
+    // app-list then times out with 0 packages while the pipe is stuck.
+    final local = _localAdb?.server.findDevice(info.serial);
+    final ConnectedDevice device;
+    if (ownsLocalAdbServer.value &&
+        local != null &&
+        local.isOnline &&
+        local.connection.isConnected) {
+      device = ConnectedDevice.shared(
+        AdbDevice(local.connection),
+        serial: local.serial,
+      );
+      log.info('使用本机 Server 直连 ${local.serial}${local.usb ? '（USB）' : ''}');
+    } else {
+      device = ConnectedDevice.viaHost(hostClient, info.serial);
+    }
     final endpoint = _adbEndpoint(info.serial);
     final profile = DeviceProfile(
       serial: device.serial,
@@ -418,6 +434,7 @@ class ConnectionManager extends GetxService {
       port: endpoint?.$2,
       label: info.model?.replaceAll('_', ' ') ?? info.product ?? device.serial,
       adbSerial: info.serial,
+      usbAddress: local?.usb == true ? local?.devPath : null,
     );
     await _registerConnection(profile, device);
     return device;

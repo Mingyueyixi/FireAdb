@@ -14,6 +14,15 @@ void main() {
       'app_process -Djava.class.path=/data/local/tmp/fire-app-service.jar '
       '/system/bin com.fire.adb.appservice.FireAppService',
     );
+    expect(
+      fireAppServiceCommand(
+        '/data/local/tmp/fire-app-service.jar',
+        argument: 'LIST',
+      ),
+      'CLASSPATH=/data/local/tmp/fire-app-service.jar '
+      'app_process -Djava.class.path=/data/local/tmp/fire-app-service.jar '
+      '/system/bin com.fire.adb.appservice.FireAppService LIST',
+    );
   });
 
   test('分片到达时仍能解析名称和图标帧', () {

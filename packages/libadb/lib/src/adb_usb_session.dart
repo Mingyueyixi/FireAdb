@@ -6,20 +6,25 @@ import 'dart:typed_data';
 
 import 'package:dart_libusb/dart_libusb.dart';
 import 'package:ffi/ffi.dart';
+import 'package:logging/logging.dart';
 
 import 'adb_usb_device.dart';
 import 'adb_usb_match.dart';
+import 'fire_usb.dart';
 import 'libusb_loader.dart';
+
+final Logger _usbLog = Logger('fire_adb.usb');
 
 const int _libusbErrorAccess = -3;
 const int _libusbErrorBusy = -6;
 const int _libusbErrorInterrupted = -10;
 const int _writeTimeoutMs = 10000;
-const int _readTimeoutMs = 1000;
+/// Bulk-IN must not use a short timeout. A 1000ms timeout cancels in-flight
+/// WinUSB reads, drops bytes (status TIMED_OUT), and stalls the pipe during
+/// long transfers such as the app list. Official AOSP uses timeout 0.
+const int _readTimeoutMs = 0;
 const int _readBufferSize = 16 * 1024;
 const int _bulkTransfer = 2;
-const int _transferRead = 1;
-const int _transferWrite = 2;
 
 /// 枚举带 ADB 接口的 USB 设备。没有 libusb 或当前不是桌面平台时抛出 [AdbUsbException]。
 ///
@@ -87,6 +92,13 @@ Future<AdbUsbTransport> openUsbAdbDevice(UsbAdbDevice device) async {
   if (libraryPath == null) {
     throw AdbUsbException('当前平台没有可用的 libusb。');
   }
+  // Hot restart may leave the old handle in the C session table.
+  final fire = FireUsb.tryLoad();
+  if (fire == null) {
+    _usbLog.info('未加载 fire_usb，句柄仍由 Dart 管理');
+  } else {
+    fire.close(device.portPath);
+  }
   final bootstrap = ReceivePort();
   final isolate = await Isolate.spawn(usbWorker, bootstrap.sendPort);
   final worker = await bootstrap.first as SendPort;
@@ -95,6 +107,7 @@ Future<AdbUsbTransport> openUsbAdbDevice(UsbAdbDevice device) async {
   final opened = Completer<Object?>();
   final transport = AdbUsbTransport._(
     libraryPath,
+    device.portPath,
     isolate,
     worker,
     events,
@@ -118,6 +131,7 @@ Future<AdbUsbTransport> openUsbAdbDevice(UsbAdbDevice device) async {
 class AdbUsbTransport implements Finalizable {
   AdbUsbTransport._(
     this._libraryPath,
+    this._portPath,
     this._isolate,
     this._worker,
     this._events,
@@ -141,13 +155,16 @@ class AdbUsbTransport implements Finalizable {
             _context = Pointer<libusb_context>.fromAddress(contextAddress);
             _handle = Pointer<libusb_device_handle>.fromAddress(handleAddress);
             _interfaceNumber = interfaceNumber;
-            _handleFinalizer = NativeFinalizer(
-              DynamicLibrary.open(_libraryPath)
-                  .lookup<NativeFunction<Void Function(Pointer<Void>)>>(
-                    'libusb_close',
-                  ),
-            );
-            _handleFinalizer!.attach(this, _handle!.cast(), detach: this);
+            // Handle ownership stays in fire_usb when that library is loaded.
+            if (FireUsb.tryLoad() == null) {
+              _handleFinalizer = NativeFinalizer(
+                DynamicLibrary.open(_libraryPath)
+                    .lookup<NativeFunction<Void Function(Pointer<Void>)>>(
+                      'libusb_close',
+                    ),
+              );
+              _handleFinalizer!.attach(this, _handle!.cast(), detach: this);
+            }
           }
           if (!opened.isCompleted) opened.complete(null);
         case 'data':
@@ -165,6 +182,7 @@ class AdbUsbTransport implements Finalizable {
             unawaited(close());
           }
         case 'closed':
+          if (!_workerDone.isCompleted) _workerDone.complete();
           if (!opened.isCompleted) opened.complete('USB 设备在打开前已关闭。');
           if (!_incoming.isClosed) unawaited(_incoming.close());
       }
@@ -172,10 +190,12 @@ class AdbUsbTransport implements Finalizable {
   }
 
   final String _libraryPath;
+  final String _portPath;
   final Isolate _isolate;
   final SendPort _worker;
   final ReceivePort _events;
   final StreamController<Uint8List> _incoming = StreamController<Uint8List>();
+  final Completer<void> _workerDone = Completer<void>();
   StreamSubscription<dynamic>? _subscription;
   NativeFinalizer? _handleFinalizer;
   Libusb? _libusb;
@@ -185,19 +205,35 @@ class AdbUsbTransport implements Finalizable {
   var _closed = false;
   var _released = false;
 
-  /// USB 字符串描述符里的序列号。`adb devices` 用它，而不是端口路径。
+  /// USB ????????????`adb devices` ???????????
   String? serialNumber;
 
   Stream<Uint8List> get stream => _incoming.stream;
 
+  /// ???? worker??? libusb context ????? isolate ?????
+  /// ? isolate ??? interrupt???? handle_events ?? submit?
   Future<void> write(List<int> data) async {
-    if (_closed) throw StateError('传输已关闭，无法写入');
+    if (_closed) throw StateError('transport closed');
+    if (data.isEmpty) return;
     final reply = ReceivePort();
-    _worker.send(<Object?>['write', Uint8List.fromList(data), reply.sendPort]);
-    _interruptWorker();
-    final result = await reply.first;
-    reply.close();
-    if (result is String) throw AdbUsbException(result);
+    try {
+      _worker.send(<Object?>[
+        'write',
+        Uint8List.fromList(data),
+        reply.sendPort,
+      ]);
+      _interruptWorker();
+      final result = await reply.first.timeout(
+        const Duration(milliseconds: _writeTimeoutMs + 2000),
+      );
+      if (result != null) {
+        throw result is Exception ? result : AdbUsbException('$result');
+      }
+    } on TimeoutException {
+      throw AdbUsbException('USB write timed out');
+    } finally {
+      reply.close();
+    }
   }
 
   Future<void> close() async {
@@ -205,23 +241,44 @@ class AdbUsbTransport implements Finalizable {
     _closed = true;
     try {
       _worker.send(<Object?>['close']);
-    } catch (_) {}
+    } catch (_) {
+      if (!_workerDone.isCompleted) _workerDone.complete();
+    }
     _interruptWorker();
-    // 持有会话的 isolate 立刻关掉接口，不等后台读写 isolate。
+    // Wait for the worker to leave handle_events and drop in-flight
+    // transfers before closing the device handle. Closing from the main
+    // isolate while WinUSB still owns URBs kills the process.
+    try {
+      await _workerDone.future.timeout(const Duration(seconds: 2));
+    } on TimeoutException {
+      _usbLog.warning('USB worker ???? $_portPath');
+    }
     _handleFinalizer?.detach(this);
     _handleFinalizer = null;
-    final libusb = _libusb;
-    final handle = _handle;
-    final context = _context;
-    _released = _releaseUsb(libusb, handle, _interfaceNumber, _released);
+    final fire = FireUsb.tryLoad();
+    if (fire != null) {
+      fire.close(_portPath);
+      _released = true;
+    } else {
+      final libusb = _libusb;
+      final handle = _handle;
+      final context = _context;
+      final before = !_released && handle != null;
+      _released = _releaseUsb(libusb, handle, _interfaceNumber, _released);
+      if (libusb != null && context != null) {
+        libusb.libusb_exit(context);
+      }
+      _usbLog.info(
+        before
+            ? 'Dart released USB handle $_portPath'
+            : 'Dart close found no USB handle $_portPath',
+      );
+    }
     _handle = null;
     await _subscription?.cancel();
     _events.close();
     if (!_incoming.isClosed) await _incoming.close();
     _isolate.kill(priority: Isolate.immediate);
-    if (libusb != null && context != null) {
-      libusb.libusb_exit(context);
-    }
     _libusb = null;
     _context = null;
   }
@@ -251,23 +308,45 @@ Future<void> usbWorker(SendPort mainPort) async {
   var interfaceNumber = -1;
   var handedOff = false;
   var released = false;
+  var ownedByFireUsb = false;
   _UsbEventLoop? loop;
   try {
     libusb = Libusb(DynamicLibrary.open(libraryPath));
-    context = _init(libusb);
-    final openedDevice = _openDevice(libusb, context, portPath);
-    handle = openedDevice.handle;
-    interfaceNumber = openedDevice.match.interfaceNumber;
-    _prepareInterface(libusb, handle, interfaceNumber);
-    final serial = _usbSerialNumber(libusb, handle);
+    final fire = FireUsb.tryLoad();
+    late final int endpointIn;
+    late final int endpointOut;
+    late final int maxPacketSize;
+    late final String? serial;
+    if (fire != null) {
+      ownedByFireUsb = true;
+      final session = fire.open(portPath, libusbPath: libraryPath);
+      context = Pointer<libusb_context>.fromAddress(session.contextAddress);
+      handle = Pointer<libusb_device_handle>.fromAddress(session.handleAddress);
+      interfaceNumber = session.interfaceNumber;
+      endpointIn = session.endpointIn;
+      endpointOut = session.endpointOut;
+      maxPacketSize = session.maxPacketSize;
+      serial = session.serial.isEmpty ? null : session.serial;
+    } else {
+      context = _init(libusb);
+      final openedDevice = _openDevice(libusb, context, portPath);
+      handle = openedDevice.handle;
+      interfaceNumber = openedDevice.match.interfaceNumber;
+      _prepareInterface(libusb, handle, interfaceNumber);
+      serial = _usbSerialNumber(libusb, handle);
+      endpointIn = openedDevice.match.endpointIn;
+      endpointOut = openedDevice.match.endpointOut;
+      maxPacketSize = openedDevice.match.maxPacketSize;
+    }
     loop = _UsbEventLoop(
       libusb: libusb,
       context: context,
       handle: handle,
-      endpointIn: openedDevice.match.endpointIn,
-      endpointOut: openedDevice.match.endpointOut,
-      maxPacketSize: openedDevice.match.maxPacketSize,
+      endpointIn: endpointIn,
+      endpointOut: endpointOut,
+      maxPacketSize: maxPacketSize,
     );
+    // Caller only needs context for interrupt + handle for close/finalizer.
     _post(events, <Object?>[
       'ready',
       serial,
@@ -282,8 +361,13 @@ Future<void> usbWorker(SendPort mainPort) async {
   } finally {
     loop?.dispose();
     if (!handedOff) {
-      released = _releaseUsb(libusb, handle, interfaceNumber, released);
-      if (libusb != null && context != null) libusb.libusb_exit(context);
+      if (ownedByFireUsb) {
+        FireUsb.tryLoad()?.close(portPath);
+        released = true;
+      } else {
+        released = _releaseUsb(libusb, handle, interfaceNumber, released);
+        if (libusb != null && context != null) libusb.libusb_exit(context);
+      }
     }
     _post(events, <Object?>['closed']);
     inbox.close();
@@ -379,7 +463,7 @@ class _QueuedWrite {
 
   final Uint8List data;
   final SendPort reply;
-  var sendingZeroPacket = false;
+  var sendingZero = false;
   var replied = false;
 
   void finish(Object? result) {
@@ -391,13 +475,42 @@ class _QueuedWrite {
   }
 }
 
-class _TransferDone {
-  _TransferDone(this.tag, this.status, this.actual, this.bytes);
+/// Filled by [_libusbTransferThunk] inside `libusb_handle_events` (same
+/// thread). Dart only reads the slot after handle_events returns ? no
+/// NativeCallable async queue between kernel completion and harvest.
+final class _TransferSlot extends Struct {
+  @Int32()
+  external int ready;
 
-  final int tag;
-  final int status;
-  final int actual;
-  final Uint8List? bytes;
+  @Int32()
+  external int status;
+
+  @Int32()
+  external int actual;
+}
+
+void _libusbTransferThunk(Pointer<_LibusbTransfer> transfer) {
+  final slot = Pointer<_TransferSlot>.fromAddress(transfer.ref.userData.address);
+  slot.ref.status = transfer.ref.status;
+  slot.ref.actual = transfer.ref.actualLength;
+  slot.ref.ready = 1;
+}
+
+/// Fallback when fire_usb.dll has no C callback (old build). Prefer C callback
+/// so libusb_handle_events never re-enters Dart.
+final Pointer<NativeFunction<Void Function(Pointer<_LibusbTransfer>)>>
+_dartTransferCallback =
+    Pointer.fromFunction<Void Function(Pointer<_LibusbTransfer>)>(
+      _libusbTransferThunk,
+    );
+
+Pointer<NativeFunction<Void Function(Pointer<_LibusbTransfer>)>>
+_transferCallback() {
+  final fire = FireUsb.tryLoad()?.transferCallback;
+  if (fire != null) {
+    return fire.cast();
+  }
+  return _dartTransferCallback;
 }
 
 class _UsbEventLoop {
@@ -414,9 +527,8 @@ class _UsbEventLoop {
       _pingWaiter = null;
       if (waiter != null && !waiter.isCompleted) waiter.complete();
     });
-    _calls = NativeCallable<Void Function(Pointer<_LibusbTransfer>)>.listener(
-      _onTransfer,
-    );
+    _readSlot = calloc<_TransferSlot>();
+    _writeSlot = calloc<_TransferSlot>();
     _readTransfer = _allocate();
     _writeTransfer = _allocate();
     _readBuffer = calloc<UnsignedChar>(_readBufferSize);
@@ -430,10 +542,10 @@ class _UsbEventLoop {
   final int maxPacketSize;
 
   final ReceivePort _ping = ReceivePort();
-  final List<_TransferDone> _done = <_TransferDone>[];
   final List<_QueuedWrite> _writes = <_QueuedWrite>[];
   Completer<void>? _pingWaiter;
-  late final NativeCallable<Void Function(Pointer<_LibusbTransfer>)> _calls;
+  late final Pointer<_TransferSlot> _readSlot;
+  late final Pointer<_TransferSlot> _writeSlot;
   late final Pointer<_LibusbTransfer> _readTransfer;
   late final Pointer<_LibusbTransfer> _writeTransfer;
   late final Pointer<UnsignedChar> _readBuffer;
@@ -448,10 +560,16 @@ class _UsbEventLoop {
   var _disposed = false;
 
   Future<void> run(_Inbox inbox, SendPort events) async {
+    // Single reactor: submit IN/OUT to the kernel, block in handle_events,
+    // harvest slots, then accept Dart write/close messages. No second USB
+    // thread and no async Dart callback between completion and harvest.
+    inbox.onMessage = () {
+      libusb.libusb_interrupt_event_handler(context);
+    };
     await _flush();
     _drain(inbox);
-    _ensureRead(events);
     _pumpWrite(events);
+    _ensureRead(events);
     while (true) {
       if (_closing) _cancelInFlight();
       if (_closing && !_readBusy && !_writeBusy) return;
@@ -459,58 +577,45 @@ class _UsbEventLoop {
       if (code != 0 && code != _libusbErrorInterrupted && !_closing) {
         _report(events, libusbErrorText(libusb, code));
       }
-      await _flush();
+      // Slots are filled by the C thunk. Harvest before any await so the
+      // read buffer is copied before reuse. _finishRead resubmits IN
+      // immediately ? a gap without an IN URB lets the gadget fill its
+      // bulk-IN buffer and stop accepting OUT (OKAY), which deadlocks
+      // the app-list stream (READY works, LIST hangs with 0 packages).
       _harvest(events);
+      await _flush();
       _drain(inbox);
+      _pumpWrite(events);
       if (_closing) continue;
       _ensureRead(events);
-      _pumpWrite(events);
     }
   }
 
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    // Never free buffers while a transfer still owns them ? that UAF
+    // crashes the Windows process inside WinUSB/libusb.
     if (!_readBusy) {
       libusb.libusb_free_transfer(_readTransfer.cast());
+      calloc.free(_readBuffer);
+      calloc.free(_readSlot);
     }
     if (!_writeBusy) {
       libusb.libusb_free_transfer(_writeTransfer.cast());
+      calloc.free(_writeSlot);
+      final writeBuffer = _writeBuffer;
+      if (writeBuffer != null) calloc.free(writeBuffer);
     }
-    calloc.free(_readBuffer);
-    final writeBuffer = _writeBuffer;
-    if (writeBuffer != null) calloc.free(writeBuffer);
-    _calls.close();
     _ping.close();
   }
 
   Pointer<_LibusbTransfer> _allocate() {
     final transfer = libusb.libusb_alloc_transfer(0).cast<_LibusbTransfer>();
     if (transfer.address == 0) {
-      throw AdbUsbException('无法分配 USB 传输。');
+      throw AdbUsbException('???? USB ???');
     }
     return transfer;
-  }
-
-  void _onTransfer(Pointer<_LibusbTransfer> transfer) {
-    final actual = transfer.ref.actualLength;
-    Uint8List? bytes;
-    if (transfer.ref.userData.address == _transferRead &&
-        transfer.ref.status == 0 &&
-        actual > 0) {
-      final length = actual > _readBufferSize ? _readBufferSize : actual;
-      bytes = Uint8List.fromList(
-        transfer.ref.buffer.cast<Uint8>().asTypedList(length),
-      );
-    }
-    _done.add(
-      _TransferDone(
-        transfer.ref.userData.address,
-        transfer.ref.status,
-        actual,
-        bytes,
-      ),
-    );
   }
 
   Future<void> _flush() {
@@ -523,99 +628,97 @@ class _UsbEventLoop {
   void _drain(_Inbox inbox) {
     for (final message in inbox.drain()) {
       switch (message.first) {
-        case 'write':
-          final reply = message[2]! as SendPort;
-          if (_closing) {
-            reply.send('USB 设备已关闭。');
-            break;
-          }
-          final data = message[1]! as Uint8List;
-          if (data.isEmpty) {
-            reply.send(null);
-            break;
-          }
-          _writes.add(_QueuedWrite(data, reply));
         case 'close':
           _closing = true;
-          for (final queued in _writes) {
-            queued.finish('USB 设备已关闭。');
+          for (final write in _writes) {
+            write.finish(StateError('USB closed'));
           }
           _writes.clear();
-          _currentWrite?.finish('USB 设备已关闭。');
+          _currentWrite?.finish(StateError('USB closed'));
+          _currentWrite = null;
+        case 'write':
+          if (_closing) {
+            final reply = message[2];
+            if (reply is SendPort) {
+              try {
+                reply.send(StateError('USB closed'));
+              } catch (_) {}
+            }
+            break;
+          }
+          final data = message[1];
+          final reply = message[2];
+          if (data is Uint8List && reply is SendPort) {
+            _writes.add(_QueuedWrite(data, reply));
+          }
       }
     }
   }
 
   void _harvest(SendPort events) {
-    final ready = List<_TransferDone>.of(_done);
-    _done.clear();
-    for (final done in ready) {
-      if (done.tag == _transferRead) {
-        _finishRead(events, done);
-      } else if (done.tag == _transferWrite) {
-        _finishWrite(events, done);
-      }
+    if (_readSlot.ref.ready != 0) {
+      _readSlot.ref.ready = 0;
+      _finishRead(events, _readSlot.ref.status, _readSlot.ref.actual);
+    }
+    if (_writeSlot.ref.ready != 0) {
+      _writeSlot.ref.ready = 0;
+      _finishWrite(events, _writeSlot.ref.status, _writeSlot.ref.actual);
     }
   }
 
-  void _finishRead(SendPort events, _TransferDone done) {
+  void _finishRead(SendPort events, int status, int actual) {
     _readBusy = false;
-    if (_closing || done.status == 3) return;
-    if (done.status == 2) return;
-    if (usbBulkReadFailed(done.status)) {
-      _report(events, _transferStatusText(done.status));
+    if (_closing || status == 3) return;
+    if (usbBulkReadFailed(status)) {
+      _report(events, _transferStatusText(status));
       return;
     }
-    final bytes = done.bytes;
+    Uint8List? bytes;
+    // COMPLETED (0) or TIMED_OUT (2) with bytes ? never drop payload.
+    if (actual > 0 && (status == 0 || status == 2)) {
+      final length = actual > _readBufferSize ? _readBufferSize : actual;
+      bytes = Uint8List.fromList(
+        _readBuffer.cast<Uint8>().asTypedList(length),
+      );
+    }
+    // Resubmit IN before posting to the main isolate. Host-initiated bulk
+    // IN must stay queued or the Android gadget stalls on OUT (OKAYs).
+    _ensureRead(events);
     if (bytes != null && bytes.isNotEmpty) {
       _post(events, <Object?>['data', bytes]);
     }
   }
 
-  void _finishWrite(SendPort events, _TransferDone done) {
+  void _finishWrite(SendPort events, int status, int actual) {
     _writeBusy = false;
     final current = _currentWrite;
     if (current == null) return;
-    if (_closing || done.status == 3) {
-      current.finish('USB 设备已关闭。');
+    if (_closing || status == 3) {
+      current.finish(StateError('USB closed during write'));
       _currentWrite = null;
       return;
     }
-    if (done.status != 0 || done.actual != _writeExpect) {
+    if (status != 0 || actual != _writeExpect) {
       current.finish(
-        done.status == 0
-            ? 'USB 写入不完整：${done.actual}/$_writeExpect'
-            : 'USB 传输失败（${_transferStatusText(done.status)}）',
+        AdbUsbException(
+          status == 0
+              ? 'USB write incomplete: $actual/$_writeExpect'
+              : 'USB write failed (status $status)',
+        ),
       );
       _currentWrite = null;
-      if (done.status == 5) _report(events, _transferStatusText(done.status));
+      _pumpWrite(events);
       return;
     }
-    if (!current.sendingZeroPacket &&
+    if (!current.sendingZero &&
         needsZeroLengthPacket(current.data.length, maxPacketSize)) {
-      current.sendingZeroPacket = true;
-      _submitWrite(events, 0);
+      current.sendingZero = true;
+      _submitCurrentWrite(events, 0);
       return;
     }
     current.finish(null);
     _currentWrite = null;
-  }
-
-  void _ensureRead(SendPort events) {
-    if (_closing || _readBusy) return;
-    final code = _submit(
-      transfer: _readTransfer,
-      endpoint: endpointIn,
-      buffer: _readBuffer,
-      length: _readBufferSize,
-      timeout: _readTimeoutMs,
-      tag: _transferRead,
-    );
-    if (code != 0) {
-      _report(events, libusbErrorText(libusb, code));
-      return;
-    }
-    _readBusy = true;
+    _pumpWrite(events);
   }
 
   void _pumpWrite(SendPort events) {
@@ -629,28 +732,55 @@ class _UsbEventLoop {
     final buffer = calloc<UnsignedChar>(next.data.length);
     buffer.cast<Uint8>().asTypedList(next.data.length).setAll(0, next.data);
     _writeBuffer = buffer;
-    _submitWrite(events, next.data.length);
+    _submitCurrentWrite(events, next.data.length);
   }
 
-  void _submitWrite(SendPort events, int length) {
+  void _submitCurrentWrite(SendPort events, int length) {
     final buffer = _writeBuffer;
-    if (buffer == null) return;
+    if (buffer == null) {
+      _currentWrite?.finish(StateError('USB write buffer missing'));
+      _currentWrite = null;
+      return;
+    }
+    _writeSlot.ref.ready = 0;
     final code = _submit(
       transfer: _writeTransfer,
       endpoint: endpointOut,
       buffer: buffer,
       length: length,
       timeout: _writeTimeoutMs,
-      tag: _transferWrite,
+      slot: _writeSlot,
     );
     if (code != 0) {
-      _currentWrite?.finish('USB 传输失败（${libusbErrorText(libusb, code)}）');
+      _currentWrite?.finish(
+        AdbUsbException(
+          'USB write submit failed: ${libusbErrorText(libusb, code)}',
+        ),
+      );
       _currentWrite = null;
-      if (code == -4) _report(events, libusbErrorText(libusb, code));
+      _report(events, libusbErrorText(libusb, code));
       return;
     }
     _writeExpect = length;
     _writeBusy = true;
+  }
+
+  void _ensureRead(SendPort events) {
+    if (_closing || _readBusy) return;
+    _readSlot.ref.ready = 0;
+    final code = _submit(
+      transfer: _readTransfer,
+      endpoint: endpointIn,
+      buffer: _readBuffer,
+      length: _readBufferSize,
+      timeout: _readTimeoutMs,
+      slot: _readSlot,
+    );
+    if (code != 0) {
+      _report(events, libusbErrorText(libusb, code));
+      return;
+    }
+    _readBusy = true;
   }
 
   int _submit({
@@ -659,7 +789,7 @@ class _UsbEventLoop {
     required Pointer<UnsignedChar> buffer,
     required int length,
     required int timeout,
-    required int tag,
+    required Pointer<_TransferSlot> slot,
   }) {
     final fields = transfer.ref;
     fields.devHandle = handle;
@@ -670,8 +800,8 @@ class _UsbEventLoop {
     fields.status = 0;
     fields.length = length;
     fields.actualLength = 0;
-    fields.callback = _calls.nativeFunction;
-    fields.userData = Pointer<Void>.fromAddress(tag);
+    fields.callback = _transferCallback();
+    fields.userData = slot.cast();
     fields.buffer = buffer;
     fields.numIsoPackets = 0;
     return libusb.libusb_submit_transfer(transfer.cast());
@@ -688,11 +818,11 @@ class _UsbEventLoop {
     _closing = true;
     if (_reported) return;
     _reported = true;
-    _post(events, <Object?>['error', 'USB 传输失败（$message）']);
+    _post(events, <Object?>['error', 'USB ?????$message?']);
   }
 }
 
-/// 单订阅端口上的消息队列。一次 [take] 不会把端口听第二次。
+/// Message queue on the worker isolate. One [take] does not re-listen.
 class _Inbox {
   _Inbox() {
     attach(port);
@@ -701,11 +831,13 @@ class _Inbox {
   final ReceivePort port = ReceivePort();
   final List<List<Object?>> _pending = <List<Object?>>[];
   Completer<void>? _waiter;
+  void Function()? onMessage;
 
   void attach(ReceivePort source) {
     source.listen((Object? message) {
       if (message is! List || message.isEmpty) return;
       _pending.add(message.cast<Object?>());
+      onMessage?.call();
       final waiter = _waiter;
       if (waiter != null && !waiter.isCompleted) waiter.complete();
     });

@@ -216,7 +216,7 @@ Future<ExportedRemoteFile> copyLocalFile({
     failure = isCancelled?.call() == true
         ? (cancelledException?.call() ?? const RemoteFileExportCancelled())
         : error;
-    throw failure as Object;
+    throw failure;
   } finally {
     copyHandle?.detach();
     await closeFiles();

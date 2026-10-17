@@ -1,4 +1,3 @@
-import 'package:fire_adb/shell/device_root_store.dart';
 import 'package:fire_adb/shell/root_shell.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,7 +13,7 @@ void main() {
       "'su' -c 'id'",
     );
     expect(
-      RootPlan.su('/system/xbin/ksu', SuForm.uid).wrap("id"),
+      RootPlan.su('/system/xbin/ksu', SuForm.uid).wrap('id'),
       "'/system/xbin/ksu' 0 sh -c 'id'",
     );
     expect(

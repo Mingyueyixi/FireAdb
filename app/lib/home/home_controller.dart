@@ -476,9 +476,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       return null;
     }
     try {
-      final devices = await _hostClient.devices(long: true);
-      _loggedAdbError = null;
-      return devices;
+      return await _hostClient.devices(long: true);
     } catch (_) {
       return null;
     }

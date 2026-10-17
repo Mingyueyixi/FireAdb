@@ -9,28 +9,42 @@ class ConnectedDevice {
     : serial = device.serial,
       _device = device,
       _hostClient = null,
-      _adbSerial = null;
+      _adbSerial = null,
+      _ownsConnection = true;
+
+  /// Share the [AdbConnection] already owned by our LocalAdb server.
+  /// Writes wait for device OKAY (unlike viaHost TCP flush). [close] does not
+  /// tear down the server's transport.
+  ConnectedDevice.shared(AdbDevice device, {String? serial})
+    : serial = serial ?? device.serial,
+      _device = device,
+      _hostClient = null,
+      _adbSerial = serial ?? device.serial,
+      _ownsConnection = false;
 
   ConnectedDevice.viaHost(AdbHostClient hostClient, this.serial)
     : _device = null,
       _hostClient = hostClient,
-      _adbSerial = serial;
+      _adbSerial = serial,
+      _ownsConnection = false;
 
   final String serial;
   final AdbDevice? _device;
   AdbHostClient? _hostClient;
   final String? _adbSerial;
+  final bool _ownsConnection;
 
   /// 本机 adb server 端口变了之后，后续命令改连新端口。
   void retargetHostClient(AdbHostClient client) {
+    if (_ownsConnection) return;
     if (_device != null) return;
     _hostClient = client;
   }
 
   bool get isConnected => _device?.isConnected ?? true;
 
-  /// 经本机 adb server 转发时，`adb root` 重启后由 server 重新接上设备。
-  bool get usesHost => _device == null;
+  /// 连接由本机 adb server 持有时，root 后由 server 重新接上设备。
+  bool get usesHost => !_ownsConnection;
 
   /// 打开任意设备服务并读完一行输出，例如 `root:`。
   ///
@@ -156,6 +170,7 @@ class ConnectedDevice {
   }
 
   Future<void> close() async {
+    if (!_ownsConnection) return;
     await _device?.close();
   }
 }
@@ -208,6 +223,13 @@ class ConnectedShell {
       return;
     }
     await _hostShell!.close();
+  }
+
+  /// 对端关闭或本地 close 结束。直连时可用来等 exec 进程退出。
+  Future<void>? get closed {
+    final adbStream = _adbStream;
+    if (adbStream != null) return adbStream.closed;
+    return null;
   }
 }
 

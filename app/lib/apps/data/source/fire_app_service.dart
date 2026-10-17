@@ -9,6 +9,10 @@ import '../../../log/app_log.dart';
 /// 手机上的 jar 路径。录屏入口也在这一份 jar 里。
 const String fireAppServiceRemotePath = '/data/local/tmp/fire-app-service.jar';
 
+/// 与 jar 一并推送，避免只比文件大小时漏掉同长度的新构建。
+const String fireAppServiceRemoteVersionPath =
+    '/data/local/tmp/fire-app-service.version';
+
 /// `app_process` 入口。
 const String fireAppServiceMainClass = 'com.fire.adb.appservice.FireAppService';
 
@@ -28,8 +32,16 @@ const int fireAppFlagSuspended = 4;
 const int fireAppFlagDebug = 8;
 
 /// 启动应用信息服务。标准输入输出是二进制帧，不经过 shell 的换行转换。
-String fireAppServiceCommand(String remotePath) =>
-    'CLASSPATH=$remotePath app_process -Djava.class.path=$remotePath /system/bin $fireAppServiceMainClass';
+///
+/// 列表与 SHOW 共用长寿进程：stdin 文本命令，stdout 二进制帧。
+/// [argument] 仅测试/调试用；正常路径不传，避免每次冷启动 `app_process`。
+String fireAppServiceCommand(String remotePath, {String? argument}) {
+  final base =
+      'CLASSPATH=$remotePath app_process -Djava.class.path=$remotePath '
+      '/system/bin $fireAppServiceMainClass';
+  if (argument == null || argument.isEmpty) return base;
+  return '$base $argument';
+}
 
 sealed class FireAppFrame {}
 
@@ -148,6 +160,9 @@ class FireAppServiceError extends FireAppFrame {
 /// 把陆续到达的字节解析成帧。数据不够时保留，下次再续。
 class FireAppFrameReader {
   final _pending = <int>[];
+
+  /// Bytes waiting for a complete frame (for stall diagnostics).
+  int get pendingBytes => _pending.length;
 
   List<FireAppFrame> add(List<int> chunk) {
     _pending.addAll(chunk);
@@ -338,28 +353,44 @@ class FireAppFrameReader {
 }
 
 Uint8List? _cachedJar;
-final _jarPushed = <String, int>{};
+String? _cachedJarVersion;
+final _jarPushed = <String, String>{};
 
-/// 把辅助服务 jar 推到设备。大小相同就跳过，避免每次都重传。
-/// 本进程里确认过的设备不再查远程大小。
+/// 把辅助服务 jar 推到设备。
+///
+/// 不要对可能不存在的 stamp 做 sync pull：经 SDK adb 时缺失文件会掐断
+/// sync 流，随后 `readExactly(8)` 报「流已结束」。stamp 只用 **stat 大小**
+/// 区分版本（内容按 version 号填充，保证 29→30 时长度变化）。
 Future<void> ensureFireAppService(ConnectedDevice device) async {
   final jar = _cachedJar ??= await _loadFireAppJar();
-  if (_jarPushed[device.serial] == jar.length) return;
+  final version = _cachedJarVersion ??= await _loadFireAppJarVersion();
+  final versionNumber = int.tryParse(version) ?? 0;
+  final stamp = Uint8List.fromList(
+    utf8.encode('fire-app-service:$version:${jar.length}:') +
+        List<int>.filled(versionNumber, 0x2e),
+  );
+  final token = '${jar.length}:${stamp.length}';
+  if (_jarPushed[device.serial] == token) return;
   final sync = await device.openSync();
   try {
-    final stat = await sync.client.stat(fireAppServiceRemotePath);
-    if (stat.mode != 0 && stat.size == jar.length) {
+    final jarStat = await sync.client.stat(fireAppServiceRemotePath);
+    final stampStat = await sync.client.stat(fireAppServiceRemoteVersionPath);
+    if (jarStat.mode != 0 &&
+        jarStat.size == jar.length &&
+        stampStat.mode != 0 &&
+        stampStat.size == stamp.length) {
       try {
         await sync.client.quit();
       } catch (_) {}
-      _jarPushed[device.serial] = jar.length;
+      _jarPushed[device.serial] = token;
       return;
     }
     await sync.client.push(jar, fireAppServiceRemotePath);
+    await sync.client.push(stamp, fireAppServiceRemoteVersionPath);
     try {
       await sync.client.quit();
     } catch (_) {}
-    _jarPushed[device.serial] = jar.length;
+    _jarPushed[device.serial] = token;
   } finally {
     await sync.close();
   }
@@ -370,6 +401,16 @@ Future<Uint8List> _loadFireAppJar() async {
   return Uint8List.fromList(
     data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
   );
+}
+
+Future<String> _loadFireAppJarVersion() async {
+  try {
+    return (await rootBundle.loadString(
+      'assets/fire-app-service.version',
+    )).trim();
+  } catch (_) {
+    return '0';
+  }
 }
 
 typedef FireAppListProgress = void Function(
@@ -425,8 +466,10 @@ class _FireAppHub {
     FireAppListProgress? onNames,
   }) {
     _epoch++;
+    // Cancel idle before this call is queued — otherwise a 20s QUIT can run
+    // between ensureShell and LIST on a reused process.
+    _bumpSession();
     return _run(() async {
-      _bumpSession();
       try {
         return await _listBody(device, onCatalog, onNames);
       } catch (error) {
@@ -440,10 +483,10 @@ class _FireAppHub {
 
   Future<FireAppShow> show(ConnectedDevice device, String packageName) {
     final epoch = _epoch;
+    _bumpSession();
     return _run(() async {
       try {
         if (epoch != _epoch) throw const FireAppLoadCancelled();
-        _bumpSession();
         try {
           return await _showBody(device, packageName);
         } catch (error) {
@@ -478,16 +521,22 @@ class _FireAppHub {
     FireAppListProgress? onNames,
   ) async {
     final timing = FireAppListTiming();
-    final opened = await _ensureShell(device);
-    timing.jarMs = opened.jarMs;
-    timing.readyMs = opened.readyMs;
+    final ready = await _ensureShell(device);
+    timing.jarMs = ready.jarMs;
+    timing.readyMs = ready.readyMs;
     final shell = _shell;
     if (shell == null) throw StateError('应用信息服务没有就绪');
-    final readClock = Stopwatch()..start();
+
+    log.info(
+      '应用列表已发送 LIST（${device.serial}，就绪 ${timing.readyMs} ms）',
+    );
     await shell.write(utf8.encode('LIST\n'));
+
+    final readClock = Stopwatch()..start();
     final summaries = <FireAppSummary>[];
     final labels = <String, String>{};
     var catalogSent = false;
+    final reader = _reader;
 
     void sendCatalog() {
       if (catalogSent) return;
@@ -518,9 +567,16 @@ class _FireAppHub {
     while (true) {
       final FireAppFrame frame;
       try {
-        frame = await _next().timeout(const Duration(seconds: 60));
+        frame = await _next().timeout(const Duration(seconds: 5));
+      } on TimeoutException {
+        final phase = catalogSent ? '名称' : '目录';
+        final pending = reader?.pendingBytes ?? 0;
+        throw TimeoutException(
+          '应用列表$phase阶段超过 5 秒无数据'
+          '（已收 ${summaries.length} 包名、${labels.length} 名称，'
+          '帧缓冲 $pending 字节）',
+        );
       } on StateError catch (error) {
-        await _dropShell();
         if (summaries.isEmpty || !'$error'.contains('应用信息服务已结束')) {
           rethrow;
         }
@@ -552,7 +608,9 @@ class _FireAppHub {
         return FireAppListLoad(summaries: named, timing: timing);
       }
       if (frame is FireAppServiceError) {
-        throw StateError(frame.message.isEmpty ? '读取应用列表失败' : frame.message);
+        throw StateError(
+          frame.message.isEmpty ? '读取应用列表失败' : frame.message,
+        );
       }
       throw StateError('应用列表响应无效');
     }
@@ -699,6 +757,12 @@ class _FireAppHub {
     }
     await subscription?.cancel();
     if (shell == null) return;
+    try {
+      // Prefer QUIT so Java leaves readLine before CLSE/kills mid-PM.
+      await shell
+          .write(utf8.encode('QUIT\n'))
+          .timeout(const Duration(milliseconds: 300));
+    } catch (_) {}
     try {
       await shell.close().timeout(const Duration(seconds: 2));
     } catch (_) {}

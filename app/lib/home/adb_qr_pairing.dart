@@ -107,7 +107,7 @@ Future<QrPairingOutcome> watchQrPairing({
                 qrInstanceMatches(service.instanceName, session.serviceName),
           );
         }
-        return _matchingConnect(found, pairedFrom!) != null;
+        return _matchingConnect(found, pairedFrom) != null;
       },
     );
     if (isCancelled()) return const QrPairingOutcome.cancelled();

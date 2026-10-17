@@ -34,9 +34,11 @@ Linux、macOS 按系统库名加载 libusb。上游没有发布这两套动态�
 
 界面线程不调用 libusb 的批量传输。打开一台手机时只起一个 isolate：
 
-它 `libusb_open`、声明接口、读取序列号，然后提交一个没有超时的批量读。接着调用 `libusb_handle_events`，一直停到内核报告这批传输结束，或者主 isolate 要写入、关闭时调用 `libusb_interrupt_event_handler` 把等待打断。完成回调先回到这个 isolate 的事件循环，把数据交给界面，再提交下一次读或写。写出的长度正好是包长整数倍时，再提交一个零长度包。
+有 `fire_usb` 时，打开和声明在 C 里完成（见 [native/fire_usb/README.md](../native/fire_usb/README.md)）。句柄放进进程内静态表，热重启后新的 Dart 再 `open` / `close` 同一端口路径就能 `release_interface`。没有 `fire_usb` 时仍走 Dart 的 `libusb_open`。
 
-手机空闲时这个 isolate 停在内核的 WinUSB 重叠 I/O 上，不轮询。每个设备仍有自己的 `libusb_init` 上下文。关闭时先 `libusb_cancel_transfer`，等回调回来再 `libusb_close`。界面最多再等 2 秒，然后 `Isolate.kill`。
+打开之后：同一 isolate（worker）是唯一的 USB reactor——`submit_transfer` 把 IN/OUT 交给内核，然后堵在一次 `libusb_handle_events` 上等完成（不是官方那种读/写/状态三条线程）。完成回调用 `fire_usb_transfer_cb`（纯 C，写槽位）。读完成时必须立刻再提交下一次 bulk-IN（先于任何 `await` 或回传主 isolate）：手机 gadget 的 IN 缓冲满了会拒收 OUT，主机再发 OKAY 就会整条管道卡死，表现为 READY 正常、LIST 目录 0 包名超时。调用方只 `SendPort` 投递写/关闭并 `interrupt`。
+
+手机空闲时 worker 停在内核 WinUSB 重叠 I/O 上，不轮询。关闭时由 C（或回退路径的 Dart）做 `release_interface` + `libusb_close`。
 
 ## 接口怎么认
 
@@ -92,7 +94,7 @@ Windows 随包文件来自官方 libusb **1.0.29** 的 `libusb-1.0.29.7z`，许�
 
 **为什么当时要轮询。** `libusb_bulk_transfer` 返回之前，这个 isolate 上的 Dart 代码都不会跑。读一直堵着，`CNXN`、`OPEN`、`WRTE` 就发不出去。20 毫秒只是写入最多晚多久，协议里没有这个间隔。异步提交没有这个问题：读和写可以同时挂在内核上，事件循环被打断后两边都能继续。
 
-**官方 USB 是不是也这样轮询。** 不是。官方 libusb 后端是一条读线程、一条写线程，两边都调用同步的 `libusb_bulk_transfer`，超时是 0。源码在 `third_party/aosp-adb/client/usb_libusb.cpp`。我们没有照搬那两条线程。一台手机只有一个 isolate，用 `libusb_submit_transfer` 和 `libusb_handle_events` 等内核事件。几台手机就几个 isolate，不会把线程耗尽。界面线程只发消息，并调用 `libusb_interrupt_event_handler` 把堵在事件循环里的 isolate 叫醒。
+**官方 USB 是不是也这样轮询。** 不是。官方 libusb 后端是一条读线程、一条写线程，两边都调用同步的 `libusb_bulk_transfer`，超时是 0。源码在 `third_party/aosp-adb/client/usb_libusb.cpp`。我们没有照搬那两条线程。一台手机只有一个 isolate，用 `libusb_submit_transfer` 和 `libusb_handle_events` 等内核事件。读完成回调里立刻再挂一个 bulk-IN，缩短主机无 IN 窗口。几台手机就几个 isolate，不会把线程耗尽。界面线程只发消息，并调用 `libusb_interrupt_event_handler` 把堵在事件循环里的 isolate 叫醒。
 
 **libusb 为什么用线程，不能等内核事件吗。** 真正的等待就是内核事件：Windows 上是 WinUSB 的重叠 I/O，Linux 上是 usbfs 的 poll。`libusb_bulk_transfer` 只是同步包装，调用方要停到这一次传输结束，所以官方才用两条线程。异步接口是 `libusb_submit_transfer` 加 `libusb_handle_events`。当前代码走的就是这条。
 

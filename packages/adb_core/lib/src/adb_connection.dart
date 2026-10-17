@@ -99,15 +99,16 @@ class AdbStream {
   ///
   /// 设备发来 WRITE(remote=device, local=host)，我们应答
   /// OKAY(local=host, remote=device)。
-  Future<void> _onDeviceData(Uint8List data) async {
+  ///
+  /// 数据必须立刻进 [_incoming]，且读循环不能 await OKAY：设备流窗口通常
+  /// 只有 1 个未决 WRTE，OKAY 稍慢就会堵死后续目录帧，上层表现为
+  ///「READY 已到、目录阶段 0 字节」。
+  void _onDeviceData(Uint8List data) {
     if (!_incoming.isClosed) {
       _incoming.add(data);
     }
-    await _connection._sendMessage(
-      cmd.commandOkay,
-      localId,
-      _remoteId ?? 0,
-      const [],
+    unawaited(
+      _connection._sendOkay(localId, _remoteId ?? 0),
     );
   }
 
@@ -164,20 +165,32 @@ class AdbStream {
   }
 
   /// 主动关闭本地流。
+  ///
+  /// 先发 CLSE，再等对端 CLSE（exec 子进程退出）。若本地立刻
+  /// [complete] `_closed`，调用方会马上又 OPEN，旧 `app_process` 仍可能
+  /// 堵在 `getInstalledPackages` 上占着 PackageManager，新进程 LIST
+  /// 就会出现「已发送 LIST、5 秒 0 字节」。
   Future<void> close() async {
     if (_localClosed) return;
     _localClosed = true;
-    await _connection._sendMessage(
-      cmd.commandClose,
-      localId,
-      _remoteId ?? 0,
-      const [],
-    );
+    try {
+      await _connection._sendMessage(
+        cmd.commandClose,
+        localId,
+        _remoteId ?? 0,
+        const [],
+      );
+    } catch (_) {}
     if (!_incoming.isClosed) _incoming.close();
-    if (!_closed.isCompleted) _closed.complete();
+    if (_closed.isCompleted) return;
+    try {
+      await _closed.future.timeout(const Duration(seconds: 2));
+    } on TimeoutException {
+      if (!_closed.isCompleted) _closed.complete();
+    }
   }
 
-  /// 流结束（对端 CLSE 或本地 close）后的 Future。
+  /// 流结束（对端 CLSE 或本地 close 超时）后的 Future。
   Future<void> get closed => _closed.future;
 }
 
@@ -234,28 +247,64 @@ class AdbConnection {
   /// 串行化所有线上帧（含 ACK）：`Socket.add` + `flush` 并发会触发
   /// Dart `StreamSink is bound to a stream`（flush 置 `_isBound`），
   /// 读循环的流 ACK 与主线程帧写入必须排队。
+  ///
+  /// OKAY 插入 [_okayWrites]，在每条普通写之前排空，避免主机大包 WRTE
+  /// 插在设备 ACK 前面，把应用列表堵成「READY 后 0 字节」。
   Future<void> _writeQueue = Future.value();
+  final Queue<({Uint8List bytes, Completer<void> done})> _okayWrites =
+      Queue();
+
+  Future<void> _sendOkay(int localId, int remoteId) {
+    final bytes =
+        AdbMessage(cmd.commandOkay, localId, remoteId, const []).pack();
+    final done = Completer<void>();
+    _okayWrites.add((bytes: bytes, done: done));
+    // 若写队列空闲，立刻排空 OKAY；否则等下一条普通写前的 drain。
+    _writeQueue = _writeQueue.catchError((_) {}).then((_) async {
+      await _drainOkayWrites();
+    });
+    return done.future;
+  }
 
   Future<void> _sendMessage(int command, int arg0, int arg1, List<int> data) {
-    final msg = AdbMessage(command, arg0, arg1, data);
-    final bytes = msg.pack();
-    final prev = _writeQueue;
+    if (command == cmd.commandOkay) {
+      return _sendOkay(arg0, arg1);
+    }
+    final bytes = AdbMessage(command, arg0, arg1, data).pack();
     final done = Completer<void>();
+    final prev = _writeQueue;
     _writeQueue = prev.catchError((_) {}).then((_) async {
+      await _drainOkayWrites();
       try {
-        final tls = _tls;
-        if (tls == null) {
-          await _transport.write(bytes);
-        } else {
-          tls.writeApplicationData(Uint8List.fromList(bytes));
-          await tls.flush();
-        }
+        await _writePacked(bytes);
         done.complete();
       } catch (e, st) {
         done.completeError(e, st);
       }
     });
     return done.future;
+  }
+
+  Future<void> _drainOkayWrites() async {
+    while (_okayWrites.isNotEmpty) {
+      final item = _okayWrites.removeFirst();
+      try {
+        await _writePacked(item.bytes);
+        if (!item.done.isCompleted) item.done.complete();
+      } catch (e, st) {
+        if (!item.done.isCompleted) item.done.completeError(e, st);
+      }
+    }
+  }
+
+  Future<void> _writePacked(Uint8List bytes) async {
+    final tls = _tls;
+    if (tls == null) {
+      await _transport.write(bytes);
+    } else {
+      tls.writeApplicationData(bytes);
+      await tls.flush();
+    }
   }
 
   /// 建立连接：发送 CNXN 并驱动握手，成功返回设备 banner。
@@ -311,7 +360,7 @@ class AdbConnection {
       case cmd.commandOkay:
         _onOkay(msg);
       case cmd.commandWrite:
-        await _onWrite(msg);
+        _onWrite(msg);
       case cmd.commandClose:
         _onClose(msg);
       case cmd.commandStls:
@@ -436,14 +485,14 @@ class AdbConnection {
     }
   }
 
-  Future<void> _onWrite(AdbMessage msg) async {
+  void _onWrite(AdbMessage msg) {
     final localId = msg.arg1;
     final stream = _streams[localId];
     if (stream == null) return;
     // 设备 WRITE(local=device, remote=host)。若设备在 OKAY 前就先发数据，
     // 用帧里的设备侧 id 补记 remote id，保证 ACK 的 arg1 正确。
     stream._remoteId ??= msg.arg0;
-    await stream._onDeviceData(msg.data);
+    stream._onDeviceData(msg.data);
   }
 
   void _onClose(AdbMessage msg) {
