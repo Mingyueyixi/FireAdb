@@ -29,14 +29,15 @@ jobs:
         run: flutter pub get
 
       - name: Build Windows release
+        working-directory: app # pub workspace：Flutter 工程在 app/ 下，根目录的 windows/ 是残留
         run: flutter build windows --release
 
       - name: Package Windows ZIP
         shell: pwsh
         run: |
-          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*(.+)$').Matches[0].Groups[1].Value.Trim()
+          $version = (Select-String -Path app\pubspec.yaml -Pattern '^version:\s*(.+)$').Matches[0].Groups[1].Value.Trim() -replace '\+\d+$', ''
           $zipName = "adb_toolbox-windows-x64-v$version.zip"
-          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath $zipName
+          Compress-Archive -Path app\build\windows\x64\runner\Release\* -DestinationPath $zipName
           echo "ZIP_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Upload Windows artifact
@@ -85,13 +86,14 @@ jobs:
         run: flutter pub get
 
       - name: Build Linux release
+        working-directory: app # pub workspace：Flutter 工程在 app/ 下，根目录没有 linux/ 运行器
         run: flutter build linux --release
 
       - name: Package Linux tar.gz
         run: |
-          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | tr -d ' ')
+          VERSION=$(grep '^version:' app/pubspec.yaml | awk '{print $2}' | cut -d '+' -f 1)
           TAR_NAME="adb_toolbox-linux-x64-v$VERSION.tar.gz"
-          tar -czf "$TAR_NAME" -C build/linux/x64/release bundle
+          tar -czf "$TAR_NAME" -C app/build/linux/x64/release bundle
           echo "TAR_NAME=$TAR_NAME" >> $GITHUB_ENV
 
       - name: Upload Linux artifact
