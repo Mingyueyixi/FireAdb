@@ -49,7 +49,7 @@ void main(List<String> args) async {
   });
 }
 
-/// Optional process-owned USB helper. Present on Windows after build_fire_usb.ps1.
+/// Optional process-owned USB helper. Present after building native/fire_usb.
 Future<void> _bundleFireUsb(
   BuildInput input,
   BuildOutputBuilder output,

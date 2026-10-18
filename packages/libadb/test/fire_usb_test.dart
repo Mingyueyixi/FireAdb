@@ -14,7 +14,7 @@ void main() {
     expect(
       vendored.existsSync(),
       isTrue,
-      reason: '先运行 packages/libadb/tool/build_fire_usb.ps1',
+      reason: '先 cmake 编译 native/fire_usb（见该目录 README）',
     );
     expect(fire, isNotNull);
     fire!.closeAll();

@@ -34,7 +34,7 @@ Linux、macOS 按系统库名加载 libusb。上游没有发布这两套动态�
 
 界面线程不调用 libusb 的批量传输。打开一台手机时只起一个 isolate：
 
-有 `fire_usb` 时，打开和声明在 C 里完成（见 [native/fire_usb/README.md](../native/fire_usb/README.md)）。句柄放进进程内静态表，热重启后新的 Dart 再 `open` / `close` 同一端口路径就能 `release_interface`。没有 `fire_usb` 时仍走 Dart 的 `libusb_open`。
+有 `fire_usb` 时，打开和声明在 C 里完成（见 [native/fire_usb/README.md](../native/fire_usb/README.md)，CMake 全平台同一套构建）。句柄放进进程内静态表，热重启后新的 Dart 再 `open` / `close` 同一端口路径就能 `release_interface`。没有 `fire_usb` 时仍走 Dart 的 `libusb_open`。
 
 打开之后：同一 isolate（worker）是唯一的 USB reactor——`submit_transfer` 把 IN/OUT 交给内核，再用 `libusb_handle_events_timeout`（100ms）等完成（不是官方那种读/写/状态三条线程）。有数据或 interrupt 会立刻返回；超时也会回到 Dart，才能处理 close，避免退出时卡在 usbWorker check in。完成回调用 `fire_usb_transfer_cb`（纯 C，写槽位）。读完成时必须立刻再提交下一次 bulk-IN（先于任何 `await` 或回传主 isolate）：手机 gadget 的 IN 缓冲满了会拒收 OUT，主机再发 OKAY 就会整条管道卡死，表现为 READY 正常、LIST 目录 0 包名超时。调用方只 `SendPort` 投递写/关闭并 `interrupt`。
 

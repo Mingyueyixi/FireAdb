@@ -1,57 +1,51 @@
 # fire_usb
 
-进程内持有 libusb 设备句柄的一小层 C。
+进程内持有 libusb 句柄的一小层 C。热重启后 Dart 静态变量会丢，C 表还在，
+新的 `open` / `close` 能把旧句柄 `release_interface` + `close` 掉。
 
-## 为什么要有它
+编译时不链接 libusb（运行时再 `LoadLibrary` / `dlopen`）。
 
-Flutter 热重启只换掉 Dart isolate，进程和已加载的动态库都还在。
+## 构建
 
-句柄如果只记在 Dart 里：
+两行命令，作用不同，一般**都要跑**（先配置，再编译）：
 
-1. 热重启后静态变量清空
-2. 旧 isolate 的 `NativeFinalizer` 往往不跑
-3. WinUSB 接口仍被旧句柄占着，新的 `claim` 得到 ACCESS
-
-`fire_usb` 把 `context` / `handle` / 接口号放进这份 C 的静态表。新的 Dart 调
-`fire_usb_close(port_path)` 或再次 `fire_usb_open`，就会对旧句柄做
-`release_interface` + `close`。
-
-## API
-
-| 函数 | 作用 |
-|---|---|
-| `fire_usb_open(libusb_path, port_path, &info)` | 加载 libusb，按端口路径打开并声明 ADB 接口；同路径已有会话则先关 |
-| `fire_usb_close(port_path)` | 释放该端口会话 |
-| `fire_usb_close_all()` | 释放本进程全部会话 |
-| `fire_usb_is_open(port_path)` | 表里是否还握着该端口 |
-
-读写传输仍可由 Dart 用返回的 `handle` / `context` 做（现有 `handle_events`
-路径）。所有权在 C：Dart 不要再对这个 handle 调 `libusb_close`。
-
-## 构建（Windows x64）
-
-在仓库里，`libusb-1.0.dll` 已在 `vendor/windows/x64/`。本库运行时
-`LoadLibrary` 加载它，编译时不链接 libusb。
-
-```bat
-cd packages\libadb\native\fire_usb
-cl /nologo /O2 /LD /DFIRE_USB_BUILD fire_usb.c /Fe:..\..\vendor\windows\x64\fire_usb.dll
+```bash
+cmake -S . -B build/arm64 -A ARM64
+cmake --build build/arm64 --config Release
 ```
 
-或：
+| 命令 | 做什么 | 什么时候跑 |
+|---|---|---|
+| `cmake -S . -B build/arm64 -A ARM64` | **配置**：生成 `build/arm64/` 里的工程（找编译器、写缓存）。还不编 dll。 | 第一次，或改了 `CMakeLists.txt` / 换架构之后 |
+| `cmake --build build/arm64 --config Release` | **编译**：真正调用 MSBuild/编译器，产出 dll，并拷到 `vendor/` | 每次改了 `fire_usb.c` / `.h` 之后 |
 
-```powershell
-..\..\tool\build_fire_usb.ps1
+只改源码、没动 CMake 时，第二行就够。目录还不存在或换了 `-A` 时，必须先跑第一行。
+
+架构子目录都在 `build/` 下，一个 `-A` 对应一个目录：
+
+```bash
+# Windows x64
+cmake -S . -B build/x64 -A x64
+cmake --build build/x64 --config Release
+
+# Windows ARM64（需已装 MSVC ARM64 工具）
+cmake -S . -B build/arm64 -A ARM64
+cmake --build build/arm64 --config Release
+
+# Linux / macOS（本机架构）
+cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release
+cmake --build build/native
 ```
 
-生成 `packages/libadb/vendor/windows/x64/fire_usb.dll`。应用运行时把它和
-`libusb-1.0.dll` 放在可执行文件旁边，或设环境变量 `FIRE_ADB_FIRE_USB`。
+不用为每个操作系统再开目录：在哪台机器上编，就只出哪个 OS 的库。
+多平台产物靠各平台编完后进 `vendor/` 汇总（`POST_BUILD` 自动拷贝）：
 
-## 热重启时序
+- `vendor/windows/x64/fire_usb.dll`
+- `vendor/windows/arm64/fire_usb.dll`
+- `vendor/linux/...`、`vendor/macos/...`
 
-```
-冷启动:  fire_usb_open("1-1")     → 表里登记句柄
-热重启:  Dart 静态变量清空，C 表还在
-再打开:  fire_usb_open("1-1")     → 先 close 旧行，再 open
-正常关:  fire_usb_close("1-1")    → release + close + exit context
+`cmake` 不在 PATH 时，可用 VS 自带的，例如：
+
+```text
+"C:\Program Files\Microsoft Visual Studio\18\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 ```
