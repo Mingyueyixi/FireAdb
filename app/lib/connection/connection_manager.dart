@@ -46,6 +46,8 @@ class ConnectionManager extends GetxService {
   bool _historyLoaded = false;
   LocalAdb? _localAdb;
   String? _loggedLocalUsbError;
+  void Function(List<MdnsService> services)? _mdnsServicesListener;
+  void Function(Object? error, StackTrace? stackTrace)? _mdnsErrorListener;
 
   /// 本进程自己监听着本机 adb server 端口。USB 设备由它登记，列表走 host:devices。
   final RxBool ownsLocalAdbServer = false.obs;
@@ -232,6 +234,9 @@ class ConnectionManager extends GetxService {
     if (local != null) await local.close();
   }
 
+  /// 退出 / 热重启前关掉本机 server 与 USB worker，避免 isolate 卡在 check in。
+  Future<void> shutdownLocalAdb() => _stopFireServer();
+
   /// USB 枚举只在桌面端做。Android 没有 libusb，设备来自手动 TCP 和本机模拟器端口扫描。
   Future<void> _startFireServer() async {
     if (_localAdb != null) return;
@@ -243,6 +248,12 @@ class ConnectionManager extends GetxService {
       onKilled: _onLocalServerKilled,
     );
     local?.listenUsbError(_onLocalUsbError);
+    if (local != null) {
+      final services = _mdnsServicesListener;
+      if (services != null) local.listenMdnsServices(services);
+      final mdnsError = _mdnsErrorListener;
+      if (mdnsError != null) local.listenMdnsError(mdnsError);
+    }
     if (local == null) {
       log.info('127.0.0.1:$port 已有 ADB Server，直接使用它列出的设备');
       return;
@@ -250,6 +261,25 @@ class ConnectionManager extends GetxService {
     _localAdb = local;
     ownsLocalAdbServer.value = true;
     log.info('已启动本机 ADB Server 127.0.0.1:$port');
+  }
+
+  /// 本机 server 扫到的无线服务，包含配对端口和可连接端口。
+  ///
+  /// server 还没起来时先记下，启动后补上。后来监听会立刻拿到最近一轮。
+  void listenLocalMdns(void Function(List<MdnsService> services) listener) {
+    _mdnsServicesListener = listener;
+    _localAdb?.listenMdnsServices(listener);
+  }
+
+  void listenLocalMdnsError(
+    void Function(Object? error, StackTrace? stackTrace) listener,
+  ) {
+    _mdnsErrorListener = listener;
+    _localAdb?.listenMdnsError(listener);
+  }
+
+  Future<void> refreshLocalMdns() {
+    return _localAdb?.refreshMdns() ?? Future<void>.value();
   }
 
   void _onLocalUsbError(Object? error, StackTrace? stackTrace) {

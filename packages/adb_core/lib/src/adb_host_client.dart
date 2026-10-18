@@ -350,17 +350,15 @@ class AdbHostClient {
     late AdbSizedReader reader;
     Socket? socket;
     var closed = false;
+    final request = long ? 'host:track-devices-l' : 'host:track-devices';
 
     Future<void> run() async {
       final s = await _connectRaw();
       socket = s;
       reader = AdbSizedReader(s);
       try {
-        await _sendRequest(
-          s,
-          long ? 'host:track-devices-l' : 'host:track-devices',
-        );
-        await _readStatus(reader, 'host:track-devices');
+        await _sendRequest(s, request);
+        await _readStatus(reader, request);
         while (!closed) {
           final lenText = ascii.decode(
             await reader.readExactly(4),

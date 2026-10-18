@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:libadb/libadb.dart';
 
+import '../../connection/model/device_profile.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../settings/app_settings_store.dart';
 import '../discovered_devices.dart';
@@ -110,10 +113,11 @@ class DeviceListSection extends GetView<HomeController> {
               for (final profile in additionalConnectedProfiles)
                 HomeListTile(
                   dense: true,
-                  leading: const Icon(Icons.phone_android),
+                  leading: Icon(_profileIcon(profile)),
                   title: Text(profile.displayName),
                   subtitle: Text(
-                    '${profile.serial} · ${l10n.homeFireAdbConnected}',
+                    '${profile.connectionAddress.isEmpty ? profile.serial : profile.connectionAddress}'
+                    ' · ADB ${l10n.homeDeviceOnline}',
                   ),
                   trailing: IconButton(
                     tooltip: l10n.commonDisconnect,
@@ -142,14 +146,14 @@ class _DiscoveredDeviceTile extends GetView<HomeController> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final connecting = controller.connecting.value;
-    final type = service.serviceType == adbServiceTypeTransport
-        ? l10n.homeServiceAdbTransport
-        : l10n.homeServiceTlsConnection;
     return HomeListTile(
       dense: true,
       leading: const Icon(Icons.router),
       title: Text(discoveredServiceTitle(service)),
-      subtitle: Text('$type · ${service.endpointText}', maxLines: 2),
+      subtitle: Text(
+        '${service.endpointText} · ADB ${l10n.homeDeviceOnline}',
+        maxLines: 2,
+      ),
       trailing: TextButton(
         onPressed: connecting
             ? null
@@ -189,12 +193,9 @@ class _AdbDeviceTile extends GetView<HomeController> {
     final adbState = _deviceStateLabel(context, device.state);
     final title =
         device.model?.replaceAll('_', ' ') ?? device.product ?? device.serial;
-    final subtitle = StringBuffer(device.serial);
-    if (device.devPath != null) subtitle.write(' · ${device.devPath}');
-    subtitle.write(' · ADB $adbState');
-    if (connectedProfile != null) {
-      subtitle.write(' · ${l10n.homeFireAdbConnected}');
-    } else if (device.isOnline &&
+    final subtitle = StringBuffer('${device.serial} · ADB $adbState');
+    if (connectedProfile == null &&
+        device.isOnline &&
         !controller.manager.canConnectAdbDevice(device)) {
       subtitle.write(' · ${l10n.homeUsbConnectionUnavailable}');
     }
@@ -204,7 +205,7 @@ class _AdbDeviceTile extends GetView<HomeController> {
 
     return HomeListTile(
       dense: true,
-      leading: Icon(device.devPath == null ? Icons.phone_android : Icons.usb),
+      leading: Icon(_adbDeviceIcon(device)),
       title: Text(title),
       subtitle: Text(subtitle.toString(), maxLines: 2),
       trailing: connectedProfile != null
@@ -221,7 +222,13 @@ class _AdbDeviceTile extends GetView<HomeController> {
           ? TextButton(
               onPressed: connecting
                   ? null
-                  : () => connectListedAdbDevice(context, controller, device),
+                  : () => unawaited(
+                      connectListedAdbDevice(
+                        context,
+                        Get.find<HomeController>(),
+                        device,
+                      ),
+                    ),
               child: Text(
                 connecting ? l10n.homeConnecting : l10n.commonConnect,
               ),
@@ -230,7 +237,13 @@ class _AdbDeviceTile extends GetView<HomeController> {
       onTap: connectedProfile != null
           ? () => openWorkspace(connectedProfile.serial)
           : canConnect && !connecting
-          ? () => connectListedAdbDevice(context, controller, device)
+          ? () => unawaited(
+              connectListedAdbDevice(
+                context,
+                Get.find<HomeController>(),
+                device,
+              ),
+            )
           : null,
     );
   }
@@ -248,4 +261,20 @@ String _deviceStateLabel(BuildContext context, String state) {
     '' => l10n.homeDeviceUnknownState,
     _ => state,
   };
+}
+
+IconData _adbDeviceIcon(AdbDeviceInfo device) {
+  if (adbSerialEndpoint(device.serial) != null) return Icons.router;
+  if (device.serial.startsWith('emulator-')) return Icons.phone_android;
+  return Icons.usb;
+}
+
+IconData _profileIcon(DeviceProfile profile) {
+  if (profile.usbAddress != null && profile.usbAddress!.isNotEmpty) {
+    return Icons.usb;
+  }
+  if (profile.host != null && profile.port != null) return Icons.router;
+  if (profile.serial.startsWith('emulator-')) return Icons.phone_android;
+  if (adbSerialEndpoint(profile.serial) != null) return Icons.router;
+  return Icons.usb;
 }

@@ -106,6 +106,19 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       _settings.refreshInBackground,
       (_) => _syncRefreshGate(),
     );
+    manager.listenLocalMdns((services) {
+      if (isClosed || !manager.ownsLocalAdbServer.value) return;
+      discovered.assignAll(services);
+    });
+    manager.listenLocalMdnsError((error, stackTrace) {
+      if (isClosed || !manager.ownsLocalAdbServer.value) return;
+      if (error == null) {
+        scanError.value = null;
+        return;
+      }
+      log.severe('mDNS 设备扫描失败', error, stackTrace);
+      scanError.value = '$error';
+    });
   }
 
   /// 连接页在树上且是当前路由时为 true。
@@ -129,6 +142,9 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       AppLifecycleState.paused ||
       AppLifecycleState.detached => false,
     };
+    if (state == AppLifecycleState.detached) {
+      unawaited(manager.shutdownLocalAdb());
+    }
     if (_appForeground == foreground) return;
     _appForeground = foreground;
     _syncRefreshGate();
@@ -233,11 +249,17 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     required bool includeMdns,
     bool manual = false,
   }) {
+    // 本机 server 的 mDNS 扩展已经在扫，并经 listenLocalMdns 回调。
+    // 首页再扫一轮会和它抢结果，设备会在「离线」和发现列表之间跳。
+    final homeScansMdns = includeMdns && !manager.ownsLocalAdbServer.value;
+    if (includeMdns && manager.ownsLocalAdbServer.value) {
+      unawaited(manager.refreshLocalMdns());
+    }
     return _deviceScanner.run(
       includeAdb: adbServerSupported.value,
       // USB 由 adb server 扫进 host:devices，首页不再单独枚举。
       includeUsb: false,
-      includeMdns: includeMdns,
+      includeMdns: homeScansMdns,
       onStart: (mdnsStarted) {
         if (!mdnsStarted) return;
         scanning.value = true;
@@ -266,6 +288,11 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     if (scan.adbServerAbsent == false && scan.adbDevices != null) {
       _ensureAdbTrack();
     }
+  }
+
+  /// 设备列表只含已经握上手的传输。mDNS 走 [ConnectionManager.listenLocalMdns]。
+  Future<List<AdbDeviceInfo>> _listedDevices() {
+    return _hostClient.devices(long: true);
   }
 
   /// `host:track-devices` 推送的是当前完整列表。USB 断线后不用等下一轮轮询。
@@ -414,7 +441,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     loadingAdbDevices.value = true;
     final started = DateTime.now();
     try {
-      final devices = await _hostClient.devices(long: true);
+      final devices = await _listedDevices();
       _loggedAdbError = null;
       publish(
         ListedDeviceScan(
@@ -493,7 +520,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       return null;
     }
     try {
-      return await _hostClient.devices(long: true);
+      return await _listedDevices();
     } catch (_) {
       return null;
     }
@@ -530,6 +557,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     _wirelessBrowser.close();
     hostController.dispose();
     portController.dispose();
+    unawaited(manager.shutdownLocalAdb());
     super.onClose();
     _cancelIndicatorHolds();
   }

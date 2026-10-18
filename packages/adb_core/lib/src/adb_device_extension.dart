@@ -16,6 +16,8 @@ class AdbScannedDevice {
 
   /// 同一条连接保持不变，用来认出设备离开了。
   final String id;
+
+  /// 已经握上手的传输。
   final AdbConnection connection;
   final String serial;
   final String state;

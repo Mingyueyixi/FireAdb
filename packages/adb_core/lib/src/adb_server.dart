@@ -73,7 +73,10 @@ class AdbServerDevice {
     // AOSP `append_transport`：`%-22s %s`。Windows 官方不填 devpath。
     final buffer = StringBuffer('${shown.padRight(22)} $state');
     final path = devPath;
-    if (path != null && path.contains('/')) buffer.write(' $path');
+    // USB 口常常是 `1-3` 这种没有斜杠的路径，也要打出来，否则列表认不出是 USB。
+    if (path != null && path.isNotEmpty && (usb || path.contains('/'))) {
+      buffer.write(' $path');
+    }
     final productName = product;
     if (productName != null && productName.isNotEmpty) {
       buffer.write(' product:$productName');
@@ -110,7 +113,6 @@ class AdbServer {
   List<AdbDeviceExtension> _extensions = const <AdbDeviceExtension>[];
   final Map<AdbDeviceExtension, Map<String, String>> _extensionSerials =
       <AdbDeviceExtension, Map<String, String>>{};
-
   /// `host:kill` 时通知外面放开 USB。Server 自己会关掉监听。
   void Function()? onKilled;
 
@@ -156,9 +158,10 @@ class AdbServer {
       if (next.contains(deviceExtension)) continue;
       unawaited(deviceExtension.cancel());
       final serials = _extensionSerials.remove(deviceExtension);
-      if (serials == null) continue;
-      for (final serial in serials.values) {
-        remove(serial);
+      if (serials != null) {
+        for (final serial in serials.values) {
+          remove(serial);
+        }
       }
     }
     final previous = _extensions;
@@ -239,10 +242,9 @@ class AdbServer {
     _extensionSerials.clear();
     _extensions = const <AdbDeviceExtension>[];
     await _dropForwards();
-    final emulators = _devices.values
-        .where((device) => device.serial.startsWith('emulator-'))
-        .toList();
-    for (final device in emulators) {
+    final leftover = _devices.values.toList();
+    _devices.clear();
+    for (final device in leftover) {
       unawaited(device.connection.close());
     }
     final trackers = _trackers.toList();
@@ -956,7 +958,10 @@ class AdbServer {
         return;
       }
       unawaited(
-        _write(socket, _frame(_devicesText(long: long))).catchError((Object _) {
+        _write(
+          socket,
+          _frame(_devicesText(long: long)),
+        ).catchError((Object _) {
           if (!done.isCompleted) done.complete();
         }),
       );

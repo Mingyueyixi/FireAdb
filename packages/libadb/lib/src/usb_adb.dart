@@ -145,23 +145,26 @@ class UsbAdbExtension implements AdbDeviceExtension {
   void _emit() {
     final listener = _listener;
     if (listener == null) return;
-    listener.onScan(<AdbScannedDevice>[
-      for (final link in _links.values)
-        if (!link.closed &&
-            link.connection != null &&
-            link.registeredSerial != null)
-          AdbScannedDevice(
-            id: link.device.portPath,
-            connection: link.connection!,
-            serial: link.registeredSerial!,
-            state: link.listState,
-            devPath: link.device.portPath,
-            usb: true,
-            product: link.product,
-            model: link.model,
-            deviceName: link.deviceName,
-          ),
-    ]);
+    final devices = <AdbScannedDevice>[];
+    for (final link in _links.values) {
+      final connection = link.connection;
+      final serial = link.registeredSerial;
+      if (link.closed || connection == null || serial == null) continue;
+      devices.add(
+        AdbScannedDevice(
+          id: link.device.portPath,
+          connection: connection,
+          serial: serial,
+          state: link.listState,
+          devPath: link.device.portPath,
+          usb: true,
+          product: link.product,
+          model: link.model,
+          deviceName: link.deviceName,
+        ),
+      );
+    }
+    listener.onScan(devices);
   }
 
   String _serial(_UsbLink link, AdbConnection connection) {

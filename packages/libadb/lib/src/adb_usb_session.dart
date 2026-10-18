@@ -23,6 +23,9 @@ const int _writeTimeoutMs = 10000;
 /// WinUSB reads, drops bytes (status TIMED_OUT), and stalls the pipe during
 /// long transfers such as the app list. Official AOSP uses timeout 0.
 const int _readTimeoutMs = 0;
+/// `libusb_handle_events_timeout` 的等待上限。无限堵在 `handle_events` 时，
+/// 热重启 / 退出若 interrupt 没叫醒 worker，就会空等 usbWorker check in。
+const int _eventsTimeoutUsec = 100 * 1000;
 const int _readBufferSize = 16 * 1024;
 const int _bulkTransfer = 2;
 
@@ -245,14 +248,9 @@ class AdbUsbTransport implements Finalizable {
       if (!_workerDone.isCompleted) _workerDone.complete();
     }
     _interruptWorker();
-    // Wait for the worker to leave handle_events and drop in-flight
-    // transfers before closing the device handle. Closing from the main
-    // isolate while WinUSB still owns URBs kills the process.
-    try {
-      await _workerDone.future.timeout(const Duration(seconds: 2));
-    } on TimeoutException {
-      _usbLog.warning('USB worker ???? $_portPath');
-    }
+    // 先在这边关掉句柄，worker 才能从 libusb_handle_events 返回。
+    // 若等 worker 自己退出再关，热重启 / 退出时会一直卡在
+    // “waiting for isolate usbWorker to check in”。
     _handleFinalizer?.detach(this);
     _handleFinalizer = null;
     final fire = FireUsb.tryLoad();
@@ -275,6 +273,11 @@ class AdbUsbTransport implements Finalizable {
       );
     }
     _handle = null;
+    try {
+      await _workerDone.future.timeout(const Duration(seconds: 2));
+    } on TimeoutException {
+      _usbLog.warning('USB worker 未在超时内退出 $_portPath');
+    }
     await _subscription?.cancel();
     _events.close();
     if (!_incoming.isClosed) await _incoming.close();
@@ -529,6 +532,9 @@ class _UsbEventLoop {
     });
     _readSlot = calloc<_TransferSlot>();
     _writeSlot = calloc<_TransferSlot>();
+    _eventsTimeout = calloc<Timeval>();
+    _eventsTimeout.ref.tv_sec = 0;
+    _eventsTimeout.ref.tv_usec = _eventsTimeoutUsec;
     _readTransfer = _allocate();
     _writeTransfer = _allocate();
     _readBuffer = calloc<UnsignedChar>(_readBufferSize);
@@ -546,6 +552,7 @@ class _UsbEventLoop {
   Completer<void>? _pingWaiter;
   late final Pointer<_TransferSlot> _readSlot;
   late final Pointer<_TransferSlot> _writeSlot;
+  late final Pointer<Timeval> _eventsTimeout;
   late final Pointer<_LibusbTransfer> _readTransfer;
   late final Pointer<_LibusbTransfer> _writeTransfer;
   late final Pointer<UnsignedChar> _readBuffer;
@@ -560,9 +567,8 @@ class _UsbEventLoop {
   var _disposed = false;
 
   Future<void> run(_Inbox inbox, SendPort events) async {
-    // Single reactor: submit IN/OUT to the kernel, block in handle_events,
-    // harvest slots, then accept Dart write/close messages. No second USB
-    // thread and no async Dart callback between completion and harvest.
+    // Single reactor: submit IN/OUT，最多等 100ms 就回到 Dart 收 close/write。
+    // 无限 `handle_events` 在退出时若 interrupt 失败会卡 check in。
     inbox.onMessage = () {
       libusb.libusb_interrupt_event_handler(context);
     };
@@ -573,7 +579,10 @@ class _UsbEventLoop {
     while (true) {
       if (_closing) _cancelInFlight();
       if (_closing && !_readBusy && !_writeBusy) return;
-      final code = libusb.libusb_handle_events(context);
+      final code = libusb.libusb_handle_events_timeout(
+        context,
+        _eventsTimeout,
+      );
       if (code != 0 && code != _libusbErrorInterrupted && !_closing) {
         _report(events, libusbErrorText(libusb, code));
       }
@@ -607,6 +616,7 @@ class _UsbEventLoop {
       final writeBuffer = _writeBuffer;
       if (writeBuffer != null) calloc.free(writeBuffer);
     }
+    calloc.free(_eventsTimeout);
     _ping.close();
   }
 
