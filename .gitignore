@@ -23,6 +23,7 @@ keys/
 
 # 工具/临时产物
 .github/modernize/
+__pycache__/
 
 # 参考源码以 git submodule 引入（见 .gitmodules），内容由 submodule 管理
 # Widget Preview related

@@ -1,6 +1,6 @@
 # FireAdb
 
-纯自研跨平台 ADB 工具箱（不调用系统 adb 二进制，协议自实现）。
+跨平台 ADB 工具箱（可不调用系统 adb 二进制，协议自实现）。
 
 ## 平台
 
@@ -40,3 +40,9 @@ pub workspace，命令在仓库根执行。
 ```properties
 org.gradle.java.home=C:/Program Files/Java/jdk-17
 ```
+
+- Zig + Ninja + Python：仅 Linux 交叉编译 `fire_usb` 时需要（在 Windows / macOS 上产出 Linux 各架构 `.so`）。
+  全平台一键编译（Windows x64/arm64 + Linux x64/arm64，产物进 `vendor/`）：
+  `python packages/libadb/native/fire_usb/tool/build_all.py`；
+  只编 Linux 换成 `tool/build_linux.py`，只编 Windows（无需 Zig/Ninja）换成 `tool/build_windows.py`。
+  工具清单与细节见 [`packages/libadb/native/fire_usb/README.md`](packages/libadb/native/fire_usb/README.md#linux-交叉编译zig)。
