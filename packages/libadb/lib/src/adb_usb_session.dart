@@ -29,6 +29,83 @@ const int _eventsTimeoutUsec = 100 * 1000;
 const int _readBufferSize = 16 * 1024;
 const int _bulkTransfer = 2;
 
+/// libusb `struct timeval`。不用 dart_libusb 生成的 `Timeval`：它引用的
+/// `Susecond` 只映射了桌面 ABI、缺 Android，AOT 编译 fat APK 时会直接报
+/// 「missing mapping for android_arm」。这里自带完整映射，语义不变：
+/// tv_sec 走 dart:ffi 的 `Long`，tv_usec（suseconds_t）各平台都是 `long`。
+final class _Timeval extends Struct {
+  @Long()
+  external int tvSec;
+
+  @_Susecond()
+  external int tvUsec;
+}
+
+/// `suseconds_t`：glibc/bionic/darwin 均为 `long`，32 位平台 4 字节、64 位 8 字节。
+@AbiSpecificIntegerMapping({
+  Abi.linuxArm: Int32(),
+  Abi.linuxArm64: Int64(),
+  Abi.linuxIA32: Int32(),
+  Abi.linuxX64: Int64(),
+  Abi.androidArm: Int32(),
+  Abi.androidArm64: Int64(),
+  Abi.androidIA32: Int32(),
+  Abi.androidX64: Int64(),
+  Abi.macosArm64: Int32(),
+  Abi.macosX64: Int32(),
+  Abi.windowsArm64: Int32(),
+  Abi.windowsIA32: Int32(),
+  Abi.windowsX64: Int32(),
+})
+final class _Susecond extends AbiSpecificInteger {
+  const _Susecond();
+}
+
+typedef _HandleEventsTimeoutNative =
+    Int32 Function(Pointer<libusb_context>, Pointer<_Timeval>);
+typedef _HandleEventsTimeoutDart =
+    int Function(Pointer<libusb_context>, Pointer<_Timeval>);
+
+/// 单独绑定 `libusb_handle_events_timeout`，绕开 dart_libusb 里所有带
+/// `Timeval` 签名的生成方法，保证其 `Susecond` 不进入 Android 的 AOT 快照。
+int _handleEventsTimeout(
+  DynamicLibrary library,
+  Pointer<libusb_context> context,
+  Pointer<_Timeval> timeout,
+) {
+  final handle =
+      library
+          .lookupFunction<
+            _HandleEventsTimeoutNative,
+            _HandleEventsTimeoutDart
+          >('libusb_handle_events_timeout');
+  return handle(context, timeout);
+}
+
+typedef _GetDeviceListNative =
+    IntPtr Function(
+      Pointer<libusb_context>,
+      Pointer<Pointer<Pointer<libusb_device>>>,
+    );
+typedef _GetDeviceListDart =
+    int Function(
+      Pointer<libusb_context>,
+      Pointer<Pointer<Pointer<libusb_device>>>,
+    );
+
+/// 同理：`libusb_get_device_list` 返回 ssize_t，dart_libusb 用未映射 Android 的
+/// `Ssize` 声明。ssize_t 尺寸恒等于 intptr_t，直接用内置 `IntPtr` 声明即可。
+int _getDeviceList(
+  DynamicLibrary library,
+  Pointer<libusb_context> context,
+  Pointer<Pointer<Pointer<libusb_device>>> list,
+) {
+  final handle = library.lookupFunction<_GetDeviceListNative, _GetDeviceListDart>(
+    'libusb_get_device_list',
+  );
+  return handle(context, list);
+}
+
 /// 枚举带 ADB 接口的 USB 设备。没有 libusb 或当前不是桌面平台时抛出 [AdbUsbException]。
 ///
 /// 枚举在后台 isolate 里做。libusb 的枚举是同步调用，放在界面线程上会挡住窗口启动。
@@ -50,8 +127,10 @@ Future<List<UsbAdbDevice>> listUsbAdbDevices() async {
 
 Map<String, Object?> _listUsbAdbDeviceRows(String libraryPath) {
   Libusb libusb;
+  DynamicLibrary library;
   try {
-    libusb = Libusb(DynamicLibrary.open(libraryPath));
+    library = DynamicLibrary.open(libraryPath);
+    libusb = Libusb(library);
   } on ArgumentError catch (error) {
     return <String, Object?>{'error': '无法加载 libusb（$libraryPath）：$error'};
   }
@@ -61,7 +140,7 @@ Map<String, Object?> _listUsbAdbDeviceRows(String libraryPath) {
     final devices = <UsbAdbDevice>[];
     final listOut = calloc<Pointer<Pointer<libusb_device>>>();
     try {
-      final count = libusb.libusb_get_device_list(context, listOut);
+      final count = _getDeviceList(library, context, listOut);
       if (count < 0) {
         return <String, Object?>{
           'error': '枚举 USB 设备失败：${libusbErrorText(libusb, count)}',
@@ -314,7 +393,8 @@ Future<void> usbWorker(SendPort mainPort) async {
   var ownedByFireUsb = false;
   _UsbEventLoop? loop;
   try {
-    libusb = Libusb(DynamicLibrary.open(libraryPath));
+    final library = DynamicLibrary.open(libraryPath);
+    libusb = Libusb(library);
     final fire = FireUsb.tryLoad();
     late final int endpointIn;
     late final int endpointOut;
@@ -332,7 +412,7 @@ Future<void> usbWorker(SendPort mainPort) async {
       serial = session.serial.isEmpty ? null : session.serial;
     } else {
       context = _init(libusb);
-      final openedDevice = _openDevice(libusb, context, portPath);
+      final openedDevice = _openDevice(library, libusb, context, portPath);
       handle = openedDevice.handle;
       interfaceNumber = openedDevice.match.interfaceNumber;
       _prepareInterface(libusb, handle, interfaceNumber);
@@ -342,6 +422,7 @@ Future<void> usbWorker(SendPort mainPort) async {
       maxPacketSize = openedDevice.match.maxPacketSize;
     }
     loop = _UsbEventLoop(
+      library: library,
       libusb: libusb,
       context: context,
       handle: handle,
@@ -518,6 +599,7 @@ _transferCallback() {
 
 class _UsbEventLoop {
   _UsbEventLoop({
+    required this.library,
     required this.libusb,
     required this.context,
     required this.handle,
@@ -532,14 +614,15 @@ class _UsbEventLoop {
     });
     _readSlot = calloc<_TransferSlot>();
     _writeSlot = calloc<_TransferSlot>();
-    _eventsTimeout = calloc<Timeval>();
-    _eventsTimeout.ref.tv_sec = 0;
-    _eventsTimeout.ref.tv_usec = _eventsTimeoutUsec;
+    _eventsTimeout = calloc<_Timeval>();
+    _eventsTimeout.ref.tvSec = 0;
+    _eventsTimeout.ref.tvUsec = _eventsTimeoutUsec;
     _readTransfer = _allocate();
     _writeTransfer = _allocate();
     _readBuffer = calloc<UnsignedChar>(_readBufferSize);
   }
 
+  final DynamicLibrary library;
   final Libusb libusb;
   final Pointer<libusb_context> context;
   final Pointer<libusb_device_handle> handle;
@@ -552,7 +635,7 @@ class _UsbEventLoop {
   Completer<void>? _pingWaiter;
   late final Pointer<_TransferSlot> _readSlot;
   late final Pointer<_TransferSlot> _writeSlot;
-  late final Pointer<Timeval> _eventsTimeout;
+  late final Pointer<_Timeval> _eventsTimeout;
   late final Pointer<_LibusbTransfer> _readTransfer;
   late final Pointer<_LibusbTransfer> _writeTransfer;
   late final Pointer<UnsignedChar> _readBuffer;
@@ -579,10 +662,7 @@ class _UsbEventLoop {
     while (true) {
       if (_closing) _cancelInFlight();
       if (_closing && !_readBusy && !_writeBusy) return;
-      final code = libusb.libusb_handle_events_timeout(
-        context,
-        _eventsTimeout,
-      );
+      final code = _handleEventsTimeout(library, context, _eventsTimeout);
       if (code != 0 && code != _libusbErrorInterrupted && !_closing) {
         _report(events, libusbErrorText(libusb, code));
       }
@@ -1036,13 +1116,14 @@ class _OpenedUsbDevice {
 }
 
 _OpenedUsbDevice _openDevice(
+  DynamicLibrary library,
   Libusb libusb,
   Pointer<libusb_context> context,
   String portPath,
 ) {
   final listOut = calloc<Pointer<Pointer<libusb_device>>>();
   try {
-    final count = libusb.libusb_get_device_list(context, listOut);
+    final count = _getDeviceList(library, context, listOut);
     if (count < 0) {
       throw AdbUsbException('枚举 USB 设备失败：${libusbErrorText(libusb, count)}');
     }
