@@ -36,14 +36,14 @@ jobs:
         shell: pwsh
         run: |
           $version = (Select-String -Path app\pubspec.yaml -Pattern '^version:\s*(.+)$').Matches[0].Groups[1].Value.Trim() -replace '\+\d+$', ''
-          $zipName = "adb_toolbox-windows-x64-v$version.zip"
+          $zipName = "fire-adb-windows-x64-v$version.zip"
           Compress-Archive -Path app\build\windows\x64\runner\Release\* -DestinationPath $zipName
           echo "ZIP_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: adb_toolbox-windows-x64
+          name: fire-adb-windows-x64
           path: ${{ env.ZIP_NAME }}
           if-no-files-found: error
           retention-days: 7
@@ -92,14 +92,14 @@ jobs:
       - name: Package Linux tar.gz
         run: |
           VERSION=$(grep '^version:' app/pubspec.yaml | awk '{print $2}' | cut -d '+' -f 1)
-          TAR_NAME="adb_toolbox-linux-x64-v$VERSION.tar.gz"
+          TAR_NAME="fire-adb-linux-x64-v$VERSION.tar.gz"
           tar -czf "$TAR_NAME" -C app/build/linux/x64/release bundle
           echo "TAR_NAME=$TAR_NAME" >> $GITHUB_ENV
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
-          name: adb_toolbox-linux-x64
+          name: fire-adb-linux-x64
           path: ${{ env.TAR_NAME }}
           if-no-files-found: error
           retention-days: 7
@@ -142,14 +142,14 @@ jobs:
       - name: Package Android APK
         run: |
           VERSION=$(grep '^version:' app/pubspec.yaml | awk '{print $2}' | cut -d '+' -f 1)
-          APK_NAME="adb_toolbox-android-arm64-v$VERSION.apk"
+          APK_NAME="fire-adb-android-arm64-v$VERSION.apk"
           cp app/build/app/outputs/flutter-apk/app-release.apk "$APK_NAME"
           echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
 
       - name: Upload Android artifact
         uses: actions/upload-artifact@v4
         with:
-          name: adb_toolbox-android-arm64
+          name: fire-adb-android-arm64
           path: ${{ env.APK_NAME }}
           if-no-files-found: error
           retention-days: 7
