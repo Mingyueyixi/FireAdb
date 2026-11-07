@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../../../connection/model/connected_device.dart';
 import '../../../files/data/source/remote_file_commands.dart';
+import '../../../shell/root_shell.dart';
 
 final _packagePattern = RegExp(r'^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+$');
 
@@ -11,7 +12,7 @@ final _lsLine = RegExp(
   r'\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?\s+(.+)$',
 );
 
-/// debug 应用数据目录里的一项。通过 `run-as` 列出来。
+/// 应用数据目录里的一项。debug 应用用 `run-as` 列出，root 模式直接列出。
 class RunAsEntry {
   const RunAsEntry({
     required this.name,
@@ -33,7 +34,7 @@ class RunAsEntry {
 bool isAppPackageName(String packageName) =>
     _packagePattern.hasMatch(packageName);
 
-/// `/data/data` 和 `/data/user` 只能用 `run-as` 读。SD 卡目录走 shell。
+/// `/data/data` 和 `/data/user` 默认用 `run-as`。root 模式下改为 root 读取。SD 卡目录走 shell。
 bool isPrivateAppDataPath(String path) {
   final value = normalizeRemotePath(path);
   return value.startsWith('/data/data/') || value.startsWith('/data/user/');
@@ -180,13 +181,17 @@ Future<AppDirectoryPage> listAppDirectory({
 }) async {
   _requireInside(root, directory);
   if (isPrivateAppDataPath(root)) {
-    final entries = await listRunAsDirectory(
-      device: device,
-      packageName: packageName,
+    final command = await _privateCommand(
+      device,
+      rooted: shellListCommand(directory),
+      runAs: runAsListCommand(packageName, directory),
+    );
+    final output = await device.shell(command);
+    return AppDirectoryPage(
       root: root,
       directory: directory,
+      entries: parseRunAsList(output, directory),
     );
-    return AppDirectoryPage(root: root, directory: directory, entries: entries);
   }
   final opened = await openExternalDirectory(device, directory);
   return AppDirectoryPage(
@@ -220,7 +225,11 @@ Future<Uint8List> readAppFile({
     throw StateError('不能把目录当文件读取');
   }
   final command = isPrivateAppDataPath(root)
-      ? runAsCatCommand(packageName, path)
+      ? await _privateCommand(
+          device,
+          rooted: shellCatCommand(path),
+          runAs: runAsCatCommand(packageName, path),
+        )
       : shellCatCommand(path);
   return device.execOut(command);
 }
@@ -235,16 +244,14 @@ Future<void> deleteAppPath({
   if (normalizeRemotePath(path) == normalizeRemotePath(root)) {
     throw StateError('不能删除目录本身');
   }
-  if (isPrivateAppDataPath(root)) {
-    await deleteRunAsPath(
-      device: device,
-      packageName: packageName,
-      root: root,
-      path: path,
-    );
-    return;
-  }
-  final output = await device.shell(shellDeleteCommand(path));
+  final command = isPrivateAppDataPath(root)
+      ? await _privateCommand(
+          device,
+          rooted: shellDeleteCommand(path),
+          runAs: runAsDeleteCommand(packageName, path),
+        )
+      : shellDeleteCommand(path);
+  final output = await device.shell(command);
   final trimmed = output.trim();
   if (trimmed.isNotEmpty) throw StateError(trimmed);
 }
@@ -331,7 +338,11 @@ Future<void> _copyFile({
   required File localFile,
 }) async {
   final command = isPrivateAppDataPath(root)
-      ? runAsCatCommand(packageName, remotePath)
+      ? await _privateCommand(
+          device,
+          rooted: shellCatCommand(remotePath),
+          runAs: runAsCatCommand(packageName, remotePath),
+        )
       : shellCatCommand(remotePath);
   final exec = await device.openExec(command);
   final sink = localFile.openWrite();
@@ -353,6 +364,16 @@ Future<void> _copyFile({
       } catch (_) {}
     }
   }
+}
+
+/// root 模式用 root 执行 [rooted]，否则用 [runAs]。
+Future<String> _privateCommand(
+  ConnectedDevice device, {
+  required String rooted,
+  required String runAs,
+}) {
+  if (!rootCanEditAppData(device.serial)) return Future<String>.value(runAs);
+  return rootCommand(device, rooted, scope: SuScope.apps);
 }
 
 void _requirePackage(String packageName) {

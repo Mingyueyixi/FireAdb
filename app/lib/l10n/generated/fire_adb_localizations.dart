@@ -62,20 +62,15 @@ import 'fire_adb_localizations_zh.dart';
 /// be consistent with the languages listed in the FireAdbLocalizations.supportedLocales
 /// property.
 abstract class FireAdbLocalizations {
-  FireAdbLocalizations(String locale)
-    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+  FireAdbLocalizations(String locale) : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
   static FireAdbLocalizations? of(BuildContext context) {
-    return Localizations.of<FireAdbLocalizations>(
-      context,
-      FireAdbLocalizations,
-    );
+    return Localizations.of<FireAdbLocalizations>(context, FireAdbLocalizations);
   }
 
-  static const LocalizationsDelegate<FireAdbLocalizations> delegate =
-      _FireAdbLocalizationsDelegate();
+  static const LocalizationsDelegate<FireAdbLocalizations> delegate = _FireAdbLocalizationsDelegate();
 
   /// A list of this localizations delegate along with the default localizations
   /// delegates.
@@ -87,18 +82,17 @@ abstract class FireAdbLocalizations {
   /// Additional delegates can be added by appending to this list in
   /// MaterialApp. This list does not have to be used at all if a custom list
   /// of delegates is preferred or required.
-  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
-      <LocalizationsDelegate<dynamic>>[
-        delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ];
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates = <LocalizationsDelegate<dynamic>>[
+    delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+  ];
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('zh'),
-    Locale('en'),
+    Locale('en')
   ];
 
   /// No description provided for @settingsLanguage.
@@ -1244,7 +1238,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @appsDebugOnlyHint.
   ///
   /// In zh, this message translates to:
-  /// **'数据目录只有 debug 应用可以读取和修改。'**
+  /// **'没有 root 时，只有 debug 应用的数据目录可以读取和修改。'**
   String get appsDebugOnlyHint;
 
   /// No description provided for @appsDataEmpty.
@@ -1671,13 +1665,7 @@ abstract class FireAdbLocalizations {
   ///
   /// In zh, this message translates to:
   /// **'{action} {name}（{completed}/{total}，{percent}%）'**
-  String appsTaskProgress(
-    Object action,
-    Object name,
-    int completed,
-    int total,
-    int percent,
-  );
+  String appsTaskProgress(Object action, Object name, int completed, int total, int percent);
 
   /// No description provided for @appsExportMeasuring.
   ///
@@ -2582,7 +2570,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @appsSuModeHelp.
   ///
   /// In zh, this message translates to:
-  /// **'卸载用 su 执行。冻结和导出 APK 按当前连接的身份执行。'**
+  /// **'卸载和数据目录用 su 执行。冻结和导出 APK 按当前连接的身份执行。'**
   String get appsSuModeHelp;
 
   /// No description provided for @deviceSuFailed.
@@ -2592,38 +2580,34 @@ abstract class FireAdbLocalizations {
   String get deviceSuFailed;
 }
 
-class _FireAdbLocalizationsDelegate
-    extends LocalizationsDelegate<FireAdbLocalizations> {
+class _FireAdbLocalizationsDelegate extends LocalizationsDelegate<FireAdbLocalizations> {
   const _FireAdbLocalizationsDelegate();
 
   @override
   Future<FireAdbLocalizations> load(Locale locale) {
-    return SynchronousFuture<FireAdbLocalizations>(
-      lookupFireAdbLocalizations(locale),
-    );
+    return SynchronousFuture<FireAdbLocalizations>(lookupFireAdbLocalizations(locale));
   }
 
   @override
-  bool isSupported(Locale locale) =>
-      <String>['en', 'zh'].contains(locale.languageCode);
+  bool isSupported(Locale locale) => <String>['en', 'zh'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_FireAdbLocalizationsDelegate old) => false;
 }
 
 FireAdbLocalizations lookupFireAdbLocalizations(Locale locale) {
+
+
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
-    case 'en':
-      return FireAdbLocalizationsEn();
-    case 'zh':
-      return FireAdbLocalizationsZh();
+    case 'en': return FireAdbLocalizationsEn();
+    case 'zh': return FireAdbLocalizationsZh();
   }
 
   throw FlutterError(
     'FireAdbLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
     'an issue with the localizations generation tool. Please file an issue '
     'on GitHub with a reproducible sample app and the gen-l10n configuration '
-    'that was used.',
+    'that was used.'
   );
 }

@@ -15,7 +15,7 @@ import '../../l10n/generated/fire_adb_localizations.dart';
 import '../../log/app_log.dart';
 import '../data/source/run_as_files.dart';
 
-/// 用 `run-as` 浏览和修改一个 debug 应用的数据目录。
+/// 浏览和修改应用数据目录。debug 应用用 `run-as`，root 模式直接读写。
 class AppDataPage extends StatefulWidget {
   const AppDataPage({
     super.key,

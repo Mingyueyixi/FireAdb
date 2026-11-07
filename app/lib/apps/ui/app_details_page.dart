@@ -9,6 +9,7 @@ import '../../connection/connection_manager.dart';
 import '../../files/local_file_picker.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../log/app_log.dart';
+import '../../shell/root_shell.dart';
 import '../apps_controller.dart';
 import '../data/bean/installed_app.dart';
 import '../data/source/app_inventory.dart';
@@ -87,10 +88,9 @@ class _AppDetailsPageState extends State<AppDetailsPage> {
     return value.isEmpty ? null : value;
   }
 
-  void _browse(String title, String? path, {required bool runAs}) {
+  void _browse(String title, String? path) {
     final directory = path;
     if (directory == null) return;
-    if (runAs && !_app.isDebuggable) return;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => AppDataPage(
@@ -163,8 +163,16 @@ class _AppDetailsPageState extends State<AppDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!Get.isRegistered<DeviceRootStore>()) {
+      return _page(context, rooted: false);
+    }
+    return Obx(() => _page(context, rooted: rootCanEditAppData(widget.serial)));
+  }
+
+  Widget _page(BuildContext context, {required bool rooted}) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
+    final canEditData = _app.isDebuggable || rooted;
     final version = _app.versionLabel;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.appsDetailsTitle)),
@@ -229,9 +237,8 @@ class _AppDetailsPageState extends State<AppDetailsPage> {
             path: _app.dataDir,
             unknown: l10n.appsDirectoryUnknown,
             browse: l10n.appsBrowseDirectory,
-            canBrowse: _app.isDebuggable && _app.dataDir != null,
-            onBrowse: () =>
-                _browse(l10n.appsDataDirectory, _app.dataDir, runAs: true),
+            canBrowse: canEditData && _app.dataDir != null,
+            onBrowse: () => _browse(l10n.appsDataDirectory, _app.dataDir),
           ),
           _DirectoryTile(
             title: l10n.appsExternalDirectory,
@@ -239,13 +246,10 @@ class _AppDetailsPageState extends State<AppDetailsPage> {
             unknown: l10n.appsDirectoryUnknown,
             browse: l10n.appsBrowseDirectory,
             canBrowse: _app.externalDir != null,
-            onBrowse: () => _browse(
-              l10n.appsExternalDirectory,
-              _app.externalDir,
-              runAs: false,
-            ),
+            onBrowse: () =>
+                _browse(l10n.appsExternalDirectory, _app.externalDir),
           ),
-          if (!_app.isDebuggable)
+          if (!canEditData)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Text(

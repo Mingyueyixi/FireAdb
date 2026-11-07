@@ -24,6 +24,13 @@ String rootFailureText(Object error) {
   return '$error';
 }
 
+/// `adb root` 已生效，或应用管理打开了 su。这时可以读写任意应用的数据目录。
+bool rootCanEditAppData(String serial) {
+  if (!Get.isRegistered<DeviceRootStore>()) return false;
+  final store = Get.find<DeviceRootStore>();
+  return store.isAdbRootActive(serial) || store.of(serial).appSu;
+}
+
 /// 这个功能打开了 su，并且当前连接不是 adb root。
 bool commandUsesSu(ConnectedDevice device, SuScope scope) {
   if (!Get.isRegistered<DeviceRootStore>()) return false;

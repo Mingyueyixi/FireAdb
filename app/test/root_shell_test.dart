@@ -1,5 +1,6 @@
 import 'package:fire_adb/shell/root_shell.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -8,18 +9,12 @@ void main() {
   });
 
   test('su 按探测到的写法包一层', () {
-    expect(
-      RootPlan.su('su', SuForm.dashC).wrap('id'),
-      "'su' -c 'id'",
-    );
+    expect(RootPlan.su('su', SuForm.dashC).wrap('id'), "'su' -c 'id'");
     expect(
       RootPlan.su('/system/xbin/ksu', SuForm.uid).wrap('id'),
       "'/system/xbin/ksu' 0 sh -c 'id'",
     );
-    expect(
-      RootPlan.su('su', SuForm.user).wrap('id'),
-      "'su' root sh -c 'id'",
-    );
+    expect(RootPlan.su('su', SuForm.user).wrap('id'), "'su' root sh -c 'id'");
   });
 
   test('adb root 回复决定是保持 root 还是退回', () {
@@ -63,6 +58,18 @@ void main() {
       DeviceRootOptions.fromJson(<String, Object>{'useSu': true}).appSu,
       isTrue,
     );
+  });
+
+  test('adb root 或应用 su 可以编辑任意应用数据目录', () {
+    Get.reset();
+    final store = Get.put(DeviceRootStore());
+    expect(rootCanEditAppData('serial'), isFalse);
+    store.markAdbRoot('serial', true);
+    expect(rootCanEditAppData('serial'), isTrue);
+    store.markAdbRoot('serial', false);
+    store.options['serial'] = const DeviceRootOptions(appSu: true);
+    expect(rootCanEditAppData('serial'), isTrue);
+    Get.reset();
   });
 
   test('只认 uid=0', () {

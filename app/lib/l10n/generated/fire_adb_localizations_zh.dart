@@ -639,7 +639,7 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   }
 
   @override
-  String get appsDebugOnlyHint => '数据目录只有 debug 应用可以读取和修改。';
+  String get appsDebugOnlyHint => '没有 root 时，只有 debug 应用的数据目录可以读取和修改。';
 
   @override
   String get appsDataEmpty => '这个目录是空的';
@@ -1439,7 +1439,7 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
       '列目录、搜索、删除、重命名、复制、移动、新建和改权限用 su 执行。打开、编辑、上传和导出按当前连接的身份执行。复制和新建的文件属于 root。';
 
   @override
-  String get appsSuModeHelp => '卸载用 su 执行。冻结和导出 APK 按当前连接的身份执行。';
+  String get appsSuModeHelp => '卸载和数据目录用 su 执行。冻结和导出 APK 按当前连接的身份执行。';
 
   @override
   String get deviceSuFailed => 'su 没有取得 root';

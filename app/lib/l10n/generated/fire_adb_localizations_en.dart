@@ -666,7 +666,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get appsDebugOnlyHint =>
-      'Only a debug app can read and change its data directory.';
+      'Without root, only a debug app\'s data directory can be read and changed.';
 
   @override
   String get appsDataEmpty => 'This directory is empty';
@@ -1486,7 +1486,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get appsSuModeHelp =>
-      'Uninstall runs through su. Freeze and APK export use the current connection\'s identity.';
+      'Uninstall and data directories run through su. Freeze and APK export use the current connection\'s identity.';
 
   @override
   String get deviceSuFailed => 'su did not get root';

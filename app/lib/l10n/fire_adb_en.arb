@@ -323,7 +323,7 @@
       "error": {}
     }
   },
-  "appsDebugOnlyHint": "Only a debug app can read and change its data directory.",
+  "appsDebugOnlyHint": "Without root, only a debug app's data directory can be read and changed.",
   "appsDataEmpty": "This directory is empty",
   "appsDataFailed": "Could not read the directory: {error}",
   "@appsDataFailed": {
@@ -925,6 +925,6 @@
   "deviceSuCommandInvalid": "Enter the su command name or path",
   "suMode": "su mode",
   "filesSuModeHelp": "Listing, search, delete, rename, copy, move, create, and permission changes run through su. Open, edit, upload, and export use the current connection's identity. Copied and newly created files are owned by root.",
-  "appsSuModeHelp": "Uninstall runs through su. Freeze and APK export use the current connection's identity.",
+  "appsSuModeHelp": "Uninstall and data directories run through su. Freeze and APK export use the current connection's identity.",
   "deviceSuFailed": "su did not get root"
 }
