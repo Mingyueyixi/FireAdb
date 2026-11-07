@@ -3,7 +3,6 @@ import 'dart:typed_data';
 
 import '../../../connection/model/connected_device.dart';
 import '../../../files/data/source/remote_file_commands.dart';
-import '../../../log/app_log.dart';
 
 final _packagePattern = RegExp(r'^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+$');
 
@@ -11,21 +10,6 @@ final _lsLine = RegExp(
   r'^([dl\-])[rwxsStT-]{9}[.+]?\s+\d+\s+\S+\s+\S+\s+(\d+)\s+'
   r'\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?\s+(.+)$',
 );
-
-const _emulatedPrefixes = <String>[
-  '/sdcard/',
-  '/storage/emulated/0/',
-  '/storage/self/primary/',
-];
-
-/// shell 读不到 `Android/data` 时，给 shell 打开外部存储后再试一次。
-const shellStorageGrantCommands = <String>[
-  'appops set --uid 2000 MANAGE_EXTERNAL_STORAGE allow',
-  'appops set com.android.shell MANAGE_EXTERNAL_STORAGE allow',
-  'appops set com.android.shell LEGACY_STORAGE allow',
-];
-
-var _shellStorageGranted = false;
 
 /// debug 应用数据目录里的一项。通过 `run-as` 列出来。
 class RunAsEntry {
@@ -53,26 +37,6 @@ bool isAppPackageName(String packageName) =>
 bool isPrivateAppDataPath(String path) {
   final value = normalizeRemotePath(path);
   return value.startsWith('/data/data/') || value.startsWith('/data/user/');
-}
-
-bool isRemotePermissionDenied(Object error) =>
-    '$error'.toLowerCase().contains('permission denied');
-
-/// FUSE 上的 `Android/data` 读不到时，换成存储卷上的真实目录。
-List<String> externalDirectoryCandidates(String path) {
-  final normalized = normalizeRemotePath(path);
-  for (final prefix in _emulatedPrefixes) {
-    if (!normalized.startsWith(prefix)) continue;
-    final suffix = normalized.substring(prefix.length);
-    return <String>[
-      normalized,
-      '/data/media/0/$suffix',
-      '/mnt/pass_through/0/emulated/0/$suffix',
-      '/mnt/user/0/emulated/0/$suffix',
-      '/mnt/androidwritable/0/emulated/0/$suffix',
-    ];
-  }
-  return <String>[normalized];
 }
 
 String shellListCommand(String directory) =>
@@ -232,33 +196,17 @@ Future<AppDirectoryPage> listAppDirectory({
   );
 }
 
+/// 只列调用方给出的目录。shell 读得到已创建的 `Android/data`。
+///
+/// 没创建过的目录就是不存在。`/mnt/androidwritable` 等挂载 shell 不能进，
+/// 再去试只会得到 Permission denied。
 Future<({String directory, List<RunAsEntry> entries})> openExternalDirectory(
   ConnectedDevice device,
   String directory,
 ) async {
-  final candidates = externalDirectoryCandidates(directory);
-  final first = await _firstReadableDirectory(device, candidates);
-  if (first.page != null) return first.page!;
-  if (first.denied) {
-    log.info('SD 卡目录没有读取权限，为 shell 打开外部存储访问后再试');
-    await grantShellExternalStorage(device);
-    final second = await _firstReadableDirectory(device, candidates);
-    if (second.page != null) return second.page!;
-  }
-  final error = first.error ?? StateError('没有权限读取目录');
-  throw error;
-}
-
-Future<void> grantShellExternalStorage(ConnectedDevice device) async {
-  if (_shellStorageGranted) return;
-  _shellStorageGranted = true;
-  for (final command in shellStorageGrantCommands) {
-    try {
-      await device.shell(command);
-    } catch (error, stackTrace) {
-      log.warning('打开 shell 外部存储失败：$command', error, stackTrace);
-    }
-  }
+  final normalized = normalizeRemotePath(directory);
+  final output = await device.shell(shellListCommand(normalized));
+  return (directory: normalized, entries: parseRunAsList(output, normalized));
 }
 
 Future<Uint8List> readAppFile({
@@ -321,38 +269,6 @@ Future<String> exportAppDirectory({
     localDirectory: localRoot,
   );
   return localRoot.path;
-}
-
-Future<
-  ({
-    ({String directory, List<RunAsEntry> entries})? page,
-    Object? error,
-    bool denied,
-  })
->
-_firstReadableDirectory(ConnectedDevice device, List<String> candidates) async {
-  Object? lastError;
-  var denied = false;
-  for (final candidate in candidates) {
-    try {
-      final output = await device.shell(shellListCommand(candidate));
-      final entries = parseRunAsList(output, candidate);
-      return (
-        page: (directory: candidate, entries: entries),
-        error: null,
-        denied: false,
-      );
-    } catch (error) {
-      lastError = error;
-      if (isRemotePermissionDenied(error)) {
-        denied = true;
-        continue;
-      }
-      if (error is StateError) continue;
-      rethrow;
-    }
-  }
-  return (page: null, error: lastError, denied: denied);
 }
 
 String _remapRoot(String root, String requested, String resolved) {

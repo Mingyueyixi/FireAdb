@@ -51,7 +51,7 @@ lrwxrwxrwx 1 u0_a1 u0_a1 10 2024-05-01 10:12 link -> /tmp
     );
   });
 
-  test('SD 卡目录用 shell 读取，并准备备用路径', () {
+  test('SD 卡目录只列给出的路径', () {
     expect(isPrivateAppDataPath('/data/user/0/com.example.app'), isTrue);
     expect(
       isPrivateAppDataPath('/sdcard/Android/data/com.example.app'),
@@ -62,18 +62,11 @@ lrwxrwxrwx 1 u0_a1 u0_a1 10 2024-05-01 10:12 link -> /tmp
       "ls -la '/sdcard/Android/data/com.example.app'",
     );
     expect(
-      externalDirectoryCandidates(
-        '/storage/emulated/0/Android/data/com.example.app',
+      () => parseRunAsList(
+        'ls: /sdcard/Android/data/com.example.app: No such file or directory',
+        '/sdcard/Android/data/com.example.app',
       ),
-      contains('/data/media/0/Android/data/com.example.app'),
-    );
-    expect(
-      isRemotePermissionDenied(
-        StateError(
-          'ls: /sdcard/Android/data/com.example.app: Permission denied',
-        ),
-      ),
-      isTrue,
+      throwsStateError,
     );
     expect(localEntryName('a:b'), 'a_b');
   });
