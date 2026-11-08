@@ -18,7 +18,30 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   var _index = 0;
 
-  void _select(int index) => setState(() => _index = index);
+  /// 已访问过的 tab 下标：惰性挂载用。首次访问才真正构建页面，
+  /// 之后常驻（IndexedStack 切换只改可见索引），滚动位置、已加载
+  /// 数据、页面状态都保留，无闪动。未访问过的页面不参与初始化。
+  final Set<int> _visited = <int>{0};
+
+  /// 连接页是否为当前 tab。页面常驻后，首页的自动刷新启停
+  /// 需要这个信号（路由/dispose 不再随 tab 切换变化）。
+  final ValueNotifier<bool> _homeVisible = ValueNotifier<bool>(true);
+
+  void _select(int index) => setState(() {
+    _index = index;
+    _visited.add(index);
+    _homeVisible.value = index == 0;
+  });
+
+  /// 三个槽位始终对齐 tab 下标；未访问的槽位用空占位。
+  List<Widget> _stackChildren() => <Widget>[
+    if (_visited.contains(0))
+      HomePage(tabVisible: _homeVisible)
+    else
+      const SizedBox.shrink(),
+    if (_visited.contains(1)) const LogPage() else const SizedBox.shrink(),
+    if (_visited.contains(2)) const AboutPage() else const SizedBox.shrink(),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -28,11 +51,6 @@ class _AppShellState extends State<AppShell> {
       _Destination(l10n.navLogs, Icons.article_outlined, Icons.article),
       _Destination(l10n.navAbout, Icons.info_outline, Icons.info),
     ];
-    final page = switch (_index) {
-      0 => const HomePage(),
-      1 => const LogPage(),
-      _ => const AboutPage(),
-    };
     final wide = isWide(context);
     final settingsButton = IconButton(
       tooltip: l10n.settingsTitle,
@@ -88,11 +106,16 @@ class _AppShellState extends State<AppShell> {
                     ],
                   ),
                   const VerticalDivider(width: 1),
-                  Expanded(child: page),
+                  Expanded(
+                    child: IndexedStack(
+                      index: _index,
+                      children: _stackChildren(),
+                    ),
+                  ),
                 ],
               ),
             )
-          : page,
+          : IndexedStack(index: _index, children: _stackChildren()),
       bottomNavigationBar: wide
           ? null
           : NavigationBar(
