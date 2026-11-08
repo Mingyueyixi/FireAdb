@@ -8,6 +8,7 @@ import '../../connection/connection_manager.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../l10n/generated/fire_adb_localizations.dart';
 import '../../log/app_log.dart';
+import '../../widgets/system_navigation_padding.dart';
 import '../data/bean/installed_app.dart';
 import '../data/repo/device_app_repository.dart';
 import '../data/source/app_permissions.dart';
@@ -133,7 +134,7 @@ class _AppPermissionsPageState extends State<AppPermissionsPage> {
     final chinese = Localizations.localeOf(context).languageCode == 'zh';
     return Scaffold(
       appBar: AppBar(title: Text(l10n.appsPermissionTitle)),
-      body: _body(l10n, theme, chinese),
+      body: SystemNavigationPadding(child: _body(l10n, theme, chinese)),
     );
   }
 

@@ -18,27 +18,55 @@ import 'file_list_tile.dart';
 import 'file_task_view.dart';
 import 'files_toolbar.dart';
 
-class FilesPage extends StatefulWidget {
+class FilesPage extends StatelessWidget {
   const FilesPage({super.key, required this.serial});
 
   final String serial;
 
   @override
-  State<FilesPage> createState() => _FilesPageState();
+  Widget build(BuildContext context) => FileBrowser(serial: serial);
 }
 
-class _FilesPageState extends State<FilesPage> {
+/// 文件列表、工具栏和行操作。路径栏、位置快捷方式和 su 开关可以按页面关掉。
+class FileBrowser extends StatefulWidget {
+  const FileBrowser({
+    super.key,
+    required this.serial,
+    this.root,
+    this.showPathField = true,
+    this.showLocations = true,
+    this.showSuMode = true,
+  });
+
+  final String serial;
+
+  /// 固定根目录。应用目录传入后不能往上离开它。
+  final String? root;
+  final bool showPathField;
+  final bool showLocations;
+  final bool showSuMode;
+
+  @override
+  State<FileBrowser> createState() => _FileBrowserState();
+}
+
+class _FileBrowserState extends State<FileBrowser> {
+  late final String _tag;
   late final FilesController controller;
 
   @override
   void initState() {
     super.initState();
-    controller = Get.put(FilesController(widget.serial), tag: widget.serial);
+    final root = widget.root;
+    _tag = root == null
+        ? widget.serial
+        : '${widget.serial}\n${normalizeRemotePath(root)}';
+    controller = Get.put(FilesController(widget.serial, root: root), tag: _tag);
   }
 
   @override
   void dispose() {
-    final tag = widget.serial;
+    final tag = _tag;
     final mine = controller;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!Get.isRegistered<FilesController>(tag: tag)) return;
@@ -259,17 +287,26 @@ class _FilesPageState extends State<FilesPage> {
             padding: const EdgeInsets.fromLTRB(12, 8, 4, 0),
             child: Row(
               children: <Widget>[
-                Expanded(
-                  child: TextField(
-                    controller: controller.pathInput,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: const OutlineInputBorder(),
-                      labelText: l10n.filesPath,
+                if (widget.showPathField)
+                  Expanded(
+                    child: TextField(
+                      controller: controller.pathInput,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        border: const OutlineInputBorder(),
+                        labelText: l10n.filesPath,
+                      ),
+                      onSubmitted: (value) => controller.open(value),
                     ),
-                    onSubmitted: (value) => controller.open(value),
+                  )
+                else
+                  Expanded(
+                    child: Text(
+                      controller.path.value,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
                 IconButton(
                   tooltip: l10n.filesUp,
                   onPressed: controller.busy.value
@@ -287,37 +324,43 @@ class _FilesPageState extends State<FilesPage> {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: SizedBox(
-                    height: 40,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: <Widget>[
-                        ActionChip(
-                          label: Text(l10n.filesLocationsStorage),
-                          onPressed: () => controller.open(remoteStoragePath),
+          if (widget.showLocations || widget.showSuMode)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
+              child: Row(
+                children: <Widget>[
+                  if (widget.showLocations)
+                    Expanded(
+                      child: SizedBox(
+                        height: 40,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: <Widget>[
+                            ActionChip(
+                              label: Text(l10n.filesLocationsStorage),
+                              onPressed: () =>
+                                  controller.open(remoteStoragePath),
+                            ),
+                            const SizedBox(width: 8),
+                            ActionChip(
+                              label: Text(l10n.filesLocationsTemp),
+                              onPressed: () => controller.open(remoteTempPath),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        ActionChip(
-                          label: Text(l10n.filesLocationsTemp),
-                          onPressed: () => controller.open(remoteTempPath),
-                        ),
-                      ],
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                  if (widget.showSuMode)
+                    SuModeChip(
+                      serial: widget.serial,
+                      scope: SuScope.files,
+                      inline: true,
                     ),
-                  ),
-                ),
-                SuModeChip(
-                  serial: widget.serial,
-                  scope: SuScope.files,
-                  inline: true,
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
           FilesToolbar(
             selecting: controller.selecting.value,
             busy: controller.busy.value,

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
+import '../apps/data/source/run_as_files.dart';
 import '../connection/connection_manager.dart';
 import '../l10n/generated/fire_adb_localizations.dart';
 import '../log/app_log.dart';
@@ -70,16 +71,29 @@ class FileTask {
   }
 }
 
-/// 一台设备上的文件浏览器。
+/// 把浏览限制在 [root] 内。越界时回到根目录。
+String fencedRemotePath(String? root, String nextPath) {
+  final target = normalizeRemotePath(nextPath);
+  if (root == null) return target;
+  final fence = normalizeRemotePath(root);
+  return isWithinAppRoot(fence, target) ? target : fence;
+}
+
+/// 一台设备上的文件浏览器。[root] 不为空时不能走到该目录外面。
 class FilesController extends GetxController {
-  FilesController(this.serial);
+  FilesController(this.serial, {String? root})
+    : root = root == null ? null : normalizeRemotePath(root),
+      pathInput = TextEditingController(
+        text: root == null ? remoteStoragePath : normalizeRemotePath(root),
+      ),
+      path = (root == null ? remoteStoragePath : normalizeRemotePath(root)).obs;
 
   final String serial;
-  final TextEditingController pathInput = TextEditingController(
-    text: remoteStoragePath,
-  );
 
-  final RxString path = remoteStoragePath.obs;
+  /// 应用目录的固定根。文件管理为空，可以从存储根开始。
+  final String? root;
+  final TextEditingController pathInput;
+  final RxString path;
   final RxString keyword = ''.obs;
   final RxList<RemoteFile> entries = <RemoteFile>[].obs;
   final RxBool loading = true.obs;
@@ -141,7 +155,7 @@ class FilesController extends GetxController {
 
   Future<void> open(String nextPath) async {
     final generation = ++_generation;
-    final target = normalizeRemotePath(nextPath);
+    final target = fencedRemotePath(root, nextPath);
     keyword.value = '';
     path.value = target;
     pathInput.text = target;
@@ -150,6 +164,10 @@ class FilesController extends GetxController {
 
   Future<void> up() {
     if (searching) return open(path.value);
+    final fence = root;
+    if (fence != null && normalizeRemotePath(path.value) == fence) {
+      return Future<void>.value();
+    }
     return open(parentRemotePath(path.value));
   }
 

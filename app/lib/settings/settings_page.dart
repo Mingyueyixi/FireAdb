@@ -11,6 +11,7 @@ import '../home/home_controller.dart';
 import '../l10n/fire_adb_localizations_ext.dart';
 import '../l10n/generated/fire_adb_localizations.dart';
 import '../log/app_log.dart';
+import '../widgets/system_navigation_padding.dart';
 import 'app_settings_store.dart';
 
 /// 独立设置页。语言、端口和自动刷新都在这一页修改。
@@ -346,141 +347,153 @@ class _SettingsPageState extends State<SettingsPage> {
     final settings = Get.find<AppSettingsStore>();
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settingsTitle)),
-      body: Obx(() {
-        final locale = localeController.locale.value;
-        final prefer = manager.preferSdkAdbServer.value;
-        final adbPath = manager.sdkAdbPath.value;
-        final adbError = manager.sdkAdbError.value;
-        final autoRefreshDevices = settings.autoRefreshDevices.value;
-        final refreshInBackground = settings.refreshInBackground.value;
-        final intervalSeconds = settings.autoRefreshIntervalSeconds.value;
-        return Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: <Widget>[
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(l10n.settingsLanguage),
-                  subtitle: Text(localeController.nativeNameOf(locale)),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: _applyingServer
-                      ? null
-                      : () => unawaited(_pickLanguage()),
-                ),
-                const Divider(),
-                CheckboxListTile(
-                  key: const ValueKey<String>('settings-auto-refresh-devices'),
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(l10n.settingsAutoRefreshDevices),
-                  subtitle: Text(l10n.settingsAutoRefreshHelp(intervalSeconds)),
-                  value: autoRefreshDevices,
-                  onChanged: (value) {
-                    if (value == null) return;
-                    unawaited(_setDeviceAutoRefresh(value));
-                  },
-                ),
-                CheckboxListTile(
-                  key: const ValueKey<String>('settings-refresh-in-background'),
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(l10n.settingsRefreshInBackground),
-                  subtitle: Text(l10n.settingsRefreshInBackgroundHelp),
-                  value: refreshInBackground,
-                  onChanged: (value) {
-                    if (value == null) return;
-                    unawaited(_setRefreshInBackground(value));
-                  },
-                ),
-                const SizedBox(height: 8),
-                _SettingNumberField(
-                  title: l10n.settingsAutoRefreshInterval,
-                  fieldKey: const ValueKey<String>(
-                    'settings-auto-refresh-interval',
-                  ),
-                  controller: _intervalController,
-                  errorText: _intervalError,
-                  onApply: _applyInterval,
-                ),
-                const Divider(),
-                _SettingNumberField(
-                  title: l10n.settingsAdbServerPort,
-                  help: l10n.settingsAdbServerPortHelp,
-                  fieldKey: const ValueKey<String>('settings-adb-server-port'),
-                  controller: _portController,
-                  errorText: _portError,
-                  enabled: !_applyingServer,
-                  onApply: _applyPort,
-                ),
-                if (!Platform.isAndroid) ...<Widget>[
-                  const Divider(),
-                  SwitchListTile(
+      body: SystemNavigationPadding(
+        child: Obx(() {
+          final locale = localeController.locale.value;
+          final prefer = manager.preferSdkAdbServer.value;
+          final adbPath = manager.sdkAdbPath.value;
+          final adbError = manager.sdkAdbError.value;
+          final autoRefreshDevices = settings.autoRefreshDevices.value;
+          final refreshInBackground = settings.refreshInBackground.value;
+          final intervalSeconds = settings.autoRefreshIntervalSeconds.value;
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: <Widget>[
+                  ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: Text(l10n.settingsPreferSdkAdb),
-                    subtitle: Text(_sdkStatus(l10n, prefer, adbPath, adbError)),
-                    value: prefer,
-                    onChanged: _applyingServer ? null : _setPreferSdk,
+                    title: Text(l10n.settingsLanguage),
+                    subtitle: Text(localeController.nativeNameOf(locale)),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _applyingServer
+                        ? null
+                        : () => unawaited(_pickLanguage()),
+                  ),
+                  const Divider(),
+                  CheckboxListTile(
+                    key: const ValueKey<String>(
+                      'settings-auto-refresh-devices',
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(l10n.settingsAutoRefreshDevices),
+                    subtitle: Text(
+                      l10n.settingsAutoRefreshHelp(intervalSeconds),
+                    ),
+                    value: autoRefreshDevices,
+                    onChanged: (value) {
+                      if (value == null) return;
+                      unawaited(_setDeviceAutoRefresh(value));
+                    },
+                  ),
+                  CheckboxListTile(
+                    key: const ValueKey<String>(
+                      'settings-refresh-in-background',
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(l10n.settingsRefreshInBackground),
+                    subtitle: Text(l10n.settingsRefreshInBackgroundHelp),
+                    value: refreshInBackground,
+                    onChanged: (value) {
+                      if (value == null) return;
+                      unawaited(_setRefreshInBackground(value));
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _SettingNumberField(
+                    title: l10n.settingsAutoRefreshInterval,
+                    fieldKey: const ValueKey<String>(
+                      'settings-auto-refresh-interval',
+                    ),
+                    controller: _intervalController,
+                    errorText: _intervalError,
+                    onApply: _applyInterval,
+                  ),
+                  const Divider(),
+                  _SettingNumberField(
+                    title: l10n.settingsAdbServerPort,
+                    help: l10n.settingsAdbServerPortHelp,
+                    fieldKey: const ValueKey<String>(
+                      'settings-adb-server-port',
+                    ),
+                    controller: _portController,
+                    errorText: _portError,
+                    enabled: !_applyingServer,
+                    onApply: _applyPort,
+                  ),
+                  if (!Platform.isAndroid) ...<Widget>[
+                    const Divider(),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(l10n.settingsPreferSdkAdb),
+                      subtitle: Text(
+                        _sdkStatus(l10n, prefer, adbPath, adbError),
+                      ),
+                      value: prefer,
+                      onChanged: _applyingServer ? null : _setPreferSdk,
+                    ),
+                  ],
+                  const Divider(),
+                  Text(
+                    l10n.navLogs,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  _SettingNumberField(
+                    title: l10n.settingsLogBuffer,
+                    help: l10n.settingsLogBufferHelp,
+                    fieldKey: const ValueKey<String>('settings-log-buffer'),
+                    controller: _logBufferController,
+                    errorText: _logBufferError,
+                    onApply: _applyLogBuffer,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.settingsLogDirectory,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  SelectableText(
+                    _logDirectory ?? l10n.settingsLogDirectoryUnavailable,
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _logDirectory == null
+                          ? null
+                          : () => unawaited(_openLogDirectory()),
+                      icon: const Icon(Icons.folder_open),
+                      label: Text(l10n.settingsOpenLogDirectory),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _clearingLogs
+                          ? null
+                          : () => unawaited(_deleteSavedLogs()),
+                      icon: const Icon(Icons.delete_outline),
+                      label: Text(l10n.settingsLogDeleteAll),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _SettingNumberField(
+                    title: l10n.settingsLogRetention,
+                    help: l10n.settingsLogRetentionHelp,
+                    fieldKey: const ValueKey<String>('settings-log-retention'),
+                    controller: _logRetentionController,
+                    errorText: _logRetentionError,
+                    onApply: _applyLogRetention,
                   ),
                 ],
-                const Divider(),
-                Text(
-                  l10n.navLogs,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                _SettingNumberField(
-                  title: l10n.settingsLogBuffer,
-                  help: l10n.settingsLogBufferHelp,
-                  fieldKey: const ValueKey<String>('settings-log-buffer'),
-                  controller: _logBufferController,
-                  errorText: _logBufferError,
-                  onApply: _applyLogBuffer,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  l10n.settingsLogDirectory,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 4),
-                SelectableText(
-                  _logDirectory ?? l10n.settingsLogDirectoryUnavailable,
-                ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: _logDirectory == null
-                        ? null
-                        : () => unawaited(_openLogDirectory()),
-                    icon: const Icon(Icons.folder_open),
-                    label: Text(l10n.settingsOpenLogDirectory),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: _clearingLogs
-                        ? null
-                        : () => unawaited(_deleteSavedLogs()),
-                    icon: const Icon(Icons.delete_outline),
-                    label: Text(l10n.settingsLogDeleteAll),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _SettingNumberField(
-                  title: l10n.settingsLogRetention,
-                  help: l10n.settingsLogRetentionHelp,
-                  fieldKey: const ValueKey<String>('settings-log-retention'),
-                  controller: _logRetentionController,
-                  errorText: _logRetentionError,
-                  onApply: _applyLogRetention,
-                ),
-              ],
+              ),
             ),
-          ),
-        );
-      }),
+          );
+        }),
+      ),
     );
   }
 

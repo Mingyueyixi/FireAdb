@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 
 import '../l10n/fire_adb_localizations_ext.dart';
 import '../widgets/adaptive.dart' show isWide, isAtLeastTablet;
+import '../widgets/system_navigation_padding.dart';
 import 'data/feature_spec.dart';
 import 'device_switcher.dart';
 import 'feature_cache.dart';
@@ -31,7 +32,8 @@ class WorkspacePage extends GetView<WorkspaceController> {
     ConnectionManager manager,
     String serial,
   ) {
-    final name = manager.profileOf(serial)?.displayName ??
+    final name =
+        manager.profileOf(serial)?.displayName ??
         controller.rosterProfile(serial)?.displayName ??
         serial;
     if (manager.isConnected(serial)) return name;
@@ -118,67 +120,69 @@ class WorkspacePage extends GetView<WorkspaceController> {
         title: const Text('FireAdb'),
         actions: <Widget>[_deviceTitle(context)],
       ),
-      body: Row(
-        children: <Widget>[
-          NavigationRail(
-            selectedIndex: selectedIndex,
-            onDestinationSelected: serials.isEmpty
-                ? null
-                : (i) => controller.selectSerial(serials[i]),
-            labelType: NavigationRailLabelType.all,
-            scrollable: true,
-            trailingAtBottom: true,
-            trailing: _connectDeviceButton(context),
-            destinations: <NavigationRailDestination>[
-              if (serials.isEmpty)
-                NavigationRailDestination(
-                  icon: const Icon(Icons.smartphone_outlined),
-                  label: Text(context.l10n.workspaceConnectDevice),
-                )
-              else
-                for (final s in serials)
+      body: SystemNavigationPadding(
+        child: Row(
+          children: <Widget>[
+            NavigationRail(
+              selectedIndex: selectedIndex,
+              onDestinationSelected: serials.isEmpty
+                  ? null
+                  : (i) => controller.selectSerial(serials[i]),
+              labelType: NavigationRailLabelType.all,
+              scrollable: true,
+              trailingAtBottom: true,
+              trailing: _connectDeviceButton(context),
+              destinations: <NavigationRailDestination>[
+                if (serials.isEmpty)
                   NavigationRailDestination(
-                    icon: Icon(
-                      manager.isConnected(s)
-                          ? Icons.smartphone
-                          : Icons.smartphone_outlined,
+                    icon: const Icon(Icons.smartphone_outlined),
+                    label: Text(context.l10n.workspaceConnectDevice),
+                  )
+                else
+                  for (final s in serials)
+                    NavigationRailDestination(
+                      icon: Icon(
+                        manager.isConnected(s)
+                            ? Icons.smartphone
+                            : Icons.smartphone_outlined,
+                      ),
+                      selectedIcon: Icon(
+                        manager.isConnected(s)
+                            ? Icons.phone_android
+                            : Icons.phonelink_erase,
+                      ),
+                      label: Text(_deviceLabel(context, manager, s)),
                     ),
-                    selectedIcon: Icon(
-                      manager.isConnected(s)
-                          ? Icons.phone_android
-                          : Icons.phonelink_erase,
+              ],
+            ),
+            const VerticalDivider(width: 1),
+            SafeArea(
+              child: SizedBox(
+                width: 220,
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: Text(
+                        context.l10n.workspaceFeatures,
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
                     ),
-                    label: Text(_deviceLabel(context, manager, s)),
-                  ),
-            ],
-          ),
-          const VerticalDivider(width: 1),
-          SafeArea(
-            child: SizedBox(
-              width: 220,
-              child: ListView(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                    child: Text(
-                      context.l10n.workspaceFeatures,
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                  ),
-                  for (final spec in kDeviceFeatures)
-                    FeatureListTile(
-                      spec: spec,
-                      selected: spec.id == controller.currentFeatureId,
-                      onTap: () => controller.selectFeature(spec.id),
-                    ),
-                ],
+                    for (final spec in kDeviceFeatures)
+                      FeatureListTile(
+                        spec: spec,
+                        selected: spec.id == controller.currentFeatureId,
+                        onTap: () => controller.selectFeature(spec.id),
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(child: SafeArea(child: cache)),
-        ],
+            const VerticalDivider(width: 1),
+            Expanded(child: SafeArea(child: cache)),
+          ],
+        ),
       ),
     );
   }
@@ -202,7 +206,7 @@ class WorkspacePage extends GetView<WorkspaceController> {
             ),
           ],
         ),
-        body: cache,
+        body: SystemNavigationPadding(child: cache),
       ),
     );
   }

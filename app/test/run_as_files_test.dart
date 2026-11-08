@@ -46,6 +46,18 @@ lrwxrwxrwx 1 u0_a1 u0_a1 10 2024-05-01 10:12 link -> /tmp
       isFalse,
     );
     expect(
+      packageOfPrivatePath('/data/data/com.example.app/cache'),
+      'com.example.app',
+    );
+    expect(
+      packageOfPrivatePath('/data/user/11/com.example.app'),
+      'com.example.app',
+    );
+    expect(
+      packageOfPrivatePath('/sdcard/Android/data/com.example.app'),
+      isNull,
+    );
+    expect(
       () => runAsCatCommand('not a package', '/data/data/x'),
       throwsArgumentError,
     );

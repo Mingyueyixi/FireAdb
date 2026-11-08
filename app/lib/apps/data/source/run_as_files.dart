@@ -40,6 +40,25 @@ bool isPrivateAppDataPath(String path) {
   return value.startsWith('/data/data/') || value.startsWith('/data/user/');
 }
 
+/// 从 `/data/data/<包名>` 或 `/data/user/<用户>/<包名>` 取出包名。
+String? packageOfPrivatePath(String path) {
+  final value = normalizeRemotePath(path);
+  const dataPrefix = '/data/data/';
+  if (value.startsWith(dataPrefix)) {
+    return _packageSegment(value.substring(dataPrefix.length));
+  }
+  final user = RegExp(r'^/data/user/\d+/([^/]+)').firstMatch(value);
+  if (user == null) return null;
+  return _packageSegment(user.group(1)!);
+}
+
+String? _packageSegment(String value) {
+  final slash = value.indexOf('/');
+  final packageName = slash < 0 ? value : value.substring(0, slash);
+  if (!isAppPackageName(packageName)) return null;
+  return packageName;
+}
+
 String shellListCommand(String directory) =>
     'ls -la ${quoteRemotePath(normalizeRemotePath(directory))}';
 

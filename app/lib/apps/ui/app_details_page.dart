@@ -10,6 +10,7 @@ import '../../files/local_file_picker.dart';
 import '../../l10n/fire_adb_localizations_ext.dart';
 import '../../log/app_log.dart';
 import '../../shell/root_shell.dart';
+import '../../widgets/system_navigation_padding.dart';
 import '../apps_controller.dart';
 import '../data/bean/installed_app.dart';
 import '../data/source/app_inventory.dart';
@@ -176,90 +177,92 @@ class _AppDetailsPageState extends State<AppDetailsPage> {
     final version = _app.versionLabel;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.appsDetailsTitle)),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                backgroundImage: _icon == null ? null : MemoryImage(_icon!),
-                child: _icon == null ? const Icon(Icons.android) : null,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(_app.displayName, style: theme.textTheme.titleLarge),
-                    Text(_app.packageName),
-                    if (_app.isDebuggable)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Chip(label: Text(l10n.appsDebugBadge)),
-                      ),
-                  ],
+      body: SystemNavigationPadding(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  backgroundImage: _icon == null ? null : MemoryImage(_icon!),
+                  child: _icon == null ? const Icon(Icons.android) : null,
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(_app.displayName, style: theme.textTheme.titleLarge),
+                      Text(_app.packageName),
+                      if (_app.isDebuggable)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Chip(label: Text(l10n.appsDebugBadge)),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (_loading) const LinearProgressIndicator(minHeight: 2),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  _error!,
+                  style: TextStyle(color: theme.colorScheme.error),
                 ),
               ),
-            ],
-          ),
-          if (_loading) const LinearProgressIndicator(minHeight: 2),
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text(
-                _error!,
-                style: TextStyle(color: theme.colorScheme.error),
+            const SizedBox(height: 12),
+            if (version.isNotEmpty)
+              ListTile(title: Text(l10n.appsVersion(version))),
+            if (_app.sizeBytes != null)
+              ListTile(
+                title: Text(l10n.appsSize(formatByteSize(_app.sizeBytes!))),
               ),
-            ),
-          const SizedBox(height: 12),
-          if (version.isNotEmpty)
-            ListTile(title: Text(l10n.appsVersion(version))),
-          if (_app.sizeBytes != null)
             ListTile(
-              title: Text(l10n.appsSize(formatByteSize(_app.sizeBytes!))),
-            ),
-          ListTile(
-            title: Text(
-              _app.primaryPath == null
-                  ? l10n.appsPath(l10n.appsDirectoryUnknown)
-                  : l10n.appsPath(_app.primaryPath!),
-            ),
-            trailing: TextButton(
-              onPressed: _exporting ? null : _exportApk,
-              child: Text(l10n.appsExportAction),
-            ),
-          ),
-          const Divider(),
-          _DirectoryTile(
-            title: l10n.appsDataDirectory,
-            path: _app.dataDir,
-            unknown: l10n.appsDirectoryUnknown,
-            browse: l10n.appsBrowseDirectory,
-            canBrowse: canEditData && _app.dataDir != null,
-            onBrowse: () => _browse(l10n.appsDataDirectory, _app.dataDir),
-          ),
-          _DirectoryTile(
-            title: l10n.appsExternalDirectory,
-            path: _app.externalDir,
-            unknown: l10n.appsDirectoryUnknown,
-            browse: l10n.appsBrowseDirectory,
-            canBrowse: _app.externalDir != null,
-            onBrowse: () =>
-                _browse(l10n.appsExternalDirectory, _app.externalDir),
-          ),
-          if (!canEditData)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Text(
-                l10n.appsDebugOnlyHint,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+              title: Text(
+                _app.primaryPath == null
+                    ? l10n.appsPath(l10n.appsDirectoryUnknown)
+                    : l10n.appsPath(_app.primaryPath!),
+              ),
+              trailing: TextButton(
+                onPressed: _exporting ? null : _exportApk,
+                child: Text(l10n.appsExportAction),
               ),
             ),
-        ],
+            const Divider(),
+            _DirectoryTile(
+              title: l10n.appsDataDirectory,
+              path: _app.dataDir,
+              unknown: l10n.appsDirectoryUnknown,
+              browse: l10n.appsBrowseDirectory,
+              canBrowse: canEditData && _app.dataDir != null,
+              onBrowse: () => _browse(l10n.appsDataDirectory, _app.dataDir),
+            ),
+            _DirectoryTile(
+              title: l10n.appsExternalDirectory,
+              path: _app.externalDir,
+              unknown: l10n.appsDirectoryUnknown,
+              browse: l10n.appsBrowseDirectory,
+              canBrowse: _app.externalDir != null,
+              onBrowse: () =>
+                  _browse(l10n.appsExternalDirectory, _app.externalDir),
+            ),
+            if (!canEditData)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Text(
+                  l10n.appsDebugOnlyHint,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

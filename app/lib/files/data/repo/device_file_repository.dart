@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:get/get.dart';
 import 'package:libadb/libadb.dart';
 
+import '../../../apps/data/source/run_as_files.dart';
 import '../../../connection/local_adb_target.dart';
 import '../../../connection/model/connected_device.dart';
 import '../../../files/remote_file_export.dart';
@@ -18,7 +20,9 @@ class FileOperationCancelled implements Exception {
   String toString() => '操作已取消';
 }
 
-/// 通过 ADB sync 浏览设备文件，通过 shell 做删除、改名和权限修改。
+/// 浏览和修改设备文件。普通路径走 sync，文件 su 走 root shell。
+/// 应用私有目录在 adb root 时仍走 sync；只有应用 su 时走应用 root；
+/// 都没有时用 `run-as`。调用方只看到列目录、读字节、写字节和删除。
 class DeviceFileRepository {
   DeviceFileRepository(this._device, {this.host, this.adbSerial});
 
@@ -51,12 +55,12 @@ class DeviceFileRepository {
   }
 
   Future<List<RemoteFile>> list(String directory) async {
-    if (commandUsesSu(_device, SuScope.files)) {
-      final output = await _shell(rootListCommand(directory));
+    if (commandUsesSu(_device, SuScope.files) || _usesIdentity(directory)) {
+      final output = await _exec(rootListCommand(directory), directory);
       final files = parseRootList(output, directory);
       final failure = rootListFailure(output);
       if (failure != null && files.isEmpty) throw StateError(failure);
-      return _markDirectoryLinks(files);
+      return _markDirectoryLinks(files, directory);
     }
     final sync = await _openSync();
     final List<RemoteFile> files;
@@ -80,20 +84,24 @@ class DeviceFileRepository {
     } finally {
       await _closeSync(sync);
     }
-    return _markDirectoryLinks(files);
+    return _markDirectoryLinks(files, directory);
   }
 
   Future<List<RemoteFile>> search(String directory, String keyword) async {
-    final output = await _shell(
+    final output = await _exec(
       searchCommand(directory, keyword),
+      directory,
       timeout: _slowShellTimeout,
     );
-    return _markDirectoryLinks(parseSearchOutput(output));
+    return _markDirectoryLinks(parseSearchOutput(output), directory);
   }
 
-  Future<List<RemoteFile>> _markDirectoryLinks(List<RemoteFile> files) async {
+  Future<List<RemoteFile>> _markDirectoryLinks(
+    List<RemoteFile> files,
+    String scope,
+  ) async {
     final links = files.where((file) => file.isLink).map((file) => file.path);
-    final directories = await _directoryTargets(links);
+    final directories = await _directoryTargets(links, scope);
     final marked = directories.isEmpty
         ? files
         : <RemoteFile>[
@@ -107,7 +115,10 @@ class DeviceFileRepository {
     return marked;
   }
 
-  Future<Set<String>> _directoryTargets(Iterable<String> paths) async {
+  Future<Set<String>> _directoryTargets(
+    Iterable<String> paths,
+    String scope,
+  ) async {
     final list = paths.toList();
     final directories = <String>{};
     const chunkSize = 40;
@@ -115,8 +126,9 @@ class DeviceFileRepository {
       final end = offset + chunkSize > list.length
           ? list.length
           : offset + chunkSize;
-      final output = await _shell(
+      final output = await _exec(
         directoryProbeCommand(list.sublist(offset, end)),
+        scope,
       );
       directories.addAll(parseDirectoryProbe(output));
     }
@@ -126,40 +138,45 @@ class DeviceFileRepository {
   Future<void> remove(Iterable<String> paths) async {
     final list = paths.toList();
     if (list.isEmpty) return;
-    ensureCommandSuccess(await _shell(deleteCommand(list)));
+    ensureCommandSuccess(await _exec(deleteCommand(list), list.first));
   }
 
   Future<void> rename(String from, String to) async {
-    ensureCommandSuccess(await _shell(renameCommand(from, to)));
+    ensureCommandSuccess(await _exec(renameCommand(from, to), from));
   }
 
   Future<void> copyTo(Iterable<String> sources, String destination) async {
     final list = sources.toList();
     if (list.isEmpty) return;
-    ensureCommandSuccess(await _shell(copyCommand(list, destination)));
+    ensureCommandSuccess(
+      await _exec(copyCommand(list, destination), list.first),
+    );
   }
 
   Future<void> moveTo(Iterable<String> sources, String destination) async {
     final list = sources.toList();
     if (list.isEmpty) return;
-    ensureCommandSuccess(await _shell(moveCommand(list, destination)));
+    ensureCommandSuccess(
+      await _exec(moveCommand(list, destination), list.first),
+    );
   }
 
   Future<void> chmod(Iterable<String> paths, String mode) async {
     final list = paths.toList();
     if (list.isEmpty) return;
-    ensureCommandSuccess(await _shell(chmodCommand(list, mode)));
+    ensureCommandSuccess(await _exec(chmodCommand(list, mode), list.first));
   }
 
   Future<void> createDirectory(String path) async {
-    ensureCommandSuccess(await _shell(mkdirCommand(path)));
+    ensureCommandSuccess(await _exec(mkdirCommand(path), path));
   }
 
   Future<void> createFile(String path) async {
-    ensureCommandSuccess(await _shell(touchCommand(path)));
+    ensureCommandSuccess(await _exec(touchCommand(path), path));
   }
 
   Future<Uint8List> readBytes(String path, {required int maxBytes}) async {
+    if (_usesIdentity(path)) return _readViaShell(path, maxBytes: maxBytes);
     final stat = await _stat(path);
     if (stat.mode == 0) throw StateError('文件不存在');
     if (stat.isDirectory) throw StateError('不能把目录当文本打开');
@@ -181,6 +198,10 @@ class DeviceFileRepository {
     List<int> bytes, {
     int mode = 0x81a4,
   }) async {
+    if (_usesIdentity(path)) {
+      await _writeViaShell(path, bytes);
+      return;
+    }
     final sync = await _openSync();
     try {
       await sync.client.push(bytes, path, mode: mode);
@@ -198,6 +219,16 @@ class DeviceFileRepository {
   }) async {
     _ensureActive(isCancelled);
     final length = await file.length();
+    if (_usesIdentity(remotePath)) {
+      await _uploadViaShell(
+        file,
+        remotePath,
+        length: length,
+        onProgress: onProgress,
+        isCancelled: isCancelled,
+      );
+      return;
+    }
     final sync = await _openSync();
     RandomAccessFile? reader;
     try {
@@ -227,10 +258,24 @@ class DeviceFileRepository {
   }
 
   Future<List<RemoteExportPiece>> planExport(List<RemoteFile> selected) async {
-    final sync = await _openSync();
     final pieces = <RemoteExportPiece>[];
+    final identity = <RemoteFile>[];
+    final synced = <RemoteFile>[];
+    for (final file in selected) {
+      if (_usesIdentity(file.path)) {
+        identity.add(file);
+      } else {
+        synced.add(file);
+      }
+    }
+    for (final file in identity) {
+      _ensureActive(null);
+      await _collectListed(file, file.name, pieces);
+    }
+    if (synced.isEmpty) return pieces;
+    final sync = await _openSync();
     try {
-      for (final file in selected) {
+      for (final file in synced) {
         _ensureActive(null);
         await _collect(sync.client, file, file.name, pieces);
       }
@@ -294,7 +339,7 @@ class DeviceFileRepository {
       await exportRemoteFile(
         remotePath: piece.remotePath,
         localFile: local,
-        shell: (command) => _shell(command),
+        shell: (command) => _exec(command, piece.remotePath),
         pullTo: (remote, sink, progress) =>
             _pullTo(remote, sink, onProgress: progress),
         onProgress: (done, _) {
@@ -375,6 +420,7 @@ class DeviceFileRepository {
     IOSink sink, {
     void Function(int done, int total)? onProgress,
   }) async {
+    if (_usesIdentity(path)) return _pullViaShell(path, sink, onProgress);
     final sync = await _openSync();
     try {
       _ensureActive(null);
@@ -412,10 +458,168 @@ class DeviceFileRepository {
     await sync.close();
   }
 
-  Future<String> _shell(String command, {Duration? timeout}) async {
-    final shell = await _device.openShell(
-      await rootCommand(_device, command, scope: SuScope.files),
+  /// sync 不是该路径的身份时，读写必须走 shell。adb root 后 sync 本身就是 root。
+  bool _usesIdentity(String path) {
+    if (!isPrivateAppDataPath(path)) return false;
+    if (!Get.isRegistered<DeviceRootStore>()) return true;
+    return !Get.find<DeviceRootStore>().isAdbRootActive(_device.serial);
+  }
+
+  Future<String> _wrap(String command, String path) async {
+    if (commandUsesSu(_device, SuScope.files) || !_usesIdentity(path)) {
+      return rootCommand(_device, command, scope: SuScope.files);
+    }
+    if (rootCanEditAppData(_device.serial)) {
+      return rootCommand(_device, command, scope: SuScope.apps);
+    }
+    final packageName = packageOfPrivatePath(path);
+    if (packageName == null) {
+      return rootCommand(_device, command, scope: SuScope.files);
+    }
+    return 'run-as ${quoteRemotePath(packageName)} sh -c ${quoteRemotePath(command)}';
+  }
+
+  Future<Uint8List> _readViaShell(String path, {required int maxBytes}) async {
+    final output = await _exec('ls -ld ${quoteRemotePath(path)}', path);
+    final files = parseRootList(output, parentRemotePath(path));
+    final failure = rootListFailure(output);
+    if (failure != null && files.isEmpty) throw StateError(failure);
+    if (files.isEmpty) throw StateError('文件不存在');
+    final file = files.first;
+    if (file.isDirectory) throw StateError('不能把目录当文本打开');
+    if (file.sizeKnown && file.size > maxBytes) {
+      throw StateError('文件超过 ${formatFileSize(maxBytes)}');
+    }
+    final bytes = await _device.execOut(
+      await _wrap('cat ${quoteRemotePath(path)}', path),
     );
+    if (bytes.length > maxBytes) {
+      throw StateError('文件超过 ${formatFileSize(maxBytes)}');
+    }
+    return bytes;
+  }
+
+  Future<void> _writeViaShell(String path, List<int> bytes) async {
+    final shell = await _device.openShell(
+      await _wrap('cat > ${quoteRemotePath(path)}', path),
+    );
+    _shellSession = shell;
+    try {
+      _ensureActive(null);
+      if (bytes.isNotEmpty) await shell.write(bytes);
+      _ensureActive(null);
+    } catch (_) {
+      if (_cancelled) throw const FileOperationCancelled();
+      rethrow;
+    } finally {
+      if (identical(_shellSession, shell)) _shellSession = null;
+      await shell.close();
+    }
+  }
+
+  Future<void> _uploadViaShell(
+    File file,
+    String remotePath, {
+    required int length,
+    void Function(int bytesDone, int bytesTotal)? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    final shell = await _device.openShell(
+      await _wrap('cat > ${quoteRemotePath(remotePath)}', remotePath),
+    );
+    _shellSession = shell;
+    RandomAccessFile? reader;
+    try {
+      reader = await file.open();
+      var done = 0;
+      onProgress?.call(0, length);
+      while (true) {
+        _ensureActive(isCancelled);
+        final chunk = await reader.read(kFileIoBufferSize);
+        if (chunk.isEmpty) break;
+        await shell.write(chunk);
+        done += chunk.length;
+        onProgress?.call(done, length);
+      }
+    } catch (_) {
+      if (_cancelled || isCancelled?.call() == true) {
+        throw const FileOperationCancelled();
+      }
+      rethrow;
+    } finally {
+      await reader?.close();
+      if (identical(_shellSession, shell)) _shellSession = null;
+      await shell.close();
+    }
+  }
+
+  Future<int> _pullViaShell(
+    String path,
+    IOSink sink,
+    void Function(int done, int total)? onProgress,
+  ) async {
+    final shell = await _device.openShell(
+      await _wrap('cat ${quoteRemotePath(path)}', path),
+    );
+    _shellSession = shell;
+    try {
+      var received = 0;
+      await for (final chunk in shell.readStream) {
+        _ensureActive(null);
+        sink.add(chunk);
+        received += chunk.length;
+        onProgress?.call(received, 0);
+      }
+      return received;
+    } catch (_) {
+      if (_cancelled) throw const FileOperationCancelled();
+      rethrow;
+    } finally {
+      if (identical(_shellSession, shell)) _shellSession = null;
+      await shell.close();
+    }
+  }
+
+  Future<void> _collectListed(
+    RemoteFile file,
+    String relative,
+    List<RemoteExportPiece> pieces,
+  ) async {
+    _ensureActive(null);
+    if (!file.canEnter) {
+      pieces.add(
+        RemoteExportPiece(
+          remotePath: file.path,
+          relativePath: relative,
+          size: file.size,
+          directory: false,
+        ),
+      );
+      return;
+    }
+    pieces.add(
+      RemoteExportPiece(
+        remotePath: file.path,
+        relativePath: relative,
+        size: 0,
+        directory: true,
+      ),
+    );
+    final children = await list(file.path);
+    for (final child in children) {
+      await _collectListed(child, '$relative/${child.name}', pieces);
+    }
+  }
+
+  Future<String> _exec(String command, String path, {Duration? timeout}) {
+    return _rawShell(() => _wrap(command, path), timeout: timeout);
+  }
+
+  Future<String> _rawShell(
+    Future<String> Function() command, {
+    Duration? timeout,
+  }) async {
+    final shell = await _device.openShell(await command());
     _shellSession = shell;
     try {
       _ensureActive(null);
@@ -439,5 +643,4 @@ class DeviceFileRepository {
       throw const FileOperationCancelled();
     }
   }
-
 }
