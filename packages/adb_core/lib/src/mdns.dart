@@ -17,6 +17,34 @@ final InternetAddress kMdnsGroupV6 = InternetAddress('ff02::fb');
 const int kMdnsPort = 5353;
 const String kMdnsDomain = 'local';
 
+/// Dart VM 是否支持 `bind(reusePort: true)`。
+///
+/// 这是编译进 runtime 的能力，与设备内核无关：Windows / Android 现阶段
+/// 不支持，bind 会抛 `SocketException` 并刷一条 VM 原生 ERROR（见
+/// flutter/flutter#141587）。因此不做平台清单——清单会过期；而是进程内
+/// 探测一次（绑定临时端口，避免与真实端口冲突混淆判断）并缓存结果。
+/// Dart 未来放开支持后探测自动通过，reusePort 全量启用，代码零改动。
+Future<bool>? _reusePortProbeFuture;
+
+Future<bool> _supportsReusePort() {
+  return _reusePortProbeFuture ??= () async {
+    RawDatagramSocket? probe;
+    try {
+      probe = await RawDatagramSocket.bind(
+        InternetAddress.anyIPv4,
+        0,
+        reuseAddress: true,
+        reusePort: true,
+      );
+      return true;
+    } on SocketException {
+      return false;
+    } finally {
+      probe?.close();
+    }
+  }();
+}
+
 /// 每块网卡的查询超时。
 ///
 /// 同一局域网里的 mDNS 会很快应答。各网卡同时发送，扫描只等这一段，
@@ -452,7 +480,10 @@ class MdnsBrowser {
         address,
         bindPort,
         reuseAddress: true,
-        reusePort: shared && !Platform.isWindows,
+        // 平台是否支持 SO_REUSEPORT 由 _supportsReusePort 进程内探测，
+        // 不做平台白名单（会过期）。探测不支持时此处传 false，
+        // 首次 bind 即成功，无 VM 原生 ERROR、无异常回退。
+        reusePort: shared && await _supportsReusePort(),
         ttl: ttl,
       );
     } on SocketException {
