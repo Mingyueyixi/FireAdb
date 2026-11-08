@@ -28,23 +28,15 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build Windows release
-        working-directory: app # pub workspace：Flutter 工程在 app/ 下，根目录的 windows/ 是残留
-        run: flutter build windows --release
-
-      - name: Package Windows ZIP
-        shell: pwsh
-        run: |
-          $version = (Select-String -Path app\pubspec.yaml -Pattern '^version:\s*(.+)$').Matches[0].Groups[1].Value.Trim() -replace '\+\d+$', ''
-          $zipName = "fire-adb-windows-x64-v$version.zip"
-          Compress-Archive -Path app\build\windows\x64\runner\Release\* -DestinationPath $zipName
-          echo "ZIP_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Build & package Windows release
+        id: build
+        run: python scripts/build_app.py windows --release # 脚本自行进入 app/，注入构建信息并压 zip
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
           name: fire-adb-windows-x64
-          path: ${{ env.ZIP_NAME }}
+          path: ${{ steps.build.outputs.artifact }}
           if-no-files-found: error
           retention-days: 7
 
@@ -52,8 +44,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.ZIP_NAME }}
+          files: ${{ steps.build.outputs.artifact }}
           fail_on_unmatched_files: true
+          generate_release_notes: true
 
   build-linux:
     name: Build Linux
@@ -85,22 +78,15 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build Linux release
-        working-directory: app # pub workspace：Flutter 工程在 app/ 下，根目录没有 linux/ 运行器
-        run: flutter build linux --release
-
-      - name: Package Linux tar.gz
-        run: |
-          VERSION=$(grep '^version:' app/pubspec.yaml | awk '{print $2}' | cut -d '+' -f 1)
-          TAR_NAME="fire-adb-linux-x64-v$VERSION.tar.gz"
-          tar -czf "$TAR_NAME" -C app/build/linux/x64/release bundle
-          echo "TAR_NAME=$TAR_NAME" >> $GITHUB_ENV
+      - name: Build & package Linux release
+        id: build
+        run: python scripts/build_app.py linux --release # 脚本自行进入 app/，注入构建信息并压 tar.gz
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
           name: fire-adb-linux-x64
-          path: ${{ env.TAR_NAME }}
+          path: ${{ steps.build.outputs.artifact }}
           if-no-files-found: error
           retention-days: 7
 
@@ -108,8 +94,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.TAR_NAME }}
+          files: ${{ steps.build.outputs.artifact }}
           fail_on_unmatched_files: true
+          generate_release_notes: true
 
   build-android:
     name: Build Android
@@ -135,22 +122,15 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Build Android APK
-        working-directory: app # pub workspace：Flutter 工程在 app/ 下
-        run: flutter build apk --release --target-platform android-arm64 # 只要 arm64-v8a
-
-      - name: Package Android APK
-        run: |
-          VERSION=$(grep '^version:' app/pubspec.yaml | awk '{print $2}' | cut -d '+' -f 1)
-          APK_NAME="fire-adb-android-arm64-v$VERSION.apk"
-          cp app/build/app/outputs/flutter-apk/app-release.apk "$APK_NAME"
-          echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
+      - name: Build & package Android APK
+        id: build
+        run: python scripts/build_app.py apk --release --target-platform android-arm64 # 脚本注入构建信息并重命名 APK；只要 arm64-v8a
 
       - name: Upload Android artifact
         uses: actions/upload-artifact@v4
         with:
           name: fire-adb-android-arm64
-          path: ${{ env.APK_NAME }}
+          path: ${{ steps.build.outputs.artifact }}
           if-no-files-found: error
           retention-days: 7
 
@@ -158,5 +138,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.APK_NAME }}
+          files: ${{ steps.build.outputs.artifact }}
           fail_on_unmatched_files: true
+          generate_release_notes: true

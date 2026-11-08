@@ -903,19 +903,35 @@
       "error": {}
     }
   },
-  "aboutVersion": "Version {version}",
-  "@aboutVersion": {
+  "aboutVersionLabel": "Version",
+  "aboutBuild": "Build number",
+  "aboutBuildTime": "Build time",
+  "aboutDevBuild": "Development build",
+  "aboutHomepage": "Project homepage",
+  "aboutCheckUpdate": "Check for updates",
+  "aboutCheckUpdateLatest": "You're on the latest version",
+  "aboutCheckUpdateFailed": "Update check failed: {error}",
+  "@aboutCheckUpdateFailed": {
     "placeholders": {
-      "version": {}
+      "error": {}
     }
   },
-  "aboutBuild": "Build {build}",
-  "@aboutBuild": {
+  "aboutCheckUpdateFoundTitle": "New version available",
+  "aboutCheckUpdateFoundMessage": "Latest {version}, current {current}.",
+  "@aboutCheckUpdateFoundMessage": {
     "placeholders": {
-      "build": {}
+      "version": {},
+      "current": {}
     }
   },
-  "aboutDescription": "A cross-platform ADB toolbox. The protocol is implemented in the app and does not use the system adb binary.",
+  "aboutGoRelease": "Open releases page",
+  "aboutOpenLinkFailed": "Could not open the link: {error}",
+  "@aboutOpenLinkFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "aboutDescription": "A cross-platform ADB toolbox.",
   "aboutVersionUnknown": "Version information is not available yet",
   "deviceAdbRoot": "ADB Root",
   "deviceAdbRootHelp": "Connect this device with adb root. If that cannot connect, the normal connection stays.",

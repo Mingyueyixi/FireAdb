@@ -1395,17 +1395,49 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   }
 
   @override
-  String aboutVersion(Object version) {
-    return '版本 $version';
+  String get aboutVersionLabel => '版本';
+
+  @override
+  String get aboutBuild => '构建号';
+
+  @override
+  String get aboutBuildTime => '构建时间';
+
+  @override
+  String get aboutDevBuild => '开发构建';
+
+  @override
+  String get aboutHomepage => '项目主页';
+
+  @override
+  String get aboutCheckUpdate => '检查更新';
+
+  @override
+  String get aboutCheckUpdateLatest => '已是最新版本';
+
+  @override
+  String aboutCheckUpdateFailed(Object error) {
+    return '检查更新失败：$error';
   }
 
   @override
-  String aboutBuild(Object build) {
-    return '构建号 $build';
+  String get aboutCheckUpdateFoundTitle => '发现新版本';
+
+  @override
+  String aboutCheckUpdateFoundMessage(Object version, Object current) {
+    return '最新版本 $version，当前 $current。';
   }
 
   @override
-  String get aboutDescription => '跨平台 ADB 工具箱。协议自实现，不依赖系统 adb。';
+  String get aboutGoRelease => '前往发布页';
+
+  @override
+  String aboutOpenLinkFailed(Object error) {
+    return '无法打开链接：$error';
+  }
+
+  @override
+  String get aboutDescription => '跨平台 ADB 工具箱。';
 
   @override
   String get aboutVersionUnknown => '版本信息还不可用';

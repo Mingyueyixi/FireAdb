@@ -2501,22 +2501,82 @@ abstract class FireAdbLocalizations {
   /// **'读取日志失败：{error}'**
   String logReadFailed(Object error);
 
-  /// No description provided for @aboutVersion.
+  /// No description provided for @aboutVersionLabel.
   ///
   /// In zh, this message translates to:
-  /// **'版本 {version}'**
-  String aboutVersion(Object version);
+  /// **'版本'**
+  String get aboutVersionLabel;
 
   /// No description provided for @aboutBuild.
   ///
   /// In zh, this message translates to:
-  /// **'构建号 {build}'**
-  String aboutBuild(Object build);
+  /// **'构建号'**
+  String get aboutBuild;
+
+  /// No description provided for @aboutBuildTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'构建时间'**
+  String get aboutBuildTime;
+
+  /// No description provided for @aboutDevBuild.
+  ///
+  /// In zh, this message translates to:
+  /// **'开发构建'**
+  String get aboutDevBuild;
+
+  /// No description provided for @aboutHomepage.
+  ///
+  /// In zh, this message translates to:
+  /// **'项目主页'**
+  String get aboutHomepage;
+
+  /// No description provided for @aboutCheckUpdate.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查更新'**
+  String get aboutCheckUpdate;
+
+  /// No description provided for @aboutCheckUpdateLatest.
+  ///
+  /// In zh, this message translates to:
+  /// **'已是最新版本'**
+  String get aboutCheckUpdateLatest;
+
+  /// No description provided for @aboutCheckUpdateFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查更新失败：{error}'**
+  String aboutCheckUpdateFailed(Object error);
+
+  /// No description provided for @aboutCheckUpdateFoundTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'发现新版本'**
+  String get aboutCheckUpdateFoundTitle;
+
+  /// No description provided for @aboutCheckUpdateFoundMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'最新版本 {version}，当前 {current}。'**
+  String aboutCheckUpdateFoundMessage(Object version, Object current);
+
+  /// No description provided for @aboutGoRelease.
+  ///
+  /// In zh, this message translates to:
+  /// **'前往发布页'**
+  String get aboutGoRelease;
+
+  /// No description provided for @aboutOpenLinkFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法打开链接：{error}'**
+  String aboutOpenLinkFailed(Object error);
 
   /// No description provided for @aboutDescription.
   ///
   /// In zh, this message translates to:
-  /// **'跨平台 ADB 工具箱。协议自实现，不依赖系统 adb。'**
+  /// **'跨平台 ADB 工具箱。'**
   String get aboutDescription;
 
   /// No description provided for @aboutVersionUnknown.

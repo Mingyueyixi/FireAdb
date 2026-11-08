@@ -1436,18 +1436,49 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   }
 
   @override
-  String aboutVersion(Object version) {
-    return 'Version $version';
+  String get aboutVersionLabel => 'Version';
+
+  @override
+  String get aboutBuild => 'Build number';
+
+  @override
+  String get aboutBuildTime => 'Build time';
+
+  @override
+  String get aboutDevBuild => 'Development build';
+
+  @override
+  String get aboutHomepage => 'Project homepage';
+
+  @override
+  String get aboutCheckUpdate => 'Check for updates';
+
+  @override
+  String get aboutCheckUpdateLatest => 'You\'re on the latest version';
+
+  @override
+  String aboutCheckUpdateFailed(Object error) {
+    return 'Update check failed: $error';
   }
 
   @override
-  String aboutBuild(Object build) {
-    return 'Build $build';
+  String get aboutCheckUpdateFoundTitle => 'New version available';
+
+  @override
+  String aboutCheckUpdateFoundMessage(Object version, Object current) {
+    return 'Latest $version, current $current.';
   }
 
   @override
-  String get aboutDescription =>
-      'A cross-platform ADB toolbox. The protocol is implemented in the app and does not use the system adb binary.';
+  String get aboutGoRelease => 'Open releases page';
+
+  @override
+  String aboutOpenLinkFailed(Object error) {
+    return 'Could not open the link: $error';
+  }
+
+  @override
+  String get aboutDescription => 'A cross-platform ADB toolbox.';
 
   @override
   String get aboutVersionUnknown => 'Version information is not available yet';

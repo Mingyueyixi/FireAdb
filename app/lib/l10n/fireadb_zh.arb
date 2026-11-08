@@ -903,19 +903,35 @@
       "error": {}
     }
   },
-  "aboutVersion": "版本 {version}",
-  "@aboutVersion": {
+  "aboutVersionLabel": "版本",
+  "aboutBuild": "构建号",
+  "aboutBuildTime": "构建时间",
+  "aboutDevBuild": "开发构建",
+  "aboutHomepage": "项目主页",
+  "aboutCheckUpdate": "检查更新",
+  "aboutCheckUpdateLatest": "已是最新版本",
+  "aboutCheckUpdateFailed": "检查更新失败：{error}",
+  "@aboutCheckUpdateFailed": {
     "placeholders": {
-      "version": {}
+      "error": {}
     }
   },
-  "aboutBuild": "构建号 {build}",
-  "@aboutBuild": {
+  "aboutCheckUpdateFoundTitle": "发现新版本",
+  "aboutCheckUpdateFoundMessage": "最新版本 {version}，当前 {current}。",
+  "@aboutCheckUpdateFoundMessage": {
     "placeholders": {
-      "build": {}
+      "version": {},
+      "current": {}
     }
   },
-  "aboutDescription": "跨平台 ADB 工具箱。协议自实现，不依赖系统 adb。",
+  "aboutGoRelease": "前往发布页",
+  "aboutOpenLinkFailed": "无法打开链接：{error}",
+  "@aboutOpenLinkFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "aboutDescription": "跨平台 ADB 工具箱。",
   "aboutVersionUnknown": "版本信息还不可用",
   "deviceAdbRoot": "ADB Root",
   "deviceAdbRootHelp": "用 adb root 连接这台设备。连不上就保持普通连接。",
