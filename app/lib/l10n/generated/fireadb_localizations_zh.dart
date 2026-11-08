@@ -318,6 +318,17 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get homeDeviceOnline => '在线';
 
   @override
+  String get homeLocalDevice => '本机';
+
+  @override
+  String homeLanAddress(Object address) {
+    return '局域网 IP $address';
+  }
+
+  @override
+  String get homeNetworkUnavailable => '网络不可用：请检查 WiFi 或以太网连接';
+
+  @override
   String get homeDeviceOffline => '离线';
 
   @override

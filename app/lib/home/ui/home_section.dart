@@ -146,6 +146,32 @@ class HomeAutoRefreshToggle extends StatelessWidget {
   }
 }
 
+/// 「本机」徽标：标记服务就在当前设备上（经 loopback 发现）。
+class HomeLocalBadge extends StatelessWidget {
+  const HomeLocalBadge({super.key, required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onPrimaryContainer,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
 /// ListTile 在尾部控件宽于整行时会直接抛异常。窄宽度把操作放到标题下方。
 class HomeListTile extends StatelessWidget {
   const HomeListTile({

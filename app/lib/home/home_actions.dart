@@ -32,6 +32,15 @@ Future<void> connectToHost(
       message: l10n.homeConnectedDevice(device.serial),
     );
     openWorkspace(device.serial);
+  } on AdbNetworkUnavailable {
+    log.info('无对外网络，拒绝连接');
+    showAppMessage(
+      messenger,
+      theme,
+      title: l10n.homeConnectionFailed,
+      message: l10n.homeNetworkUnavailable,
+      isError: true,
+    );
   } catch (error, stackTrace) {
     log.severe('连接设备失败：$host:$port', error, stackTrace);
     showAppMessage(
@@ -108,6 +117,10 @@ Future<void> connectHistoryProfile(
   final host = profile.host;
   final port = profile.port;
   if (host != null && port != null) {
+    // 回填手动连接输入框：转圈期间用户能看到本次连的是哪个地址，
+    // 不会误以为还在连输入框里残留的旧地址。
+    controller.hostController.text = host;
+    controller.portController.text = '$port';
     await connectToHost(context, controller, host, port);
     return;
   }

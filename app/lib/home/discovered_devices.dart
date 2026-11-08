@@ -9,10 +9,15 @@ bool isConnectableAdbService(MdnsService service) {
 }
 
 /// 设备列表里还没有的可连接服务。地址和端口相同的只留已有的那一行。
+///
+/// [localAddresses] 为本机网卡地址集合：127.0.0.1 与本机任一接口 IP
+/// 是同一台设备（同一 adb server），带端口相同即去重，避免手动连接
+/// 127.0.0.1 后设备列表出现两行同一设备。
 List<MdnsService> connectableDiscoveredServices({
   required Iterable<MdnsService> discovered,
   required Iterable<AdbDeviceInfo> adbDevices,
   required Iterable<DeviceProfile> profiles,
+  Set<String> localAddresses = const {},
 }) {
   return <MdnsService>[
     for (final service in discovered)
@@ -23,6 +28,7 @@ List<MdnsService> connectableDiscoveredServices({
             service,
             adbDevices: adbDevices,
             profiles: profiles,
+            localAddresses: localAddresses,
           ))
         service,
   ];
@@ -32,6 +38,7 @@ bool discoveredServiceAlreadyListed(
   MdnsService service, {
   required Iterable<AdbDeviceInfo> adbDevices,
   required Iterable<DeviceProfile> profiles,
+  Set<String> localAddresses = const {},
 }) {
   for (final device in adbDevices) {
     final endpoint = adbSerialEndpoint(device.serial);
@@ -41,6 +48,7 @@ bool discoveredServiceAlreadyListed(
           service.port,
           endpoint.$1,
           endpoint.$2,
+          localAddresses: localAddresses,
         )) {
       return true;
     }
@@ -50,7 +58,13 @@ bool discoveredServiceAlreadyListed(
     final port = profile.port;
     if (host != null &&
         port != null &&
-        sameHostPort(service.addressText, service.port, host, port)) {
+        sameHostPort(
+          service.addressText,
+          service.port,
+          host,
+          port,
+          localAddresses: localAddresses,
+        )) {
       return true;
     }
   }
@@ -66,8 +80,21 @@ bool discoveredServiceAlreadyListed(
   return (normalizeHost(serial.substring(0, separator)), port);
 }
 
-bool sameHostPort(String host, int port, String otherHost, int otherPort) {
-  return port == otherPort && normalizeHost(host) == normalizeHost(otherHost);
+bool sameHostPort(
+  String host,
+  int port,
+  String otherHost,
+  int otherPort, {
+  Set<String> localAddresses = const {},
+}) {
+  if (port != otherPort) return false;
+  final a = normalizeHost(host);
+  final b = normalizeHost(otherHost);
+  if (a == b) return true;
+  // 本机地址等价：127.0.0.1 与本机任一接口 IP 指向同一台设备。
+  return localAddresses.isNotEmpty &&
+      localAddresses.contains(a) &&
+      localAddresses.contains(b);
 }
 
 String normalizeHost(String host) {

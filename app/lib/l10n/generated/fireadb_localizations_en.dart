@@ -335,6 +335,18 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String get homeDeviceOnline => 'Online';
 
   @override
+  String get homeLocalDevice => 'This device';
+
+  @override
+  String homeLanAddress(Object address) {
+    return 'LAN IP $address';
+  }
+
+  @override
+  String get homeNetworkUnavailable =>
+      'Network unavailable. Check your Wi-Fi or Ethernet connection';
+
+  @override
   String get homeDeviceOffline => 'Offline';
 
   @override

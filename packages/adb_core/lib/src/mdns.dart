@@ -63,6 +63,8 @@ class MdnsService {
     this.host = '',
     this.address,
     this.txt = const {},
+    this.isLocal = false,
+    this.interfaceAddress,
   });
 
   /// 实例名，例如 `adb-86VXQYJF-3A6B9C`（connect）或设备型号（pairing）。
@@ -83,7 +85,24 @@ class MdnsService {
   /// TXT 属性：`v`（服务版本）、`name`（ro.product.model）、`api`（SDK 版本）。
   final Map<String, String> txt;
 
+  /// 本机服务的局域网地址（WiFi/以太网 IP，非回环），仅 [isLocal] 时非空。
+  ///
+  /// 连接端点已规范化为 127.0.0.1；这个地址只作展示补充（设备列表小字），
+  /// 帮用户把"127.0.0.1 的本机设备"和别处看到的局域网 IP 对上号。每次
+  /// 扫描重新计算，不存过期值。
+  final String? interfaceAddress;
+
   String get addressText => address?.address ?? host;
+
+  /// 服务是否就在当前设备上。
+  ///
+  /// 判定以 A/AAAA 自报住址为权威（命中本机网卡地址集合）；仅当应答
+  /// 没带广播地址时才退回报文源地址。"本机 adb server 代发远端设备"
+  /// 的应答源是 127.0.0.1 但 A 记录是远端 IP，不会误标。
+  ///
+  /// 本机服务的 [address] 一律合成为 127.0.0.1（稳定、与手动连接习惯
+  /// 一致），[interfaceAddress] 提供局域网 IP 作展示补充。
+  final bool isLocal;
 
   /// 展示用的 `地址:端口`。IPv6 地址带方括号，避免和端口粘在一起。
   String get endpointText {
@@ -339,6 +358,7 @@ class MdnsBrowser {
         serviceTypes,
         lan: true,
         retainListener: reuseLanSockets,
+        localAddresses: await localMachineAddresses(),
         onUpdate: onUpdate,
         stopWhen: stopWhen,
         requeryInterval: requeryInterval,
@@ -467,6 +487,24 @@ class MdnsBrowser {
         }
       }
     }
+
+    // 本机 adb server（Android 无线调试 / 桌面端 adb）本身也是 mDNS 应答
+    // 方：无 WiFi 等无路由场景下组播出不去、组播应答收不到，但单播
+    // 127.0.0.1 恒可达。发现结果与局域网在 resolver 里按实例名合并，
+    // 地址取舍见 preferReachableAddress（局域网 IPv4 优先，loopback 兜底）。
+    final loopback = await _tryBind(
+      InternetAddress.loopbackIPv4,
+      0,
+      shared: false,
+    );
+    if (loopback != null) {
+      sockets.add(
+        _QuerySocket(
+          loopback,
+          unicastDestination: InternetAddress.loopbackIPv4,
+        ),
+      );
+    }
     return sockets;
   }
 
@@ -552,6 +590,7 @@ class MdnsBrowser {
         <_QuerySocket>[_QuerySocket(socket)],
         serviceTypes,
         lan: false,
+        localAddresses: await localMachineAddresses(),
         onUpdate: onUpdate,
         stopWhen: stopWhen,
         requeryInterval: requeryInterval,
@@ -595,12 +634,16 @@ class MdnsBrowser {
     Set<String> serviceTypes, {
     required bool lan,
     bool retainListener = false,
+    Set<String> localAddresses = const {},
     void Function(List<MdnsService> services)? onUpdate,
     bool Function(List<MdnsService> services)? stopWhen,
     Duration? requeryInterval,
     bool Function()? isCancelled,
   }) async {
-    final resolver = _MdnsResolver(serviceTypes: _queryTypes(serviceTypes));
+    final resolver = _MdnsResolver(
+      serviceTypes: _queryTypes(serviceTypes),
+      localAddresses: localAddresses,
+    );
     final subscriptions = <StreamSubscription<RawSocketEvent>>[];
     final completer = Completer<void>();
     var expired = false;
@@ -657,19 +700,20 @@ class MdnsBrowser {
         for (final entry in sockets) {
           final socket = entry.socket;
           final ipv6 = socket.address.type == InternetAddressType.IPv6;
-          final destination = lan
-              ? (ipv6 ? kMdnsGroupV6 : kMdnsGroupV4)
-              : group;
-          final destinationPort = port;
-          final outlets = lan
+          final unicast = entry.unicastDestination;
+          final destination = unicast ??
+              (lan ? (ipv6 ? kMdnsGroupV6 : kMdnsGroupV4) : group);
+          final outlets = lan && unicast == null
               ? (entry.interface != null
                     ? <NetworkInterface>[entry.interface!]
                     : entry.interfaces)
               : const <NetworkInterface>[];
-          if (lan && outlets.isEmpty) continue;
-          final rounds = lan ? outlets.length : 1;
+          if (lan && unicast == null && outlets.isEmpty) continue;
+          final rounds = lan && unicast == null ? outlets.length : 1;
           for (var i = 0; i < rounds; i++) {
-            if (lan && !selectMulticastInterface(socket, outlets[i])) {
+            if (lan &&
+                unicast == null &&
+                !selectMulticastInterface(socket, outlets[i])) {
               _mdnsLog('指定组播出口失败：${outlets[i].name}');
               continue;
             }
@@ -686,7 +730,7 @@ class MdnsBrowser {
                   socket.send(
                     _buildPtrQuery(qname, unicastResponse: unicastResponse),
                     destination,
-                    destinationPort,
+                    port,
                   );
                 } on SocketException {
                   _mdnsLog('发送查询失败：$type ${lan ? outlets[i].name : ''}');
@@ -718,7 +762,7 @@ class MdnsBrowser {
     } finally {
       timer.cancel();
       if (retainListener) {
-        _holdForLateReplies(sockets, serviceTypes);
+        _holdForLateReplies(sockets, serviceTypes, localAddresses: localAddresses);
       }
       for (final subscription in subscriptions) {
         await subscription.cancel();
@@ -730,9 +774,13 @@ class MdnsBrowser {
   /// 窗口结束后继续收包。查询已经发出，应答常常晚一点才到。
   void _holdForLateReplies(
     List<_QuerySocket> sockets,
-    Set<String> serviceTypes,
-  ) {
-    final resolver = _MdnsResolver(serviceTypes: _queryTypes(serviceTypes));
+    Set<String> serviceTypes, {
+    Set<String> localAddresses = const {},
+  }) {
+    final resolver = _MdnsResolver(
+      serviceTypes: _queryTypes(serviceTypes),
+      localAddresses: localAddresses,
+    );
     void take(Datagram datagram) {
       resolver.handleDatagram(datagram.data, datagram.address);
       final found = resolver.services();
@@ -754,7 +802,12 @@ class MdnsBrowser {
 
 /// 监听或发送用的一个 UDP 套接字，以及它的组播出口。
 class _QuerySocket {
-  _QuerySocket(this.socket, {this.interface, this.interfaces = const []});
+  _QuerySocket(
+    this.socket, {
+    this.interface,
+    this.interfaces = const [],
+    this.unicastDestination,
+  });
 
   final RawDatagramSocket socket;
 
@@ -763,6 +816,9 @@ class _QuerySocket {
 
   /// 绑在任意地址上的监听套接字：每块网卡各发一次。
   final List<NetworkInterface> interfaces;
+
+  /// 非空时查询单播发往该地址（本机 loopback 探测），不走组播出口。
+  final InternetAddress? unicastDestination;
 
   /// RawDatagramSocket 只能 listen 一次。复用套接字时监听留着，扫描只换回调。
   StreamSubscription<RawSocketEvent>? _subscription;
@@ -845,6 +901,108 @@ bool selectMulticastInterface(
   } on OSError {
     return false;
   }
+}
+
+/// 本机网络快照：全部地址集合 + 展示用局域网地址（WiFi 优先）。
+class LocalNetworkSnapshot {
+  LocalNetworkSnapshot({required this.addresses, required this.wifiAddress});
+
+  /// 本机全部网卡地址（含回环，小写）。用于本机判定与列表去重。
+  final Set<String> addresses;
+
+  /// 展示用局域网地址：WiFi 接口优先（Android 上蜂窝 rmnet 地址不该
+  /// 抢占展示位），其次以太网，最后任意非回环、非链路本地 IPv4。
+  final String? wifiAddress;
+}
+
+/// 一次枚举同时取回地址集合与展示地址，避免各处重复系统调用。
+Future<LocalNetworkSnapshot> localNetworkSnapshot() async {
+  List<NetworkInterface> interfaces;
+  try {
+    interfaces = await NetworkInterface.list(
+      includeLoopback: true,
+      includeLinkLocal: true,
+    );
+  } on SocketException {
+    // 网卡枚举失败时至少保住回环判定。
+    return LocalNetworkSnapshot(
+      addresses: localAddressSetWithLoopback(const <String>[]),
+      wifiAddress: null,
+    );
+  }
+  return LocalNetworkSnapshot(
+    addresses: localAddressSetWithLoopback(<String>[
+      for (final iface in interfaces)
+        for (final address in iface.addresses) address.address,
+    ]),
+    wifiAddress: wifiPreferredLanAddress(<({String name, List<InternetAddress> addresses})>[
+      for (final iface in interfaces) (name: iface.name, addresses: iface.addresses),
+    ]),
+  );
+}
+
+/// 本机全部网卡地址（含回环，小写）。
+///
+/// 服务的任一地址命中该集合即视为本机服务；应用层也用它识别"同一台
+/// 设备的不同地址"（127.0.0.1 与本机接口 IP 等价），用于列表去重。
+Future<Set<String>> localMachineAddresses() async {
+  return (await localNetworkSnapshot()).addresses;
+}
+
+/// 展示用局域网地址选取：WiFi（wlan*）优先，其次以太网（eth*），
+/// 最后任意非回环、非链路本地的 IPv4。
+///
+/// Android 上同一时刻可能并存多个局域网地址：WiFi 的 wlan0、蜂窝的
+/// rmnet（10.x / CGNAT 100.64.x）。用户认知里的"本机局域网 IP"是
+/// WiFi 那个，蜂窝地址不应抢占展示位；仅在完全没有 wlan/eth 时
+/// 才回退到其他接口。纯函数便于测试。
+String? wifiPreferredLanAddress(
+  Iterable<({String name, List<InternetAddress> addresses})> interfaces,
+) {
+  String? pick(bool Function(String name) matches) {
+    for (final iface in interfaces) {
+      if (!matches(iface.name)) continue;
+      for (final address in iface.addresses) {
+        if (address.type == InternetAddressType.IPv4 &&
+            !address.isLoopback &&
+            !address.isLinkLocal) {
+          return address.address;
+        }
+      }
+    }
+    return null;
+  }
+
+  return pick((name) => name.startsWith('wlan')) ??
+      pick((name) => name.startsWith('eth')) ??
+      pick((_) => true);
+}
+
+/// 在网卡枚举结果上恒定并入回环地址。
+///
+/// Android 的接口枚举很可能不返回回环接口（includeLoopback 在部分
+/// 版本上无效），而 127.0.0.1 / ::1 定义上就是本机：本机判定与
+/// "127.0.0.1 ↔ 接口 IP 等价"的去重都依赖它们在场，不能赌枚举。
+Set<String> localAddressSetWithLoopback(Iterable<String> addresses) {
+  return <String>{'127.0.0.1', '::1', ...addresses.map((a) => a.toLowerCase())};
+}
+
+/// 从候选地址里挑出本机的非回环局域网地址（WiFi/以太网 IP）。
+///
+/// 本机服务的连接端点已规范化为回环；这个地址只用于展示（设备列表
+/// 小字），链路本地（fe80::）对用户没有意义，一并排除。纯函数便于测试。
+String? localInterfaceAddressOf(
+  Iterable<InternetAddress> candidates,
+  Set<String> localAddresses,
+) {
+  final local = <InternetAddress>[
+    for (final candidate in candidates)
+      if (!candidate.isLoopback &&
+          !candidate.isLinkLocal &&
+          localAddresses.contains(candidate.address.toLowerCase()))
+        candidate,
+  ];
+  return preferReachableAddress(local)?.address;
 }
 
 final Logger _mdnsLogger = Logger('adb_core.mdns');
@@ -1125,18 +1283,30 @@ class _ServiceState {
   int? port;
   final Map<String, String> txt = {};
   final List<InternetAddress> addresses = <InternetAddress>[];
+
+  /// 应答报文 A/AAAA 记录声明的地址（服务方自报的住址）。
+  ///
+  /// 与 [addresses]（含报文源地址兜底）分开记：判定服务是否在本机时，
+  /// 自报住址才是权威——"本机 server 代发远端设备"的应答源是 127.0.0.1，
+  /// 但 A 记录是远端 IP，不能算本机服务。
+  final List<InternetAddress> advertised = <InternetAddress>[];
 }
 
 class _MdnsResolver {
-  _MdnsResolver({Set<String>? serviceTypes})
-    : serviceTypes = serviceTypes?.toSet();
+  _MdnsResolver({Set<String>? serviceTypes, Set<String> localAddresses = const {}})
+    : serviceTypes = serviceTypes?.toSet(),
+      localAddresses = localAddresses;
 
   /// 本次查询的服务类型集合（`_type._tcp` 形式）；非空时只返回这些类型的服务，
   /// 用于滤掉无关应答（例如应答方对别的查询顺手回带了全部记录）。
   final Set<String>? serviceTypes;
 
+  /// 本机全部网卡地址（小写）。服务的任一地址命中它即视为本机服务。
+  final Set<String> localAddresses;
+
   final Map<String, _ServiceState> _services = {};
   final Map<String, List<InternetAddress>> _hostAddresses = {};
+  final Map<String, List<InternetAddress>> _advertisedHostAddresses = {};
 
   void handleDatagram(List<int> data, [InternetAddress? sender]) {
     final response = _parseDnsResponse(data);
@@ -1169,7 +1339,12 @@ class _MdnsResolver {
           _noteSender(record.rname, sender);
         case _dnsTypeA:
           if (record.rdlen != 4) continue;
+          // A/AAAA 同时进自报住址（本机判定权威）与普通候选（端点选择）。
           _addHostAddress(
+            record.rname,
+            InternetAddress.fromRawAddress(Uint8List.fromList(record.rdata)),
+          );
+          _addAdvertisedAddress(
             record.rname,
             InternetAddress.fromRawAddress(Uint8List.fromList(record.rdata)),
           );
@@ -1180,11 +1355,24 @@ class _MdnsResolver {
             record.rname,
             InternetAddress.fromRawAddress(Uint8List.fromList(record.rdata)),
           );
+          _addAdvertisedAddress(
+            record.rname,
+            InternetAddress.fromRawAddress(Uint8List.fromList(record.rdata)),
+          );
           _noteSender(record.rname, sender);
       }
     }
 
     _attachAddresses();
+  }
+
+  void _addAdvertisedAddress(String name, InternetAddress address) {
+    final list = _advertisedHostAddresses.putIfAbsent(
+      name,
+      () => <InternetAddress>[],
+    );
+    if (list.any((item) => item.address == address.address)) return;
+    list.add(address);
   }
 
   void _addHostAddress(String name, InternetAddress address) {
@@ -1214,6 +1402,14 @@ class _MdnsResolver {
           }
           state.addresses.add(address);
         }
+        for (final address
+            in _advertisedHostAddresses[name] ??
+            const <InternetAddress>[]) {
+          if (state.advertised.any((item) => item.address == address.address)) {
+            continue;
+          }
+          state.advertised.add(address);
+        }
       }
     }
   }
@@ -1221,7 +1417,21 @@ class _MdnsResolver {
   List<MdnsService> services() {
     final result = <MdnsService>[];
     _services.forEach((instance, state) {
-      final address = preferReachableAddress(state.addresses);
+      bool isLocalAddress(InternetAddress candidate) =>
+          localAddresses.contains(candidate.address.toLowerCase());
+      // 本机判定以 A/AAAA 自报住址为权威；仅当没有任何广播地址时才退回
+      // 全部候选（含报文源地址）——"本机 server 代发远端设备"的应答源是
+      // 127.0.0.1，但 A 记录是远端 IP，不会误判成本机。
+      final isLocal =
+          state.advertised.any(isLocalAddress) ||
+          (state.advertised.isEmpty && state.addresses.any(isLocalAddress));
+      // 本机服务一律以回环为规范端点（直接合成，不依赖"曾经收到过回环
+      // 应答"——真机上 mdnsd 未必应答 loopback 单播）：服务绑在本机上，
+      // 127.0.0.1:端口定义上可达；不随 WiFi 开关 / DHCP 换址变化，与手动
+      // 连接 127.0.0.1 的输入习惯一致。
+      final address = isLocal
+          ? InternetAddress.loopbackIPv4
+          : preferReachableAddress(state.addresses);
       final serviceType = state.serviceType ?? _serviceTypeFrom(instance);
       if (address == null || state.port == null || serviceType == null) {
         return;
@@ -1238,6 +1448,15 @@ class _MdnsResolver {
           port: state.port!,
           address: address,
           txt: Map.unmodifiable(state.txt),
+          isLocal: isLocal,
+          interfaceAddress: isLocal
+              ? localInterfaceAddressOf(
+                  state.advertised.isNotEmpty
+                      ? state.advertised
+                      : state.addresses,
+                  localAddresses,
+                )
+              : null,
         ),
       );
     });

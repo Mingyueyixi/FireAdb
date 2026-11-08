@@ -59,4 +59,56 @@ void main() {
     expect(discoveredServiceTitle(connect), 'Pixel 8');
     expect(adbSerialEndpoint('[fe80::1]:40000'), ('fe80::1', 40000));
   });
+
+  test('本机地址等价：127.0.0.1 与本机接口 IP 是同一台设备', () {
+    const local = <String>{'127.0.0.1', '192.168.3.45', '::1'};
+    final discoveredWifiIp = MdnsService(
+      instanceName: 'adb-self',
+      serviceType: adbServiceTypeConnect,
+      port: 40001,
+      address: InternetAddress('192.168.3.45'),
+    );
+    final otherPort = MdnsService(
+      instanceName: 'adb-self-other-port',
+      serviceType: adbServiceTypeConnect,
+      port: 40002,
+      address: InternetAddress('192.168.3.45'),
+    );
+    final remoteDevice = MdnsService(
+      instanceName: 'adb-remote',
+      serviceType: adbServiceTypeConnect,
+      port: 40003,
+      address: InternetAddress('192.0.2.10'),
+    );
+
+    // 手动连接 127.0.0.1 后，同一端口的接口 IP 服务不再重复出现。
+    final listed = connectableDiscoveredServices(
+      discovered: <MdnsService>[discoveredWifiIp, otherPort, remoteDevice],
+      adbDevices: const <AdbDeviceInfo>[],
+      profiles: const <DeviceProfile>[
+        DeviceProfile(serial: 'manual', host: '127.0.0.1', port: 40001),
+      ],
+      localAddresses: local,
+    );
+    expect(listed, <MdnsService>[otherPort, remoteDevice]);
+
+    // 反向同理：本机服务 127.0.0.1 不会与远端设备地址混同。
+    final loopbackService = MdnsService(
+      instanceName: 'adb-self-loop',
+      serviceType: adbServiceTypeConnect,
+      port: 40001,
+      address: InternetAddress('127.0.0.1'),
+    );
+    expect(
+      connectableDiscoveredServices(
+        discovered: <MdnsService>[loopbackService],
+        adbDevices: const <AdbDeviceInfo>[],
+        profiles: const <DeviceProfile>[
+          DeviceProfile(serial: 'manual', host: '192.168.3.45', port: 40001),
+        ],
+        localAddresses: local,
+      ),
+      isEmpty,
+    );
+  });
 }

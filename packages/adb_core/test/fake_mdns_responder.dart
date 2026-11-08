@@ -86,7 +86,11 @@ List<int> _txtRdata() {
 /// 构造一条 mDNS 响应：AN = PTR + SRV + TXT，AR = A。
 /// 名称按真实应答方的顺序出现：instance 首现于 PTR 的 rdata，
 /// host 首现于 SRV 的 rdata，之后用压缩指针引用。
-Uint8List buildPairingResponse({int port = kFakePairPort, List<int>? aaaa}) {
+Uint8List buildPairingResponse({
+  int port = kFakePairPort,
+  List<int>? a,
+  List<int>? aaaa,
+}) {
   final w = _Writer();
   w.addAll([0, 0, 0x84, 0x00]);
   w.addAll([0, 0]); // QDCOUNT
@@ -131,7 +135,7 @@ Uint8List buildPairingResponse({int port = kFakePairPort, List<int>? aaaa}) {
   w.u16(0x0001);
   w.u32(120);
   w.u16(4);
-  w.addAll([10, 0, 2, 2]);
+  w.addAll(a ?? [10, 0, 2, 2]);
 
   if (aaaa != null) {
     w.name(kFakeHostFqdn);

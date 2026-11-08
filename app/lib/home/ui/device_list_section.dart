@@ -33,6 +33,7 @@ class DeviceListSection extends GetView<HomeController> {
         discovered: controller.discovered,
         adbDevices: devices,
         profiles: manager.profiles,
+        localAddresses: controller.localAddresses,
       );
       final total =
           devices.length + additionalConnectedProfiles.length + wireless.length;
@@ -111,21 +112,54 @@ class DeviceListSection extends GetView<HomeController> {
               else
                 for (final device in devices) _AdbDeviceTile(device: device),
               for (final profile in additionalConnectedProfiles)
-                HomeListTile(
-                  dense: true,
-                  leading: Icon(_profileIcon(profile)),
-                  title: Text(profile.displayName),
-                  subtitle: Text(
-                    '${profile.connectionAddress.isEmpty ? profile.serial : profile.connectionAddress}'
-                    ' · ADB ${l10n.homeDeviceOnline}',
-                  ),
-                  trailing: IconButton(
-                    tooltip: l10n.commonDisconnect,
-                    icon: const Icon(Icons.link_off),
-                    onPressed: () =>
-                        disconnectDevice(context, controller, profile.serial),
-                  ),
-                  onTap: () => openWorkspace(profile.serial),
+                Builder(
+                  builder: (context) {
+                    // 地址属于本机网卡（127.0.0.1 或本机接口 IP）的连接，
+                    // 同样标注本机——手动连接 127.0.0.1 的设备不再"无感"，
+                    // 与扫描到的本机服务行身份一致。
+                    final endpoint = adbSerialEndpoint(profile.serial);
+                    final isLocalDevice =
+                        endpoint != null &&
+                        controller.localAddresses.contains(
+                          normalizeHost(endpoint.$1),
+                        );
+                    final lanAddress = isLocalDevice
+                        ? controller.lanAddress.value
+                        : null;
+                    return HomeListTile(
+                      dense: true,
+                      leading: Icon(_profileIcon(profile)),
+                      title: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Flexible(
+                            child: Text(
+                              profile.displayName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isLocalDevice) ...<Widget>[
+                            const SizedBox(width: 6),
+                            HomeLocalBadge(
+                              label: context.l10n.homeLocalDevice,
+                            ),
+                          ],
+                        ],
+                      ),
+                      subtitle: Text(
+                        '${profile.connectionAddress.isEmpty ? profile.serial : profile.connectionAddress}'
+                        '${lanAddress == null ? '' : ' · ${l10n.homeLanAddress(lanAddress)}'}'
+                        ' · ADB ${l10n.homeDeviceOnline}',
+                      ),
+                      trailing: IconButton(
+                        tooltip: l10n.commonDisconnect,
+                        icon: const Icon(Icons.link_off),
+                        onPressed: () =>
+                            disconnectDevice(context, controller, profile.serial),
+                      ),
+                      onTap: () => openWorkspace(profile.serial),
+                    );
+                  },
                 ),
               for (final service in wireless)
                 _DiscoveredDeviceTile(service: service),
@@ -146,12 +180,33 @@ class _DiscoveredDeviceTile extends GetView<HomeController> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final connecting = controller.connecting.value;
+    // 本机服务的局域网 IP 就是我们自己设备的 WiFi IP：与连接行同源
+    // （实时枚举、WiFi 接口优先），不取扫描候选（可能含蜂窝地址）。
+    final lanAddress = service.isLocal ? controller.lanAddress.value : null;
+    final subtitle =
+        '${service.endpointText} · ADB ${l10n.homeDeviceOnline}';
     return HomeListTile(
       dense: true,
       leading: const Icon(Icons.router),
-      title: Text(discoveredServiceTitle(service)),
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Flexible(
+            child: Text(
+              discoveredServiceTitle(service),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (service.isLocal) ...<Widget>[
+            const SizedBox(width: 6),
+            HomeLocalBadge(label: l10n.homeLocalDevice),
+          ],
+        ],
+      ),
       subtitle: Text(
-        '${service.endpointText} · ADB ${l10n.homeDeviceOnline}',
+        // 本机设备端点是 127.0.0.1；补一块局域网 IP 小字，帮用户把它和
+        // 别处（路由器、adb devices 序列号）看到的 WiFi IP 对上号。
+        lanAddress == null ? subtitle : '$subtitle · ${l10n.homeLanAddress(lanAddress)}',
         maxLines: 2,
       ),
       trailing: TextButton(
@@ -193,7 +248,18 @@ class _AdbDeviceTile extends GetView<HomeController> {
     final adbState = _deviceStateLabel(context, device.state);
     final title =
         device.model?.replaceAll('_', ' ') ?? device.product ?? device.serial;
-    final subtitle = StringBuffer('${device.serial} · ADB $adbState');
+    // 地址属于本机网卡（127.0.0.1 或本机接口 IP）的设备，标注本机，
+    // 并从发现结果联查局域网 IP 小字（与发现行信息一致，不因连接断裂）。
+    final endpoint = adbSerialEndpoint(device.serial);
+    final isLocalDevice =
+        endpoint != null &&
+        controller.localAddresses.contains(normalizeHost(endpoint.$1));
+    final lanAddress = isLocalDevice ? controller.lanAddress.value : null;
+    final subtitle = StringBuffer(
+      lanAddress == null
+          ? '${device.serial} · ADB $adbState'
+          : '${device.serial} · ${l10n.homeLanAddress(lanAddress)} · ADB $adbState',
+    );
     if (connectedProfile == null &&
         device.isOnline &&
         !controller.manager.canConnectAdbDevice(device)) {
@@ -206,7 +272,18 @@ class _AdbDeviceTile extends GetView<HomeController> {
     return HomeListTile(
       dense: true,
       leading: Icon(_adbDeviceIcon(device)),
-      title: Text(title),
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Flexible(
+            child: Text(title, overflow: TextOverflow.ellipsis),
+          ),
+          if (isLocalDevice) ...<Widget>[
+            const SizedBox(width: 6),
+            HomeLocalBadge(label: l10n.homeLocalDevice),
+          ],
+        ],
+      ),
       subtitle: Text(subtitle.toString(), maxLines: 2),
       trailing: connectedProfile != null
           ? IconButton(

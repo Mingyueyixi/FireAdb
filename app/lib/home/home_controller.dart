@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show SocketException;
+import 'dart:io' show InternetAddress, SocketException;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -11,6 +11,12 @@ import '../log/app_log.dart';
 import '../settings/app_settings_store.dart';
 import 'device_scanner.dart';
 import 'discovered_devices.dart';
+
+/// 本机没有任何对外网络接口（WiFi/以太网全断开），局域网目标必不可达。
+class AdbNetworkUnavailable implements Exception {
+  @override
+  String toString() => 'AdbNetworkUnavailable';
+}
 
 class HomeController extends GetxController with WidgetsBindingObserver {
   static const Duration adbDeviceRefreshInterval = Duration(seconds: 3);
@@ -76,6 +82,28 @@ class HomeController extends GetxController with WidgetsBindingObserver {
 
   AppSettingsStore get _settings => Get.find<AppSettingsStore>();
 
+  /// 本机网卡地址集合（小写，随设备列表推送 / 扫描轮次刷新）。设备列
+  /// 表去重时把 127.0.0.1 与本机任一接口 IP 视为同一台设备（同一 adb
+  /// server）。
+  final Set<String> _localAddresses = <String>{};
+  Set<String> get localAddresses => _localAddresses;
+
+  /// 展示用局域网 IP（WiFi/以太网地址）。与地址集合同节奏实时获取：
+  /// 每次刷新重新计算，拿不到（无 WiFi/以太网）就清空，小字随之消失，
+  /// 不残留过期值。
+  final Rxn<String> lanAddress = Rxn<String>();
+
+  Future<void> _refreshLocalAddresses() async {
+    // 一次枚举同时刷新：地址集合（徽标/去重）+ 展示用局域网 IP
+    // （WiFi 接口优先，蜂窝 rmnet 不抢占展示位）。
+    final snapshot = await localNetworkSnapshot();
+    if (isClosed) return;
+    _localAddresses
+      ..clear()
+      ..addAll(snapshot.addresses);
+    lanAddress.value = snapshot.wifiAddress;
+  }
+
   @override
   void onInit() {
     super.onInit();
@@ -86,6 +114,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       discoverMdns: _discoverRound,
     );
     _wirelessBrowser.onUnsolicited = _onUnsolicitedDiscovery;
+    unawaited(_refreshLocalAddresses());
     _restoreManualConnection();
     final canListDevices = adbServerSupported.value;
     if (canListDevices) {
@@ -304,6 +333,9 @@ class HomeController extends GetxController with WidgetsBindingObserver {
           (devices) {
             if (isClosed) return;
             adbDevices.assignAll(devices);
+            // 设备列表变化时顺带刷新本机地址集合：徽标/去重用的展示
+            // 数据跟设备列表同一节奏收敛，不依赖扫描是否在跑。
+            unawaited(_refreshLocalAddresses());
             adbServerAbsent.value = false;
             adbDevicesError.value = null;
           },
@@ -362,9 +394,57 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   Future<ConnectedDevice> connect(String host, int port) async {
     connecting.value = true;
     try {
-      return await manager.connectHost(host, port);
+      // 连接时实时枚举当前网卡：输入的地址等价于本机（127.0.0.1 或任一
+      // 接口 IP）才换成本机回环连接。回环和自身接口 IP 永远是同一台
+      // 机器，重写不会连到别的设备；WiFi 刚断开时枚举拿不到那个 IP，
+      // 就不会重写，如实报错。
+      final localNow = await localMachineAddresses();
+      final canonicalHost =
+          localNow.contains(normalizeHost(host)) ? '127.0.0.1' : host;
+      // WiFi/以太网全断开时（无任何对外接口），局域网地址不可能可达：
+      // 零等待直接判死，不发任何连接。
+      final hasNetwork = localNow.any(
+        (address) => address != '127.0.0.1' && address != '::1',
+      );
+      final target = InternetAddress.tryParse(canonicalHost);
+      if (target != null && !target.isLoopback && !hasNetwork) {
+        throw AdbNetworkUnavailable();
+      }
+      // 直接交给 adb server：可达时秒级完成，不可达时由 server 自行
+      // 超时并返回失败，没有客户端单方面放弃导致的状态含糊。
+      final device = await manager.connectHost(canonicalHost, port);
+      // 清理等价的历史 transport（曾直连接口 IP 留下的）：同一设备
+      // 同一端口只保留一条连接。
+      await _disconnectEquivalentTransports(
+        port,
+        keepSerial: device.serial,
+        localNow: localNow,
+      );
+      return device;
     } finally {
       connecting.value = false;
+    }
+  }
+
+  /// 断开与刚建立的连接等价（本机地址 + 同端口）的其他 transport。
+  Future<void> _disconnectEquivalentTransports(
+    int port, {
+    required String keepSerial,
+    required Set<String> localNow,
+  }) async {
+    for (final device in adbDevices.toList()) {
+      final endpoint = adbSerialEndpoint(device.serial);
+      if (endpoint == null ||
+          device.serial == keepSerial ||
+          endpoint.$2 != port ||
+          !localNow.contains(normalizeHost(endpoint.$1))) {
+        continue;
+      }
+      try {
+        await manager.disconnect(device.serial);
+      } catch (error, stackTrace) {
+        log.warning('清理等价 transport 失败：${device.serial}', error, stackTrace);
+      }
     }
   }
 
@@ -405,6 +485,9 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     void Function(List<MdnsService> services) onUpdate, {
     bool Function()? isCancelled,
   }) async {
+    // 后台刷新，不阻塞扫描：网卡枚举是真 I/O，测试的 fake-async 环境
+    // 里永远不会完成；首轮流最多退化为精确匹配，下一轮集合就位。
+    unawaited(_refreshLocalAddresses());
     final found = await _discover(onUpdate, isCancelled: isCancelled);
     final timedOut =
         discoverServices == null && _wirelessBrowser.lastRoundExpiredEmpty;

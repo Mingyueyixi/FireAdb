@@ -162,6 +162,14 @@
   "commonDisconnect": "断开",
   "homeUsbConnectionUnavailable": "USB 连接暂不可用",
   "homeDeviceOnline": "在线",
+  "homeLocalDevice": "本机",
+  "homeLanAddress": "局域网 IP {address}",
+  "homeNetworkUnavailable": "网络不可用：请检查 WiFi 或以太网连接",
+  "@homeLanAddress": {
+    "placeholders": {
+      "address": {}
+    }
+  },
   "homeDeviceOffline": "离线",
   "homeDeviceUnauthorized": "未授权",
   "homeDeviceBootloader": "引导加载程序",

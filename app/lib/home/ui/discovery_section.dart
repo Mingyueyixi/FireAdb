@@ -134,7 +134,21 @@ class DiscoverySection extends GetView<HomeController> {
                   HomeListTile(
                     dense: true,
                     leading: const Icon(Icons.vpn_key),
-                    title: Text(service.instanceName),
+                    title: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Flexible(
+                          child: Text(
+                            service.instanceName,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (service.isLocal) ...<Widget>[
+                          const SizedBox(width: 6),
+                          HomeLocalBadge(label: l10n.homeLocalDevice),
+                        ],
+                      ],
+                    ),
                     subtitle: Text(
                       // IPv6 端点（如 [fe80::…%wlan0]:5555）可能很长，限制行数
                       // 与其他 tile 的 subtitle（maxLines: 2）保持一致。

@@ -653,6 +653,24 @@ abstract class FireAdbLocalizations {
   /// **'在线'**
   String get homeDeviceOnline;
 
+  /// No description provided for @homeLocalDevice.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机'**
+  String get homeLocalDevice;
+
+  /// No description provided for @homeLanAddress.
+  ///
+  /// In zh, this message translates to:
+  /// **'局域网 IP {address}'**
+  String homeLanAddress(Object address);
+
+  /// No description provided for @homeNetworkUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'网络不可用：请检查 WiFi 或以太网连接'**
+  String get homeNetworkUnavailable;
+
   /// No description provided for @homeDeviceOffline.
   ///
   /// In zh, this message translates to:
