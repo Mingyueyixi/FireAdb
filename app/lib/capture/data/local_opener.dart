@@ -47,14 +47,12 @@ Future<String> androidExternalFilesDirectory() async {
   return path;
 }
 
-/// 用系统默认文件管理器打开目录。
-Future<void> openSystemDirectory(String path) async {
-  if (Platform.isAndroid) {
-    await _storageChannel.invokeMethod<void>('openDirectory', path);
-    return;
-  }
-  await openLocalPath(path, openFile: false);
-}
+/// 用系统文件管理器打开目录。仅桌面端使用；Android 上应用私有目录
+/// 由应用内浏览器直接浏览，不走系统文件管理器。
+Future<void> openSystemDirectory(String path) => openLocalPath(
+      path,
+      openFile: false,
+    );
 
 Future<void> openLocalPath(String path, {required bool openFile}) async {
   final request = localOpenRequest(

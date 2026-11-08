@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/fireadb_localizations_ext.dart';
-import '../data/bean/remote_file.dart';
 import '../data/source/remote_file_commands.dart';
+import '../file_entry.dart';
 
 enum FileTileAction {
   open,
@@ -27,9 +27,13 @@ class FileListTile extends StatelessWidget {
     required this.onToggleSelected,
     required this.onStartSelecting,
     required this.onAction,
+    this.showExport = true,
   });
 
-  final RemoteFile file;
+  final FileEntry file;
+
+  /// 导出是跨机传输，仅设备后端显示。
+  final bool showExport;
   final bool showPath;
   final bool selecting;
   final bool selected;
@@ -85,10 +89,11 @@ class FileListTile extends StatelessWidget {
                     value: FileTileAction.open,
                     child: Text(l10n.filesOpen),
                   ),
-                PopupMenuItem(
-                  value: FileTileAction.export,
-                  child: Text(l10n.filesExport),
-                ),
+                if (showExport)
+                  PopupMenuItem(
+                    value: FileTileAction.export,
+                    child: Text(l10n.filesExport),
+                  ),
                 PopupMenuItem(
                   value: FileTileAction.rename,
                   child: Text(l10n.filesRename),
@@ -106,10 +111,11 @@ class FileListTile extends StatelessWidget {
                     value: FileTileAction.edit,
                     child: Text(l10n.filesEdit),
                   ),
-                PopupMenuItem(
-                  value: FileTileAction.permission,
-                  child: Text(l10n.filesPermission),
-                ),
+                if (file.canChmod)
+                  PopupMenuItem(
+                    value: FileTileAction.permission,
+                    child: Text(l10n.filesPermission),
+                  ),
                 PopupMenuItem(
                   value: FileTileAction.delete,
                   child: Text(l10n.filesDelete),

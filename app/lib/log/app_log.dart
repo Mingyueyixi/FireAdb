@@ -5,8 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
 
 import '../capture/data/local_opener.dart';
-import '../files/android_storage_access.dart';
+import '../l10n/fireadb_localizations_ext.dart';
 import 'file_log_store.dart';
+import 'log_directory_page.dart';
 import 'log_paths.dart';
 
 /// 应用日志。各处直接使用这个官方 [Logger]。
@@ -128,18 +129,47 @@ Future<void> deleteSavedLogs() async {
   log.info('日志文件已清理');
 }
 
-/// 打开日志目录。安卓上先确认文件访问权限。
+/// 打开日志目录。Android 用应用内文件管理页查看/操作日志文件——操作的都是
+/// 应用自己的私有目录，不需要任何存储权限；桌面交给系统文件管理器。
+/// 页面关闭后如果发现当前日志文件被删了，立即重开新文件，保证会话日志连续。
 Future<String?> openSavedLogDirectory(BuildContext context) async {
-  if (Platform.isAndroid) {
-    final granted = await ensureAllFilesAccess(context);
-    if (!granted || !context.mounted) return null;
-  }
   final directory = await ensureLogDirectory(create: true);
   if (directory == null) return null;
   logDirectoryPath = directory;
   await attachFileLogStore();
-  await openSystemDirectory(directory);
+  if (Platform.isAndroid) {
+    if (!context.mounted) return directory;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => LogDirectoryPage(
+          title: context.l10n.settingsLogDirectory,
+          directory: directory,
+        ),
+      ),
+    );
+    await _recoverActiveLogFile();
+    return directory;
+  }
+  await openLocalPath(directory, openFile: false);
   return directory;
+}
+
+/// 当前日志文件在浏览页里被删除时，重开一个新文件继续写。
+Future<void> _recoverActiveLogFile() async {
+  final current = _fileStore;
+  if (current == null) return;
+  if (await current.file.exists()) return;
+  _fileStore = null;
+  try {
+    await current.close();
+  } catch (_) {}
+  _fileStore = await FileLogStore.openSession(
+    current.file.parent,
+    DateTime.now(),
+    processId: pidOfThisProcess(),
+    forceNew: true,
+  );
+  log.info('当前日志文件已被删除，已开启新日志文件');
 }
 
 String _fileName(File file) {

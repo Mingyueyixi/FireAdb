@@ -45,7 +45,7 @@
   "settingsRefreshInBackground": "后台刷新",
   "settingsRefreshInBackgroundHelp": "关闭时，连接页不在最前面或应用进入后台，自动刷新会停下来。",
   "settingsLogDirectory": "日志目录",
-  "settingsOpenLogDirectory": "在文件管理器中打开",
+  "settingsOpenLogDirectory": "打开日志目录",
   "settingsLogDirectoryUnavailable": "日志目录还不可用",
   "settingsOpenLogDirectoryFailed": "无法打开日志目录：{error}",
   "@settingsOpenLogDirectoryFailed": {
@@ -53,6 +53,7 @@
       "error": {}
     }
   },
+
   "settingsLogBuffer": "日志显示缓冲区（KB）",
   "settingsLogBufferHelp": "日志页在内存中保留这些内容，默认 256 KB。",
   "settingsLogBufferInvalid": "请输入 16 到 8192 之间的整数",

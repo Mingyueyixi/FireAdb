@@ -242,7 +242,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @settingsOpenLogDirectory.
   ///
   /// In zh, this message translates to:
-  /// **'在文件管理器中打开'**
+  /// **'打开日志目录'**
   String get settingsOpenLogDirectory;
 
   /// No description provided for @settingsLogDirectoryUnavailable.

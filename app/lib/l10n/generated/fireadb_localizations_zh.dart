@@ -88,7 +88,7 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get settingsLogDirectory => '日志目录';
 
   @override
-  String get settingsOpenLogDirectory => '在文件管理器中打开';
+  String get settingsOpenLogDirectory => '打开日志目录';
 
   @override
   String get settingsLogDirectoryUnavailable => '日志目录还不可用';

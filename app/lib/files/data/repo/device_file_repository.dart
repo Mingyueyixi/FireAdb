@@ -10,7 +10,7 @@ import '../../../connection/local_adb_target.dart';
 import '../../../connection/model/connected_device.dart';
 import '../../../files/remote_file_export.dart';
 import '../../../shell/root_shell.dart';
-import '../bean/remote_file.dart';
+import '../../remote_file.dart';
 import '../source/remote_file_commands.dart';
 
 class FileOperationCancelled implements Exception {

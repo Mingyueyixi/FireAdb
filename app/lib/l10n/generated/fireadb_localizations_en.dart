@@ -92,7 +92,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String get settingsLogDirectory => 'Log folder';
 
   @override
-  String get settingsOpenLogDirectory => 'Open in file manager';
+  String get settingsOpenLogDirectory => 'Open log folder';
 
   @override
   String get settingsLogDirectoryUnavailable =>

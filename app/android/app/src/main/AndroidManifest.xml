@@ -43,11 +43,5 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-        <intent>
-            <action android:name="android.intent.action.VIEW"/>
-            <data android:mimeType="vnd.android.document/directory"/>
-        </intent>
-        <package android:name="com.android.documentsui"/>
-        <package android:name="com.google.android.documentsui"/>
     </queries>
 </manifest>

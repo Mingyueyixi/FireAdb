@@ -45,7 +45,7 @@
   "settingsRefreshInBackground": "Refresh in the background",
   "settingsRefreshInBackgroundHelp": "While off, auto-refresh stops when the Connect page is not current or the app is in the background.",
   "settingsLogDirectory": "Log folder",
-  "settingsOpenLogDirectory": "Open in file manager",
+  "settingsOpenLogDirectory": "Open log folder",
   "settingsLogDirectoryUnavailable": "The log folder is not available yet",
   "settingsOpenLogDirectoryFailed": "Could not open the log folder: {error}",
   "@settingsOpenLogDirectoryFailed": {
@@ -53,6 +53,7 @@
       "error": {}
     }
   },
+
   "settingsLogBuffer": "Log display buffer (KB)",
   "settingsLogBufferHelp": "How much of the current log the log page keeps in memory. The default is 256 KB.",
   "settingsLogBufferInvalid": "Enter a whole number from 16 to 8192",

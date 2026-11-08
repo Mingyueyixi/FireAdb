@@ -23,6 +23,8 @@ class FilesToolbar extends StatelessWidget {
     required this.onCut,
     required this.onPaste,
     required this.onPermission,
+    this.showTransfer = true,
+    this.showPermission = true,
   });
 
   final bool selecting;
@@ -30,6 +32,12 @@ class FilesToolbar extends StatelessWidget {
   final bool searching;
   final bool canPaste;
   final int selectedCount;
+
+  /// 上传/导出是跨机传输，仅设备文件后端显示。
+  final bool showTransfer;
+
+  /// 权限修改在无法 chmod 的后端（如 Windows 本机）隐藏。
+  final bool showPermission;
   final VoidCallback onUpload;
   final VoidCallback onCreate;
   final VoidCallback onSearch;
@@ -49,11 +57,12 @@ class FilesToolbar extends StatelessWidget {
     final enabled = !busy;
     return _ScrollingIconRow(
       children: <Widget>[
-        IconButton(
-          tooltip: l10n.filesUpload,
-          onPressed: enabled ? onUpload : null,
-          icon: const Icon(Icons.upload_file),
-        ),
+        if (showTransfer)
+          IconButton(
+            tooltip: l10n.filesUpload,
+            onPressed: enabled ? onUpload : null,
+            icon: const Icon(Icons.upload_file),
+          ),
         IconButton(
           tooltip: l10n.filesCreate,
           onPressed: enabled ? onCreate : null,
@@ -80,11 +89,12 @@ class FilesToolbar extends StatelessWidget {
             onPressed: enabled ? onSelectAll : null,
             icon: const Icon(Icons.select_all),
           ),
-          IconButton(
-            tooltip: l10n.filesExport,
-            onPressed: enabled && selectedCount > 0 ? onExport : null,
-            icon: const Icon(Icons.download),
-          ),
+          if (showTransfer)
+            IconButton(
+              tooltip: l10n.filesExport,
+              onPressed: enabled && selectedCount > 0 ? onExport : null,
+              icon: const Icon(Icons.download),
+            ),
           IconButton(
             tooltip: l10n.filesCopy,
             onPressed: enabled && selectedCount > 0 ? onCopy : null,
@@ -95,11 +105,12 @@ class FilesToolbar extends StatelessWidget {
             onPressed: enabled && selectedCount > 0 ? onCut : null,
             icon: const Icon(Icons.content_cut),
           ),
-          IconButton(
-            tooltip: l10n.filesPermission,
-            onPressed: enabled && selectedCount > 0 ? onPermission : null,
-            icon: const Icon(Icons.lock_outline),
-          ),
+          if (showPermission)
+            IconButton(
+              tooltip: l10n.filesPermission,
+              onPressed: enabled && selectedCount > 0 ? onPermission : null,
+              icon: const Icon(Icons.lock_outline),
+            ),
           IconButton(
             tooltip: l10n.filesDelete,
             onPressed: enabled && selectedCount > 0 ? onDelete : null,

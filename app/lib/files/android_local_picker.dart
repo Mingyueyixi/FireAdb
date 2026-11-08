@@ -100,11 +100,19 @@ class LocalNode {
     required this.name,
     required this.path,
     required this.directory,
+    this.size,
+    this.modified,
   });
 
   final String name;
   final String path;
   final bool directory;
+
+  /// 文件大小（字节）。目录或读取失败时为 null。
+  final int? size;
+
+  /// 文件修改时间。读取失败时为 null。
+  final DateTime? modified;
 }
 
 Future<List<String>> listWindowsDriveRoots() async {
@@ -126,7 +134,15 @@ Future<List<LocalNode>> listLocalNodes(String path) async {
     if (entity is Directory) {
       nodes.add(LocalNode(name: name, path: entryPath, directory: true));
     } else if (entity is File) {
-      nodes.add(LocalNode(name: name, path: entryPath, directory: false));
+      nodes.add(
+        LocalNode(
+          name: name,
+          path: entryPath,
+          directory: false,
+          size: await _entrySize(entity),
+          modified: await _entryModified(entity),
+        ),
+      );
     } else if (entity is Link) {
       final kind = await FileSystemEntity.type(entryPath, followLinks: true);
       if (kind == FileSystemEntityType.notFound) continue;
@@ -144,6 +160,22 @@ Future<List<LocalNode>> listLocalNodes(String path) async {
     return a.name.toLowerCase().compareTo(b.name.toLowerCase());
   });
   return nodes;
+}
+
+Future<int?> _entrySize(File entity) async {
+  try {
+    return await entity.length();
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<DateTime?> _entryModified(File entity) async {
+  try {
+    return (await entity.stat()).modified;
+  } catch (_) {
+    return null;
+  }
 }
 
 /// 用本机目录列表选择一个文件夹。桌面和 Android 共用这一套，不打开系统选择器。

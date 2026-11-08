@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import '../bean/remote_file.dart';
+import '../../remote_file.dart';
 
 const String remoteSearchMarker = '---FIRE-ADB---';
 

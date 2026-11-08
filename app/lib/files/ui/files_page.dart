@@ -9,8 +9,9 @@ import '../../l10n/generated/fireadb_localizations.dart';
 import '../../log/app_log.dart';
 import '../../shell/device_root_store.dart';
 import '../../shell/su_mode_chip.dart';
-import '../data/bean/remote_file.dart';
 import '../data/source/remote_file_commands.dart';
+import '../file_backend.dart';
+import '../file_entry.dart';
 import '../files_controller.dart';
 import '../local_file_picker.dart';
 import 'file_dialogs.dart';
@@ -28,10 +29,13 @@ class FilesPage extends StatelessWidget {
 }
 
 /// 文件列表、工具栏和行操作。路径栏、位置快捷方式和 su 开关可以按页面关掉。
+/// [backend] 为空时按设备文件管理（ADB）创建；传入 [LocalFileBackend]
+/// 即可浏览本机目录（日志目录页），能力开关随之收紧。
 class FileBrowser extends StatefulWidget {
   const FileBrowser({
     super.key,
     required this.serial,
+    this.backend,
     this.root,
     this.showPathField = true,
     this.showLocations = true,
@@ -39,6 +43,9 @@ class FileBrowser extends StatefulWidget {
   });
 
   final String serial;
+
+  /// 文件后端。缺省为当前连接的设备。
+  final FileBackend? backend;
 
   /// 固定根目录。应用目录传入后不能往上离开它。
   final String? root;
@@ -54,14 +61,22 @@ class _FileBrowserState extends State<FileBrowser> {
   late final String _tag;
   late final FilesController controller;
 
+  bool get _canTransfer => widget.backend?.supportsTransfer ?? true;
+
   @override
   void initState() {
     super.initState();
     final root = widget.root;
+    final backend = widget.backend;
     _tag = root == null
         ? widget.serial
-        : '${widget.serial}\n${normalizeRemotePath(root)}';
-    controller = Get.put(FilesController(widget.serial, root: root), tag: _tag);
+        : '${widget.serial}\n${backend?.normalize(root) ?? normalizeRemotePath(root)}';
+    controller = Get.put(
+      backend == null
+          ? FilesController.forDevice(widget.serial, root: root)
+          : FilesController(backend, root: root, serial: widget.serial),
+      tag: _tag,
+    );
   }
 
   @override
@@ -103,8 +118,8 @@ class _FileBrowserState extends State<FileBrowser> {
     _show(await future);
   }
 
-  Future<void> _export(List<RemoteFile> files) async {
-    if (files.isEmpty || !mounted) return;
+  Future<void> _export(List<FileEntry> files) async {
+    if (files.isEmpty || !_canTransfer || !mounted) return;
     final l10n = context.l10n;
     final prompt = files.length == 1
         ? l10n.filesExportPrompt(files.first.name)
@@ -151,7 +166,7 @@ class _FileBrowserState extends State<FileBrowser> {
     await _showWhenDone(future, transferDialog: true);
   }
 
-  Future<void> _delete(List<RemoteFile> files) async {
+  Future<void> _delete(List<FileEntry> files) async {
     if (files.isEmpty || !mounted) return;
     final confirmed = await confirmDeleteFiles(
       context,
@@ -162,7 +177,7 @@ class _FileBrowserState extends State<FileBrowser> {
     await _showWhenDone(controller.remove(context.l10n, files));
   }
 
-  Future<void> _rename(RemoteFile file) async {
+  Future<void> _rename(FileEntry file) async {
     final name = await askRemoteName(
       context,
       title: context.l10n.filesRename,
@@ -185,7 +200,7 @@ class _FileBrowserState extends State<FileBrowser> {
     );
   }
 
-  Future<void> _permission(List<RemoteFile> files) async {
+  Future<void> _permission(List<FileEntry> files) async {
     if (files.isEmpty || !mounted) return;
     final current = files.length == 1 ? formatPermission(files.first.mode) : '';
     final mode = await askPermission(context, current);
@@ -193,7 +208,7 @@ class _FileBrowserState extends State<FileBrowser> {
     await _showWhenDone(controller.changeMode(context.l10n, files, mode));
   }
 
-  Future<void> _edit(RemoteFile file) async {
+  Future<void> _edit(FileEntry file) async {
     final l10n = context.l10n;
     final result = await controller.readText(file);
     if (!mounted || result == null) return;
@@ -236,9 +251,9 @@ class _FileBrowserState extends State<FileBrowser> {
     await controller.search(keyword);
   }
 
-  void _hold(RemoteFile file, {required bool cut}) {
+  void _hold(FileEntry file, {required bool cut}) {
     controller.clipboard.value = FileClipboard(
-      files: <RemoteFile>[file],
+      files: <FileEntry>[file],
       cut: cut,
     );
     final l10n = context.l10n;
@@ -250,12 +265,12 @@ class _FileBrowserState extends State<FileBrowser> {
     );
   }
 
-  void _onAction(RemoteFile file, FileTileAction action) {
+  void _onAction(FileEntry file, FileTileAction action) {
     switch (action) {
       case FileTileAction.open:
         unawaited(controller.open(file.path));
       case FileTileAction.export:
-        unawaited(_export(<RemoteFile>[file]));
+        unawaited(_export(<FileEntry>[file]));
       case FileTileAction.rename:
         unawaited(_rename(file));
       case FileTileAction.copy:
@@ -265,9 +280,9 @@ class _FileBrowserState extends State<FileBrowser> {
       case FileTileAction.edit:
         unawaited(_edit(file));
       case FileTileAction.permission:
-        unawaited(_permission(<RemoteFile>[file]));
+        unawaited(_permission(<FileEntry>[file]));
       case FileTileAction.delete:
-        unawaited(_delete(<RemoteFile>[file]));
+        unawaited(_delete(<FileEntry>[file]));
     }
   }
 
@@ -367,6 +382,8 @@ class _FileBrowserState extends State<FileBrowser> {
             searching: searching,
             canPaste: controller.clipboard.value != null,
             selectedCount: controller.selectedFiles.length,
+            showTransfer: _canTransfer,
+            showPermission: controller.backend.supportsChmod,
             onUpload: () => unawaited(_upload()),
             onCreate: () => unawaited(_create()),
             onSearch: () => unawaited(_search()),
@@ -431,7 +448,7 @@ class _FileBrowserState extends State<FileBrowser> {
   Widget _body({
     required FireAdbLocalizations l10n,
     required ThemeData theme,
-    required List<RemoteFile> visible,
+    required List<FileEntry> visible,
     required bool searching,
     required Object? loadError,
   }) {
@@ -472,6 +489,7 @@ class _FileBrowserState extends State<FileBrowser> {
           selecting: controller.selecting.value,
           selected: controller.selected.contains(file.path),
           busy: controller.busy.value,
+          showExport: _canTransfer,
           onToggleSelected: () => controller.toggleSelected(file),
           onStartSelecting: () => controller.startSelecting(file),
           onTap: () {

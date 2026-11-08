@@ -5,13 +5,17 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
-import '../apps/data/source/run_as_files.dart';
-import '../connection/connection_manager.dart';
 import '../l10n/generated/fireadb_localizations.dart';
 import '../log/app_log.dart';
-import 'data/bean/remote_file.dart';
 import 'data/repo/device_file_repository.dart';
 import 'data/source/remote_file_commands.dart';
+import 'file_backend.dart';
+import 'file_entry.dart';
+import 'local_file_backend.dart';
+import 'remote_file.dart';
+import 'remote_file_backend.dart';
+
+export 'file_backend.dart' show DeviceNotConnectedException;
 
 class FileNotice {
   const FileNotice({
@@ -23,10 +27,6 @@ class FileNotice {
   final String title;
   final String message;
   final bool isError;
-}
-
-class DeviceNotConnectedException implements Exception {
-  const DeviceNotConnectedException();
 }
 
 enum TextReject { tooLarge, binary, directory }
@@ -43,7 +43,7 @@ class TextReadResult {
 class FileClipboard {
   const FileClipboard({required this.files, required this.cut});
 
-  final List<RemoteFile> files;
+  final List<FileEntry> files;
   final bool cut;
 }
 
@@ -71,31 +71,32 @@ class FileTask {
   }
 }
 
-/// 把浏览限制在 [root] 内。越界时回到根目录。
-String fencedRemotePath(String? root, String nextPath) {
-  final target = normalizeRemotePath(nextPath);
-  if (root == null) return target;
-  final fence = normalizeRemotePath(root);
-  return isWithinAppRoot(fence, target) ? target : fence;
-}
-
-/// 一台设备上的文件浏览器。[root] 不为空时不能走到该目录外面。
+/// 一个文件浏览器。[root] 不为空时不能走到该目录外面。
+/// 经由 [FileBackend] 驱动：设备走 ADB（[RemoteFileBackend]），
+/// 本机目录走 dart:io（[LocalFileBackend]，日志目录页用）。
 class FilesController extends GetxController {
-  FilesController(this.serial, {String? root})
-    : root = root == null ? null : normalizeRemotePath(root),
+  FilesController(this.backend, {String? root, this.serial = ''})
+    : root = root == null ? null : backend.normalize(root),
       pathInput = TextEditingController(
-        text: root == null ? remoteStoragePath : normalizeRemotePath(root),
+        text: root == null ? backend.initialPath : backend.normalize(root),
       ),
-      path = (root == null ? remoteStoragePath : normalizeRemotePath(root)).obs;
+      path = (root == null ? backend.initialPath : backend.normalize(root)).obs;
 
+  /// 设备文件管理。
+  factory FilesController.forDevice(String serial, {String? root}) =>
+      FilesController(RemoteFileBackend(serial), root: root, serial: serial);
+
+  final FileBackend backend;
+
+  /// 页面标识：设备场景是 serial，本机场景留空。
   final String serial;
 
-  /// 应用目录的固定根。文件管理为空，可以从存储根开始。
+  /// 固定根。文件管理为空，可以从存储根开始。
   final String? root;
   final TextEditingController pathInput;
   final RxString path;
   final RxString keyword = ''.obs;
-  final RxList<RemoteFile> entries = <RemoteFile>[].obs;
+  final RxList<FileEntry> entries = <FileEntry>[].obs;
   final RxBool loading = true.obs;
   final RxBool busy = false.obs;
   final RxBool selecting = false.obs;
@@ -105,20 +106,17 @@ class FilesController extends GetxController {
   final Rxn<FileTask> task = Rxn<FileTask>();
   final RxInt taskTick = 0.obs;
 
-  DeviceFileRepository? _activeRepo;
-  DeviceFileRepository? _listRepo;
+  FileBackend? _activeBackend;
   DateTime _progressUiAt = DateTime.fromMillisecondsSinceEpoch(0);
   var _generation = 0;
   var _closed = false;
-
-  ConnectionManager get _manager => Get.find<ConnectionManager>();
 
   bool get searching {
     keyword.value;
     return keyword.value.trim().isNotEmpty;
   }
 
-  List<RemoteFile> get selectedFiles {
+  List<FileEntry> get selectedFiles {
     entries.length;
     selected.length;
     return entries.where((file) => selected.contains(file.path)).toList();
@@ -134,28 +132,16 @@ class FilesController extends GetxController {
   void onClose() {
     _generation++;
     _closed = true;
-    unawaited(_listRepo?.abort());
-    unawaited(_activeRepo?.abort());
+    unawaited(_activeBackend?.abort());
     pathInput.dispose();
     super.onClose();
-  }
-
-  DeviceFileRepository? _repository() {
-    final device = _manager.deviceOf(serial);
-    if (device == null) return null;
-    final profile = _manager.profileOf(serial);
-    return DeviceFileRepository(
-      device,
-      host: profile?.host,
-      adbSerial: profile?.adbSerial,
-    );
   }
 
   Future<void> reload() => open(path.value);
 
   Future<void> open(String nextPath) async {
     final generation = ++_generation;
-    final target = fencedRemotePath(root, nextPath);
+    final target = backend.fence(root, nextPath);
     keyword.value = '';
     path.value = target;
     pathInput.text = target;
@@ -165,10 +151,10 @@ class FilesController extends GetxController {
   Future<void> up() {
     if (searching) return open(path.value);
     final fence = root;
-    if (fence != null && normalizeRemotePath(path.value) == fence) {
+    if (fence != null && backend.normalize(path.value) == fence) {
       return Future<void>.value();
     }
-    return open(parentRemotePath(path.value));
+    return open(backend.parent(path.value));
   }
 
   Future<void> search(String value) async {
@@ -178,22 +164,14 @@ class FilesController extends GetxController {
   }
 
   Future<void> _load(int generation, String directory) async {
-    await _listRepo?.abort();
-    final repo = _repository();
-    _listRepo = repo;
+    await _activeBackend?.abort();
     loading.value = true;
     error.value = null;
-    if (repo == null) {
-      loading.value = false;
-      entries.clear();
-      error.value = const DeviceNotConnectedException();
-      return;
-    }
     try {
       final query = keyword.value.trim();
       final loaded = query.isEmpty
-          ? await repo.list(directory)
-          : await repo.search(directory, query);
+          ? await backend.list(directory)
+          : await backend.search(directory, query);
       if (_closed || generation != _generation) return;
       entries.assignAll(loaded);
       selected.removeWhere((item) => !loaded.any((file) => file.path == item));
@@ -211,12 +189,12 @@ class FilesController extends GetxController {
     if (!selecting.value) selected.clear();
   }
 
-  void startSelecting(RemoteFile file) {
+  void startSelecting(FileEntry file) {
     selecting.value = true;
     selected.add(file.path);
   }
 
-  void toggleSelected(RemoteFile file) {
+  void toggleSelected(FileEntry file) {
     if (selected.contains(file.path)) {
       selected.remove(file.path);
     } else {
@@ -236,14 +214,12 @@ class FilesController extends GetxController {
     clipboard.value = FileClipboard(files: files, cut: cut);
   }
 
-  Future<TextReadResult?> readText(RemoteFile file) async {
-    final repo = _repository();
-    if (repo == null) return null;
+  Future<TextReadResult?> readText(FileEntry file) async {
     if (file.canEnter) {
       return const TextReadResult.reject(TextReject.directory);
     }
     try {
-      final bytes = await repo.readBytes(
+      final bytes = await backend.readBytes(
         file.path,
         maxBytes: remoteTextEditLimit,
       );
@@ -258,7 +234,7 @@ class FilesController extends GetxController {
 
   Future<FileNotice?> writeText(
     FireAdbLocalizations l10n,
-    RemoteFile file,
+    FileEntry file,
     String text,
   ) {
     final mode = file.mode == 0 ? 0x81a4 : (file.mode & 0x1ff) | 0x8000;
@@ -267,10 +243,8 @@ class FilesController extends GetxController {
       label: l10n.filesTaskSave,
       total: 1,
       action: () async {
-        final repo = _repository();
-        if (repo == null) throw const DeviceNotConnectedException();
-        _activeRepo = repo;
-        await repo.writeBytes(file.path, utf8.encode(text), mode: mode);
+        _activeBackend = backend;
+        await backend.writeBytes(file.path, utf8.encode(text), mode: mode);
         await reload();
         return FileNotice(title: l10n.filesEdit, message: l10n.filesSaved);
       },
@@ -279,7 +253,7 @@ class FilesController extends GetxController {
 
   Future<FileNotice?> remove(
     FireAdbLocalizations l10n,
-    List<RemoteFile> files,
+    List<FileEntry> files,
   ) {
     return _runCounted(
       l10n: l10n,
@@ -287,16 +261,16 @@ class FilesController extends GetxController {
       files: files,
       title: l10n.filesDelete,
       success: (count) => l10n.filesDeleted(count),
-      action: (repo, file) => repo.remove(<String>[file.path]),
+      action: (file) => backend.remove(<String>[file.path]),
     );
   }
 
   Future<FileNotice?> rename(
     FireAdbLocalizations l10n,
-    RemoteFile file,
+    FileEntry file,
     String name,
   ) {
-    if (!isSafeRemoteName(name)) {
+    if (!backend.isSafeName(name)) {
       return Future<FileNotice?>.value(
         FileNotice(
           title: l10n.filesRename,
@@ -310,12 +284,10 @@ class FilesController extends GetxController {
       label: l10n.filesTaskRename,
       total: 1,
       action: () async {
-        final repo = _repository();
-        if (repo == null) throw const DeviceNotConnectedException();
-        _activeRepo = repo;
-        await repo.rename(
+        _activeBackend = backend;
+        await backend.rename(
           file.path,
-          joinRemotePath(parentRemotePath(file.path), name),
+          backend.join(backend.parent(file.path), name),
         );
         await reload();
         return FileNotice(title: l10n.filesRename, message: l10n.filesRenamed);
@@ -328,7 +300,7 @@ class FilesController extends GetxController {
     required String name,
     required bool directory,
   }) {
-    if (!isSafeRemoteName(name)) {
+    if (!backend.isSafeName(name)) {
       return Future<FileNotice?>.value(
         FileNotice(
           title: l10n.filesCreate,
@@ -337,19 +309,17 @@ class FilesController extends GetxController {
         ),
       );
     }
-    final target = joinRemotePath(path.value, name);
+    final target = backend.join(path.value, name);
     return _runTask(
       l10n: l10n,
       label: l10n.filesCreate,
       total: 1,
       action: () async {
-        final repo = _repository();
-        if (repo == null) throw const DeviceNotConnectedException();
-        _activeRepo = repo;
+        _activeBackend = backend;
         if (directory) {
-          await repo.createDirectory(target);
+          await backend.createDirectory(target);
         } else {
-          await repo.createFile(target);
+          await backend.createFile(target);
         }
         await reload();
         return FileNotice(
@@ -362,7 +332,7 @@ class FilesController extends GetxController {
 
   Future<FileNotice?> changeMode(
     FireAdbLocalizations l10n,
-    List<RemoteFile> files,
+    List<FileEntry> files,
     String mode,
   ) {
     if (normalizeChmod(mode) == null) {
@@ -379,10 +349,8 @@ class FilesController extends GetxController {
       label: l10n.filesPermission,
       total: 1,
       action: () async {
-        final repo = _repository();
-        if (repo == null) throw const DeviceNotConnectedException();
-        _activeRepo = repo;
-        await repo.chmod(files.map((file) => file.path), mode);
+        _activeBackend = backend;
+        await backend.chmod(files.map((file) => file.path), mode);
         await reload();
         return FileNotice(
           title: l10n.filesPermission,
@@ -414,15 +382,13 @@ class FilesController extends GetxController {
       label: held.cut ? l10n.filesTaskMove : l10n.filesTaskCopy,
       total: held.files.length,
       action: () async {
-        final repo = _repository();
-        if (repo == null) throw const DeviceNotConnectedException();
-        _activeRepo = repo;
+        _activeBackend = backend;
         final sources = held.files.map((file) => file.path);
         if (held.cut) {
-          await repo.moveTo(sources, destination);
+          await backend.moveTo(sources, destination);
           clipboard.value = null;
         } else {
-          await repo.copyTo(sources, destination);
+          await backend.copyTo(sources, destination);
         }
         await reload();
         return FileNotice(
@@ -433,9 +399,10 @@ class FilesController extends GetxController {
     );
   }
 
+  /// 导出到主机。跨机传输，仅设备后端支持；UI 已按能力隐藏入口。
   Future<FileNotice?> export(
     FireAdbLocalizations l10n,
-    List<RemoteFile> files,
+    List<FileEntry> files,
     String directory,
   ) {
     return _runTask(
@@ -447,6 +414,7 @@ class FilesController extends GetxController {
     );
   }
 
+  /// 从主机上传。跨机传输，仅设备后端支持；UI 已按能力隐藏入口。
   Future<FileNotice?> upload(
     FireAdbLocalizations l10n,
     List<String> localPaths,
@@ -460,14 +428,20 @@ class FilesController extends GetxController {
     );
   }
 
+  RemoteFileBackend get _transfer {
+    if (backend is! RemoteFileBackend) {
+      throw StateError('此后端不支持跨机传输');
+    }
+    return backend as RemoteFileBackend;
+  }
+
   Future<FileNotice?> _performExport(
     FireAdbLocalizations l10n,
-    List<RemoteFile> files,
+    List<FileEntry> files,
     String directory,
   ) async {
-    final repo = _repository();
-    if (repo == null) throw const DeviceNotConnectedException();
-    _activeRepo = repo;
+    final transfer = _transfer;
+    _activeBackend = transfer;
     final current = task.value;
     if (current != null) {
       current.measuring = true;
@@ -476,7 +450,7 @@ class FilesController extends GetxController {
     }
     late final List<RemoteExportPiece> pieces;
     try {
-      pieces = await repo.planExport(files);
+      pieces = await transfer.planExport(files);
     } on FileOperationCancelled {
       return FileNotice(
         title: l10n.filesExport,
@@ -494,7 +468,7 @@ class FilesController extends GetxController {
     }
     var sent = 0;
     try {
-      await repo.exportPieces(
+      await transfer.exportPieces(
         pieces,
         directory,
         isCancelled: () => task.value?.cancelRequested ?? false,
@@ -532,9 +506,8 @@ class FilesController extends GetxController {
     FireAdbLocalizations l10n,
     List<String> localPaths,
   ) async {
-    final repo = _repository();
-    if (repo == null) throw const DeviceNotConnectedException();
-    _activeRepo = repo;
+    final transfer = _transfer;
+    _activeBackend = transfer;
     final current = task.value;
     final files = localPaths.map(File.new).toList();
     var total = 0;
@@ -566,7 +539,7 @@ class FilesController extends GetxController {
       final remote = joinRemotePath(path.value, name);
       final length = await file.length();
       try {
-        await repo.uploadFile(
+        await transfer.uploadFile(
           file,
           remote,
           isCancelled: () => task.value?.cancelRequested ?? false,
@@ -600,20 +573,17 @@ class FilesController extends GetxController {
   Future<FileNotice?> _runCounted({
     required FireAdbLocalizations l10n,
     required String label,
-    required List<RemoteFile> files,
+    required List<FileEntry> files,
     required String title,
     required String Function(int count) success,
-    required Future<void> Function(DeviceFileRepository repo, RemoteFile file)
-    action,
+    required Future<void> Function(FileEntry file) action,
   }) {
     return _runTask(
       l10n: l10n,
       label: label,
       total: files.length,
       action: () async {
-        final repo = _repository();
-        if (repo == null) throw const DeviceNotConnectedException();
-        _activeRepo = repo;
+        _activeBackend = backend;
         var done = 0;
         for (final file in files) {
           if (task.value?.cancelRequested == true) {
@@ -629,7 +599,7 @@ class FilesController extends GetxController {
             current.currentName = file.name;
             _publish(force: true);
           }
-          await action(repo, file);
+          await action(file);
           done++;
           if (current != null) {
             current.completed = done;
@@ -673,7 +643,7 @@ class FilesController extends GetxController {
         isError: true,
       );
     } finally {
-      _activeRepo = null;
+      _activeBackend = null;
       if (!_closed) {
         busy.value = false;
         task.value = null;
@@ -686,7 +656,7 @@ class FilesController extends GetxController {
     final current = task.value;
     if (current == null || current.cancelRequested) return;
     current.cancelRequested = true;
-    unawaited(_activeRepo?.abort());
+    unawaited(_activeBackend?.abort());
   }
 
   void _publish({bool force = false}) {
