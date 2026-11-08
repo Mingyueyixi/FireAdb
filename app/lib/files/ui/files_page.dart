@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../app_feedback.dart';
-import '../../l10n/fire_adb_localizations_ext.dart';
-import '../../l10n/generated/fire_adb_localizations.dart';
+import '../../l10n/fireadb_localizations_ext.dart';
+import '../../l10n/generated/fireadb_localizations.dart';
 import '../../log/app_log.dart';
 import '../../shell/device_root_store.dart';
 import '../../shell/su_mode_chip.dart';

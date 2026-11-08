@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:fire_adb/files/data/source/remote_file_commands.dart';
-import 'package:fire_adb/files/local_file_picker.dart';
+import 'package:fireadb/files/data/source/remote_file_commands.dart';
+import 'package:fireadb/files/local_file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
-import 'package:fire_adb/files/remote_file_export.dart';
+import 'package:fireadb/files/remote_file_export.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

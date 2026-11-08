@@ -5,8 +5,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
-import 'fire_adb_localizations_en.dart';
-import 'fire_adb_localizations_zh.dart';
+import 'fireadb_localizations_en.dart';
+import 'fireadb_localizations_zh.dart';
 
 // ignore_for_file: type=lint
 
@@ -18,7 +18,7 @@ import 'fire_adb_localizations_zh.dart';
 /// `supportedLocales` list. For example:
 ///
 /// ```dart
-/// import 'generated/fire_adb_localizations.dart';
+/// import 'generated/fireadb_localizations.dart';
 ///
 /// return MaterialApp(
 ///   localizationsDelegates: FireAdbLocalizations.localizationsDelegates,

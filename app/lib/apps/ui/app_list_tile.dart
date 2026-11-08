@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../l10n/fireadb_localizations_ext.dart';
 import '../data/bean/installed_app.dart';
 import '../data/source/app_inventory.dart';
 

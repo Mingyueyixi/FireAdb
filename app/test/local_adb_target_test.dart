@@ -1,4 +1,4 @@
-import 'package:fire_adb/connection/local_adb_target.dart';
+import 'package:fireadb/connection/local_adb_target.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

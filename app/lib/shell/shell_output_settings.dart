@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_feedback.dart';
-import '../l10n/fire_adb_localizations_ext.dart';
+import '../l10n/fireadb_localizations_ext.dart';
 import '../log/app_log.dart';
 
 class ShellOutputSettings {

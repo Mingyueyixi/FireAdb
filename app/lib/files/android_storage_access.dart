@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../l10n/fire_adb_localizations_ext.dart';
+import '../l10n/fireadb_localizations_ext.dart';
 
-const MethodChannel _storageChannel = MethodChannel('fire_adb/storage');
+const MethodChannel _storageChannel = MethodChannel('fireadb/storage');
 
 /// 安卓 11 及以上看「所有文件访问权限」，更早的系统看存储读写权限。
 /// 其他平台不需要这一步。

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../l10n/fireadb_localizations_ext.dart';
 
 Future<bool> confirmDeleteFiles(
   BuildContext context, {

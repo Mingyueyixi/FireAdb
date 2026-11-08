@@ -1,4 +1,4 @@
-import 'package:fire_adb/log/log_paths.dart';
+import 'package:fireadb/log/log_paths.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

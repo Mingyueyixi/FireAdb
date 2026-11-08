@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:logging/logging.dart';
 
-/// 一次 OS 进程对应一个文件：`logs/fire_adb-yyyy-MM-dd_HH-mm-ss.p<pid>.log`。
+/// 一次 OS 进程对应一个文件：`logs/fireadb-yyyy-MM-dd_HH-mm-ss.p<pid>.log`。
 ///
 /// 热重启同 PID 续写同一文件；新进程新建。
 class FileLogStore {
@@ -75,7 +75,7 @@ int pidOfThisProcess() => pid;
 
 String sessionLogFileName(DateTime time, {required int processId}) {
   String two(int value) => value.toString().padLeft(2, '0');
-  return 'fire_adb-${time.year}-${two(time.month)}-${two(time.day)}'
+  return 'fireadb-${time.year}-${two(time.month)}-${two(time.day)}'
       '_${two(time.hour)}-${two(time.minute)}-${two(time.second)}'
       '.p$processId.log';
 }
@@ -83,12 +83,12 @@ String sessionLogFileName(DateTime time, {required int processId}) {
 /// 从带 `.pPID` 或旧文件名读出开始时间。
 DateTime? logFileStarted(String name) {
   final session = RegExp(
-    r'^fire_adb-(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})(?:\.p\d+)?\.log$',
+    r'^fireadb-(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})(?:\.p\d+)?\.log$',
   ).firstMatch(name);
   if (session != null) {
     return _dateFromMatch(session, withClock: true);
   }
-  final daily = RegExp(r'^fire_adb-(\d{4})-(\d{2})-(\d{2})\.log$')
+  final daily = RegExp(r'^fireadb-(\d{4})-(\d{2})-(\d{2})\.log$')
       .firstMatch(name);
   if (daily == null) return null;
   return _dateFromMatch(daily, withClock: false);

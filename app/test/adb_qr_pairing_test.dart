@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:fire_adb/home/adb_qr_pairing.dart';
+import 'package:fireadb/home/adb_qr_pairing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:libadb/libadb.dart';
 

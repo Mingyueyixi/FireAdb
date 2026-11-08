@@ -92,9 +92,9 @@ BEGIN
             VALUE "CompanyName", "FireAdb" "\0"
             VALUE "FileDescription", "FireAdb" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "fire_adb" "\0"
+            VALUE "InternalName", "fireadb" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 FireAdb. All rights reserved." "\0"
-            VALUE "OriginalFilename", "fire_adb.exe" "\0"
+            VALUE "OriginalFilename", "fireadb.exe" "\0"
             VALUE "ProductName", "FireAdb" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

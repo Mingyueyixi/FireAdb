@@ -1,6 +1,6 @@
 arb-dir: lib/l10n
-template-arb-file: fire_adb_zh.arb
-output-localization-file: fire_adb_localizations.dart
+template-arb-file: fireadb_zh.arb
+output-localization-file: fireadb_localizations.dart
 output-class: FireAdbLocalizations
 output-dir: lib/l10n/generated
 preferred-supported-locales:

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../l10n/fireadb_localizations_ext.dart';
 import '../apps_controller.dart';
 import '../data/source/app_inventory.dart';
 

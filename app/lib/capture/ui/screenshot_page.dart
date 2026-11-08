@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../files/android_storage_access.dart';
-import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../l10n/fireadb_localizations_ext.dart';
 import '../../log/app_log.dart';
 import '../capture_notice.dart';
 import '../data/capture_store.dart';

@@ -1,7 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../l10n/fireadb_localizations_ext.dart';
 
 class FilesToolbar extends StatelessWidget {
   const FilesToolbar({

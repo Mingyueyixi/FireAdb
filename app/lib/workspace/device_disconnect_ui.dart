@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 
 import '../app_feedback.dart';
 import '../connection/model/device_profile.dart';
-import '../l10n/fire_adb_localizations_ext.dart';
+import '../l10n/fireadb_localizations_ext.dart';
 import '../log/app_log.dart';
 import 'workspace_controller.dart';
 import 'workspace_reconnect.dart';

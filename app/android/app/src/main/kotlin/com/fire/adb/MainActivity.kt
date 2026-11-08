@@ -183,7 +183,7 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
-        private const val channelName = "fire_adb/storage"
+        private const val channelName = "fireadb/storage"
         private const val requestStorage = 4101
     }
 }

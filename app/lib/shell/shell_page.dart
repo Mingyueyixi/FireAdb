@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:fire_adb/connection/connection_manager.dart';
+import 'package:fireadb/connection/connection_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../connection/model/connected_device.dart';
-import '../l10n/fire_adb_localizations_ext.dart';
+import '../l10n/fireadb_localizations_ext.dart';
 import '../log/app_log.dart';
 import 'shell_output.dart';
 import 'shell_output_settings.dart';

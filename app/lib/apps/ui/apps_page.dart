@@ -5,8 +5,8 @@ import 'package:get/get.dart';
 
 import '../../app_feedback.dart';
 import '../../files/local_file_picker.dart';
-import '../../l10n/fire_adb_localizations_ext.dart';
-import '../../l10n/generated/fire_adb_localizations.dart';
+import '../../l10n/fireadb_localizations_ext.dart';
+import '../../l10n/generated/fireadb_localizations.dart';
 import '../../log/app_log.dart';
 import '../apps_controller.dart';
 import '../data/bean/installed_app.dart';

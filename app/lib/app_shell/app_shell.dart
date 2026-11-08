@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 
 import '../about/about_page.dart';
 import '../home/home_page.dart';
-import '../l10n/fire_adb_localizations_ext.dart';
+import '../l10n/fireadb_localizations_ext.dart';
 import '../log/log_page.dart';
 import '../widgets/adaptive.dart';
 

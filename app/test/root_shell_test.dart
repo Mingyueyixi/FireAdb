@@ -1,4 +1,4 @@
-import 'package:fire_adb/shell/root_shell.dart';
+import 'package:fireadb/shell/root_shell.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';

@@ -1,4 +1,4 @@
-import 'package:fire_adb/files/android_local_picker.dart';
+import 'package:fireadb/files/android_local_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

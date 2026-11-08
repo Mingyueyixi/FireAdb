@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:get/get.dart';
 
 import '../connection/connection_manager.dart';
-import '../l10n/generated/fire_adb_localizations.dart';
+import '../l10n/generated/fireadb_localizations.dart';
 import '../log/app_log.dart';
 import 'capture_notice.dart';
 import 'data/capture_paths.dart';

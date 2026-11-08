@@ -1,4 +1,4 @@
-import 'package:fire_adb/apps/data/source/app_permissions.dart';
+import 'package:fireadb/apps/data/source/app_permissions.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

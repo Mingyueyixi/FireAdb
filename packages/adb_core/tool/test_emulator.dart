@@ -59,7 +59,7 @@ Future<void> main(List<String> args) async {
   final adbPort = int.parse(digits) + 1; // emulator-5554 → 5555
   final keyPath =
       '${_home()}${Platform.pathSeparator}.config${Platform.pathSeparator}'
-      'fire_adb${Platform.pathSeparator}adbkey.pem';
+      'fireadb${Platform.pathSeparator}adbkey.pem';
   final key = loadOrCreateAdbKey(keyPath);
   print('adb 端口: $adbPort, 密钥: $keyPath');
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../l10n/fireadb_localizations_ext.dart';
 
 /// 设备页的功能入口。未实现的入口仍显示为规划中。
 class FeatureSpec {

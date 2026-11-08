@@ -1,5 +1,5 @@
-import 'package:fire_adb/workspace/data/feature_spec.dart';
-import 'package:fire_adb/workspace/workspace_controller.dart';
+import 'package:fireadb/workspace/data/feature_spec.dart';
+import 'package:fireadb/workspace/workspace_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

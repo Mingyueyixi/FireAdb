@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../l10n/fire_adb_localizations_ext.dart';
-import '../../l10n/generated/fire_adb_localizations.dart';
+import '../../l10n/fireadb_localizations_ext.dart';
+import '../../l10n/generated/fireadb_localizations.dart';
 import '../data/bean/app_freeze.dart';
 import '../data/bean/installed_app.dart';
 

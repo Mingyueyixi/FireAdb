@@ -8,7 +8,7 @@ import '../apps/data/source/fire_app_service.dart';
 import '../connection/connection_manager.dart';
 import '../connection/model/connected_device.dart';
 import '../files/data/source/remote_file_commands.dart';
-import '../l10n/generated/fire_adb_localizations.dart';
+import '../l10n/generated/fireadb_localizations.dart';
 import '../log/app_log.dart';
 import 'capture_notice.dart';
 import 'data/capture_paths.dart';

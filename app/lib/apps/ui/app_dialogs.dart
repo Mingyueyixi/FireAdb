@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../l10n/fireadb_localizations_ext.dart';
 import '../data/bean/app_freeze.dart';
 import '../data/bean/installed_app.dart';
 import 'app_freeze_dialogs.dart';

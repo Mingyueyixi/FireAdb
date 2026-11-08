@@ -5,7 +5,7 @@ import 'package:get/get.dart';
 import 'package:libadb/libadb.dart';
 
 import '../../connection/model/device_profile.dart';
-import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../l10n/fireadb_localizations_ext.dart';
 import '../../settings/app_settings_store.dart';
 import '../discovered_devices.dart';
 import '../home_actions.dart';

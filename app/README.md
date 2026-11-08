@@ -1,4 +1,4 @@
-# fire_adb（Flutter 应用）
+# fireadb（Flutter 应用）
 
 跨平台 ADB 工具箱的 Flutter 界面层：设备列表 / shell 终端 / 文件管理 / 安装构建 / 截图录屏。
 

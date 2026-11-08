@@ -1,4 +1,4 @@
-name: fire_adb
+name: fireadb
 description: "跨平台 ADB 工具箱（Flutter 桌面/Android），协议自实现，不依赖系统 adb 二进制。"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.

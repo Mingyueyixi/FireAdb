@@ -34,7 +34,7 @@ LocalOpenRequest localOpenRequest(
   return LocalOpenRequest('xdg-open', <String>[path]);
 }
 
-const MethodChannel _storageChannel = MethodChannel('fire_adb/storage');
+const MethodChannel _storageChannel = MethodChannel('fireadb/storage');
 
 /// 应用外部文件目录。调用后系统会建好 `Android/data/<包名>/files`。
 Future<String> androidExternalFilesDirectory() async {

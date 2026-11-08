@@ -13,7 +13,7 @@ import 'adb_usb_match.dart';
 import 'fire_usb.dart';
 import 'libusb_loader.dart';
 
-final Logger _usbLog = Logger('fire_adb.usb');
+final Logger _usbLog = Logger('fireadb.usb');
 
 const int _libusbErrorAccess = -3;
 const int _libusbErrorBusy = -6;

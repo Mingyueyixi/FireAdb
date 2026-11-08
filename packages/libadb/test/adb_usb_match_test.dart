@@ -51,7 +51,7 @@ void main() {
       'x64',
       'runner',
       'Debug',
-      'fire_adb.exe',
+      'fireadb.exe',
     ].join(separator);
     final library = [
       'C:',

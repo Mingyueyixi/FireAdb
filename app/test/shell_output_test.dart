@@ -1,4 +1,4 @@
-import 'package:fire_adb/shell/shell_output.dart';
+import 'package:fireadb/shell/shell_output.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

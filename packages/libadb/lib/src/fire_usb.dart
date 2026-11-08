@@ -6,7 +6,7 @@ import 'package:logging/logging.dart';
 
 import 'libusb_loader.dart';
 
-final Logger _usbLog = Logger('fire_adb.usb');
+final Logger _usbLog = Logger('fireadb.usb');
 
 /// C 层会话信息，对应 `fire_usb_info`。
 final class FireUsbInfo extends Struct {
@@ -198,7 +198,7 @@ String _arrayString(Array<Uint8> bytes, int max) {
 
 /// `fire_usb` 动态库路径。优先环境变量，再找可执行文件旁边和 vendor。
 String? resolveFireUsbLibraryPath() {
-  final fromEnv = Platform.environment['FIRE_ADB_FIRE_USB'];
+  final fromEnv = Platform.environment['fireadb_FIRE_USB'];
   if (fromEnv != null && fromEnv.isNotEmpty && File(fromEnv).existsSync()) {
     return fromEnv;
   }

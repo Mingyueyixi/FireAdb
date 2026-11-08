@@ -20,7 +20,7 @@ class ConnectionManager extends GetxService {
   static const String _manualHostPrefsKey = 'manual_connection_host';
   static const String _manualPortPrefsKey = 'manual_connection_port';
   static const String _preferSdkAdbServerKey = 'prefer_sdk_adb_server';
-  static const String _adbServerPortKey = 'fire_adb_server_port';
+  static const String _adbServerPortKey = 'fireadb_server_port';
 
   /// 新连接登记后调用。用来按设备尝试 adb root，失败则保持普通连接。
   Future<void> Function(String serial)? afterConnect;

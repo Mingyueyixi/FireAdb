@@ -1,7 +1,7 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
 
-import 'fire_adb_localizations.dart';
+import 'fireadb_localizations.dart';
 
 // ignore_for_file: type=lint
 

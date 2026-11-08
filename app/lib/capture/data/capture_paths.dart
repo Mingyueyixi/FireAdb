@@ -4,7 +4,7 @@ import 'dart:io';
 ///
 /// Windows 没有 `HOME` 时改用 `USERPROFILE`。ADB 密钥仍放在配置目录，不和这些文件混在一起。
 /// Android 的默认目录是共享存储里的「下载」。写入前申请所有文件访问权限。
-const String kFireAdbConfigName = 'fire_adb';
+const String kFireAdbConfigName = 'fireadb';
 const String kFireAdbDataFolder = 'FireAdb';
 const String kCapturesFolderName = 'captures';
 

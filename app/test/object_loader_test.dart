@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:fire_adb/common/object_loader.dart';
+import 'package:fireadb/common/object_loader.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

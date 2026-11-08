@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../l10n/fire_adb_localizations_ext.dart';
+import '../../l10n/fireadb_localizations_ext.dart';
 
 /// 区块标题。窄宽度时标题省略，避免把图标挤出屏幕。
 class HomeSectionHeader extends StatelessWidget {

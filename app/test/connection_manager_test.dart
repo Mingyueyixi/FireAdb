@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:fire_adb/connection/connection_manager.dart';
-import 'package:fire_adb/connection/model/device_profile.dart';
+import 'package:fireadb/connection/connection_manager.dart';
+import 'package:fireadb/connection/model/device_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:libadb/libadb.dart';
 import 'package:shared_preferences/shared_preferences.dart';

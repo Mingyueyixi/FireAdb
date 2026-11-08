@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:fire_adb/apps/data/source/fire_app_service.dart';
-import 'package:fire_adb/capture/data/capture_paths.dart';
-import 'package:fire_adb/capture/data/capture_store.dart';
-import 'package:fire_adb/capture/data/local_opener.dart';
+import 'package:fireadb/apps/data/source/fire_app_service.dart';
+import 'package:fireadb/capture/data/capture_paths.dart';
+import 'package:fireadb/capture/data/capture_store.dart';
+import 'package:fireadb/capture/data/local_opener.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -292,7 +292,7 @@ void main() {
 
   test('写入、列出并删除应用目录里的文件', () async {
     final directory = await Directory.systemTemp.createTemp(
-      'fire_adb_capture_test',
+      'fireadb_capture_test',
     );
     try {
       final store = CaptureStore(directory);

@@ -4,7 +4,7 @@ import 'package:libadb/libadb.dart';
 
 import '../app_feedback.dart';
 import '../connection/model/device_profile.dart';
-import '../l10n/fire_adb_localizations_ext.dart';
+import '../l10n/fireadb_localizations_ext.dart';
 import '../log/app_log.dart';
 import '../settings/app_settings_store.dart';
 import 'adb_qr_pairing.dart';

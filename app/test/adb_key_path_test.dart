@@ -1,4 +1,4 @@
-import 'package:fire_adb/connection/adb_key_path.dart';
+import 'package:fireadb/connection/adb_key_path.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -10,7 +10,7 @@ void main() {
         androidDataDir: '/data/user/0/com.fire.adb',
         separator: '/',
       ),
-      '/data/user/0/com.fire.adb/files/fire_adb/adbkey.pem',
+      '/data/user/0/com.fire.adb/files/fireadb/adbkey.pem',
     );
   });
 
@@ -25,7 +25,7 @@ void main() {
         androidDataDir: '',
         separator: '/',
       ),
-      '/home/me/.config/fire_adb/adbkey.pem',
+      '/home/me/.config/fireadb/adbkey.pem',
     );
   });
 
@@ -37,7 +37,7 @@ void main() {
         androidDataDir: '',
         separator: r'\',
       ),
-      r'C:\Users\me\.config\fire_adb\adbkey.pem',
+      r'C:\Users\me\.config\fireadb\adbkey.pem',
     );
   });
 

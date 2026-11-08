@@ -6,8 +6,8 @@ import 'package:get/get.dart';
 
 import '../../files/android_storage_access.dart';
 import '../../files/data/source/remote_file_commands.dart';
-import '../../l10n/fire_adb_localizations_ext.dart';
-import '../../l10n/generated/fire_adb_localizations.dart';
+import '../../l10n/fireadb_localizations_ext.dart';
+import '../../l10n/generated/fireadb_localizations.dart';
 import '../../log/app_log.dart';
 import '../capture_notice.dart';
 import '../data/capture_paths.dart';

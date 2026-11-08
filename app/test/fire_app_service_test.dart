@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:fire_adb/apps/data/bean/installed_app.dart';
-import 'package:fire_adb/apps/data/source/fire_app_service.dart';
-import 'package:fire_adb/apps/loader/app_display_loader.dart';
+import 'package:fireadb/apps/data/bean/installed_app.dart';
+import 'package:fireadb/apps/data/source/fire_app_service.dart';
+import 'package:fireadb/apps/loader/app_display_loader.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

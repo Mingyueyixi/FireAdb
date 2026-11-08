@@ -1,4 +1,4 @@
-package com.fire.fire_adb
+package com.fire.fireadb
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../l10n/fire_adb_localizations_ext.dart';
+import '../l10n/fireadb_localizations_ext.dart';
 import 'data/feature_spec.dart';
 
 /// 功能入口卡片（移动端九宫格用）。

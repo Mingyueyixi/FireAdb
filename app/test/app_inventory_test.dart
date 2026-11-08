@@ -1,5 +1,5 @@
-import 'package:fire_adb/apps/data/bean/installed_app.dart';
-import 'package:fire_adb/apps/data/source/app_inventory.dart';
+import 'package:fireadb/apps/data/bean/installed_app.dart';
+import 'package:fireadb/apps/data/source/app_inventory.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

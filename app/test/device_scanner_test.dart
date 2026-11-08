@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:fire_adb/connection/connection_manager.dart';
-import 'package:fire_adb/home/device_scanner.dart';
-import 'package:fire_adb/home/home_controller.dart';
-import 'package:fire_adb/settings/app_settings_store.dart';
+import 'package:fireadb/connection/connection_manager.dart';
+import 'package:fireadb/home/device_scanner.dart';
+import 'package:fireadb/home/home_controller.dart';
+import 'package:fireadb/settings/app_settings_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:libadb/libadb.dart';

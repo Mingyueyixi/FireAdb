@@ -1,4 +1,4 @@
-import 'package:fire_adb/connection/sdk_adb.dart';
+import 'package:fireadb/connection/sdk_adb.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

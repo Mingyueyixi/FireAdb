@@ -112,7 +112,7 @@ FireAdb 实现的是主机侧：传输、认证、本机 5037、以及自己调�
 
 - 官方 Server 在进程里做 mDNS（Bonjour，或 `ADB_MDNS_OPENSCREEN=1` 时用内置 openscreen），并按 `ADB_MDNS_AUTO_CONNECT` 自动连接 `_adb-tls-connect._tcp`。我们发现是用户点「扫描」之后的查询，连接也要再点一次。
 - 官方把配对得到的对端身份写入 `adb_known_hosts.pb`，之后的 TLS 连接按这份名单校验。我们校验对端证书的 CertificateVerify 签名，不把设备证书落盘，也不做后续连接的 pinning。
-- 配对用的 RSA 密钥是 FireAdb 自己的那一把，路径是桌面 `~/.config/fire_adb/adbkey.pem`，Android 上是应用私有目录里的同名文件。官方默认是 `~/.android/adbkey`。两把密钥不同，手机上会各弹一次授权。我们不扫描 `ADB_VENDOR_KEYS`。
+- 配对用的 RSA 密钥是 FireAdb 自己的那一把，路径是桌面 `~/.config/fireadb/adbkey.pem`，Android 上是应用私有目录里的同名文件。官方默认是 `~/.android/adbkey`。两把密钥不同，手机上会各弹一次授权。我们不扫描 `ADB_VENDOR_KEYS`。
 - `adb tcpip` 打开的固定端口走普通 CNXN/AUTH。Android 11+ 无线调试的 TLS 端口走 STLS。这两条在直连 API 里都有。Server 的 `host:connect` 也走同一套 TCP 握手，因此可以连 TLS 端口；它不会自己去发现 mDNS。
 
 ## 密钥与列表里的状态

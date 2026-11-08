@@ -24,7 +24,7 @@ String adbKeyFilePath({
   return '$root$sep.config$sep$kAdbKeyDirName$sep$kAdbKeyFileName';
 }
 
-const String kAdbKeyDirName = 'fire_adb';
+const String kAdbKeyDirName = 'fireadb';
 const String kAdbKeyFileName = 'adbkey.pem';
 
 class AdbKeyUnavailable implements Exception {

@@ -1,8 +1,8 @@
-import 'package:fire_adb/connection/connection_manager.dart';
+import 'package:fireadb/connection/connection_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../l10n/fire_adb_localizations_ext.dart';
+import '../l10n/fireadb_localizations_ext.dart';
 import '../widgets/adaptive.dart' show isWide, isAtLeastTablet;
 import '../widgets/system_navigation_padding.dart';
 import 'data/feature_spec.dart';

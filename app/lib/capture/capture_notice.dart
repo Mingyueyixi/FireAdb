@@ -1,4 +1,4 @@
-import '../l10n/generated/fire_adb_localizations.dart';
+import '../l10n/generated/fireadb_localizations.dart';
 
 class CaptureNotice {
   const CaptureNotice({

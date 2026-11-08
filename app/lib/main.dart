@@ -9,7 +9,7 @@ import 'apps/data/source/fire_app_service.dart';
 import 'connection/connection_manager.dart';
 import 'connection/model/device_profile.dart';
 import 'home/home_controller.dart';
-import 'l10n/generated/fire_adb_localizations.dart';
+import 'l10n/generated/fireadb_localizations.dart';
 import 'log/app_log.dart';
 import 'settings/app_settings_store.dart';
 import 'settings/settings_page.dart';

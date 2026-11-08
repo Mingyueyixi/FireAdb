@@ -10,7 +10,7 @@ import 'file_log_store.dart';
 import 'log_paths.dart';
 
 /// 应用日志。各处直接使用这个官方 [Logger]。
-final Logger log = Logger('fire_adb');
+final Logger log = Logger('fireadb');
 
 /// 当前这次启动已经产生的日志，供日志页实时显示。
 final SessionLogBuffer sessionLog = SessionLogBuffer();
@@ -163,8 +163,8 @@ void _attachConsole() {
 
 bool _isAppRecord(LogRecord record) {
   final name = record.loggerName;
-  return name == 'fire_adb' ||
-      name.startsWith('fire_adb.') ||
+  return name == 'fireadb' ||
+      name.startsWith('fireadb.') ||
       name == 'adb_core' ||
       name.startsWith('adb_core.');
 }
