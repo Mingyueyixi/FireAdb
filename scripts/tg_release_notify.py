@@ -27,6 +27,10 @@ import requests
 MAX_UPLOAD = 49 * 1024 * 1024
 # sendMediaGroup 单组最多 10 个文件
 GROUP_LIMIT = 10
+# caption 上限（Telegram 对消息文本的限制，中文按 1 字符计）
+CAPTION_LIMIT = 1024
+
+INTRO = "FireAdb 是一个跨平台 ADB 工具箱，自实现 adb 协议，无需系统 adb 二进制，支持设备连接、文件管理、应用管理、截图录屏、shell 命令等功能。"
 
 
 def read_file(path):
@@ -44,6 +48,21 @@ def truncate(text: str, limit: int):
     if len(text) <= limit:
         return text
     return text[: limit - 1] + "……"
+
+
+def dedupe_lines(text: str) -> str:
+    """去掉重复的非空行。generate_release_notes 在 tag 重打重跑后会把
+    changelog 追加进旧正文，同一行（如 Full Changelog 链接）会重复多份。"""
+    seen = set()
+    lines = []
+    for line in text.splitlines():
+        key = line.strip()
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        lines.append(line)
+    return "\n".join(lines)
 
 
 class TgBot:
@@ -105,7 +124,7 @@ def main():
 
     release = json.loads(read_file(args.release).decode("utf-8"))
     name = release.get("name") or ""
-    body = release.get("body") or ""
+    body = html.escape(dedupe_lines(release.get("body") or "").strip())
     url = release.get("url") or ""
 
     repo = os.environ.get("GITHUB_REPOSITORY", "")
@@ -114,31 +133,39 @@ def main():
     files_dir = Path(args.files_dir)
     files = sorted(p for p in (files_dir.glob("*") if files_dir.is_dir() else []) if p.is_file())
 
-    # 一条消息说清：发布说明 + 全部产物直链（含超过 50MB 只能附链接的）
+    # 产物直链（含超过 50MB 只能附链接的）
     link_base = f"https://github.com/{repo}/releases/download/{tag}/" if repo and tag else ""
     links = ""
     for p in files:
         oversize = "" if p.stat().st_size <= MAX_UPLOAD else "（过大未上传）"
         links += f'<a href="{link_base}{p.name}">{html.escape(p.name)}</a>{oversize}\n'
-
-    mess = f"<b>{html.escape(name)}</b> 已发布\n"
-    if body:
-        mess += f"<pre>{html.escape(truncate(body, 2000))}</pre>\n"
-    if url:
-        mess += f'<a href="{url}">Release 页面</a>\n'
-    if links:
-        mess += "\n<b>产物下载：</b>\n" + links
+    links_str = ("\n<b>产物下载：</b>\n" + links) if links else ""
 
     bot = TgBot(token)
-    if not bot.send_message(chat_id, truncate(mess, 4000)).get("ok"):
-        return 1
 
-    # 上传放得下的文件；超过 50MB 的 Bot API 传不了，消息里已附直链
+    # 没有可上传文件时用普通消息发完整说明
+    if not [p for p in files if p.stat().st_size <= MAX_UPLOAD]:
+        text = f"<b>{html.escape(name)}</b> 已发布\n{INTRO}\n"
+        if body:
+            text += f"<pre>{truncate(body, 2000)}</pre>\n"
+        if url:
+            text += f'<a href="{url}">Release 页面</a>\n'
+        text += links_str
+        return 0 if bot.send_message(chat_id, truncate(text, 4000)).get("ok") else 1
+
+    # 有产物：介绍与产物合并为一条消息，说明文字放 caption（上限 1024）。
+    # 正文按剩余预算裁剪，放不下就舍弃正文保链接。
+    caption = f"<b>{html.escape(name)}</b> 已发布\n{INTRO}\n"
+    if url:
+        caption += f'<a href="{url}">Release 页面</a>\n'
+    if body:
+        budget = CAPTION_LIMIT - len(caption) - len(links_str) - 8  # 8 为 <pre></pre>
+        if budget > 30:
+            caption += f"<pre>{truncate(body, budget)}</pre>\n"
+    caption = truncate(caption + links_str, CAPTION_LIMIT)
+
+    # 上传放得下的文件；超过 50MB 的 Bot API 传不了，链接里已标注
     upload = [p for p in files if p.stat().st_size <= MAX_UPLOAD]
-    if not upload:
-        return 0
-
-    caption = f"{html.escape(name)} 安装包文件"
     if len(upload) == 1:
         return 0 if bot.send_document(chat_id, upload[0], caption=caption).get("ok") else 1
 
