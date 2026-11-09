@@ -137,7 +137,7 @@ jobs:
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-        run: python scripts/tg_release_notify.py --release release.json --files-dir tg_assets
+        run: python scripts/tg_release_notify.py --release release.json --files-dir tg_assets --icon app/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
   build-android:
     name: Build Android

@@ -92,6 +92,14 @@ class TgBot:
         files = {"document": (path.name, read_file(path), guess_mime(path))}
         return self._post("sendDocument", data=data, files=files)
 
+    def send_photo(self, chat_id, path: Path, caption=None):
+        data = {"chat_id": str(chat_id)}
+        if caption:
+            data["caption"] = caption
+            data["parse_mode"] = "HTML"
+        files = {"photo": (path.name, read_file(path), "image/png")}
+        return self._post("sendPhoto", data=data, files=files)
+
     def send_media_group(self, chat_id, paths, caption=None):
         # multipart 形式：media 里用 attach:// 引用同一请求的文件字段。
         # attach 名只用字母数字下划线，用序号避免重名。
@@ -102,8 +110,10 @@ class TgBot:
             files[attach] = (p.name, read_file(p), guess_mime(p))
             media_arr.append({"type": "document", "media": f"attach://{attach}"})
         if caption:
-            media_arr[0]["caption"] = caption
-            media_arr[0]["parse_mode"] = "HTML"
+            # 挂在最后一个文件上：客户端把 caption 渲染在其所属文件下方，
+            # 挂最后一个即「产物在前、正文垫底」的阅读顺序
+            media_arr[-1]["caption"] = caption
+            media_arr[-1]["parse_mode"] = "HTML"
         return self._post("sendMediaGroup", data={
             "chat_id": str(chat_id),
             "media": json.dumps(media_arr),
@@ -114,6 +124,7 @@ def main():
     parser = argparse.ArgumentParser(description="Release -> Telegram 通知")
     parser.add_argument("--release", required=True, help="gh release view 导出的 json 文件")
     parser.add_argument("--files-dir", required=True, help="release 产物目录")
+    parser.add_argument("--icon", default="", help="app 图标 png 路径，与正文一起发送")
     args = parser.parse_args()
 
     token = os.environ.get("TG_BOT_TOKEN", "")
@@ -167,13 +178,23 @@ def main():
 
     # 上传放得下的文件；超过 50MB 的 Bot API 传不了，链接里已标注
     upload = [p for p in files if p.stat().st_size <= MAX_UPLOAD]
+
+    # 图标放正文里：Bot API 相册不能混图片和文件，拆成两条消息——
+    # 先发「图标图片 + 正文 caption」（正文在图标下方、产物之前），
+    # 再发产物相册。发图失败则退回旧行为：正文挂相册最后一个文件
+    icon = Path(args.icon) if args.icon else None
+    album_caption = caption
+    if icon and icon.is_file():
+        if bot.send_photo(chat_id, icon, caption=caption).get("ok"):
+            album_caption = None
+
     if len(upload) == 1:
-        return 0 if bot.send_document(chat_id, upload[0], caption=caption).get("ok") else 1
+        return 0 if bot.send_document(chat_id, upload[0], caption=album_caption).get("ok") else 1
 
     ok = True
     for i in range(0, len(upload), GROUP_LIMIT):
         res = bot.send_media_group(
-            chat_id, upload[i: i + GROUP_LIMIT], caption=caption if i == 0 else None)
+            chat_id, upload[i: i + GROUP_LIMIT], caption=album_caption if i == 0 else None)
         ok = ok and res.get("ok")
     return 0 if ok else 1
 
