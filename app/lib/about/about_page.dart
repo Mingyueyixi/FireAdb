@@ -142,7 +142,7 @@ class _AboutPageState extends State<AboutPage> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: <Widget>[
-            Icon(Icons.adb, size: 56, color: theme.colorScheme.primary),
+            Image.asset('assets/icon/flame_master.png', width: 56, height: 56),
             const SizedBox(height: 12),
             Text(
               'FireAdb',

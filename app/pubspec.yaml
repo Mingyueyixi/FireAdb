@@ -59,6 +59,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  image: ^4.12.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -75,6 +76,8 @@ flutter:
   assets:
     # jar 不在就由 hook/build.dart 重编；都在才比较 service.version。
     - assets/fire-app-service.jar
+    # 应用图标（关于页展示 + 各平台图标生成源，见 scripts/gen_app_icon.py）。
+    - assets/icon/flame_master.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

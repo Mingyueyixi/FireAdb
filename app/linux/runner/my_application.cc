@@ -5,6 +5,7 @@
 #include <gdk/gdkx.h>
 #endif
 
+#include "app_icon.h"
 #include "flutter/generated_plugin_registrant.h"
 
 struct _MyApplication {
@@ -53,6 +54,21 @@ static void my_application_activate(GApplication* application) {
   }
 
   gtk_window_set_default_size(window, 1280, 720);
+
+  // Set the window icon from the PNG embedded in app_icon.h.
+  GInputStream* icon_stream =
+      g_memory_input_stream_new_from_data(kAppIconPng, kAppIconPngSize, nullptr);
+  GError* icon_error = nullptr;
+  GdkPixbuf* icon =
+      gdk_pixbuf_new_from_stream(icon_stream, nullptr, &icon_error);
+  if (icon != nullptr) {
+    gtk_window_set_default_icon(icon);
+    g_object_unref(icon);
+  } else {
+    g_warning("Failed to load window icon: %s", icon_error->message);
+    g_error_free(icon_error);
+  }
+  g_object_unref(icon_stream);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(
