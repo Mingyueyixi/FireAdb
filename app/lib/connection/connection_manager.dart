@@ -253,6 +253,11 @@ class ConnectionManager extends GetxService {
       if (services != null) local.listenMdnsServices(services);
       final mdnsError = _mdnsErrorListener;
       if (mdnsError != null) local.listenMdnsError(mdnsError);
+      if (_localMdnsAutoScan) {
+        local.resumeMdnsAutoScan();
+      } else {
+        local.pauseMdnsAutoScan();
+      }
     }
     if (local == null) {
       log.info('127.0.0.1:$port 已有 ADB Server，直接使用它列出的设备');
@@ -280,6 +285,20 @@ class ConnectionManager extends GetxService {
 
   Future<void> refreshLocalMdns() {
     return _localAdb?.refreshMdns() ?? Future<void>.value();
+  }
+
+  /// 本机 server 的 mDNS 是否周期自动扫描（对应设置「自动刷新 mDNS」）。
+  /// server 还没启动时先记住，启动后应用。
+  bool _localMdnsAutoScan = false;
+
+  void setLocalMdnsAutoScan(bool enabled) {
+    if (_localMdnsAutoScan == enabled) return;
+    _localMdnsAutoScan = enabled;
+    if (enabled) {
+      _localAdb?.resumeMdnsAutoScan();
+    } else {
+      _localAdb?.pauseMdnsAutoScan();
+    }
   }
 
   void _onLocalUsbError(Object? error, StackTrace? stackTrace) {

@@ -64,6 +64,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
   Worker? _devicesRefreshWorker;
   Worker? _intervalWorker;
   Worker? _backgroundRefreshWorker;
+  Worker? _mdnsAutoRefreshWorker;
   var _deviceRefreshGeneration = 0;
   final MdnsBrowser _wirelessBrowser = MdnsBrowser();
   late final DeviceScanner _deviceScanner;
@@ -135,6 +136,11 @@ class HomeController extends GetxController with WidgetsBindingObserver {
       _settings.refreshInBackground,
       (_) => _syncRefreshGate(),
     );
+    _mdnsAutoRefreshWorker = ever<bool>(
+      _settings.autoRefreshMdns,
+      (_) => _syncRefreshGate(),
+    );
+    _syncRefreshGate();
     manager.listenLocalMdns((services) {
       if (isClosed || !manager.ownsLocalAdbServer.value) return;
       discovered.assignAll(services);
@@ -197,6 +203,11 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     // 等待重连时即使关掉了「自动刷新」，仍要扫列表 / mDNS。
     final refreshEnabled =
         _settings.autoRefreshDevices.value || _reconnectProbe;
+    // 本机 server 的 mDNS 周期扫描由「自动刷新 mDNS」开关控制；
+    // 等待重连时同样强制开启。
+    manager.setLocalMdnsAutoScan(
+      allow && (refreshEnabled || _settings.autoRefreshMdns.value),
+    );
     final gateChanged = allow != _refreshing;
     _refreshing = allow;
     _applyDeviceAutoRefresh(refreshEnabled);
@@ -633,6 +644,7 @@ class HomeController extends GetxController with WidgetsBindingObserver {
     _devicesRefreshWorker?.dispose();
     _intervalWorker?.dispose();
     _backgroundRefreshWorker?.dispose();
+    _mdnsAutoRefreshWorker?.dispose();
     _deviceRefreshGeneration++;
     _adbDeviceRefreshTimer?.cancel();
     unawaited(_adbTrack?.cancel());

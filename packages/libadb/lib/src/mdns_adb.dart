@@ -22,10 +22,36 @@ class MdnsAdbExtension implements AdbDeviceExtension {
   var _scanning = false;
   var _listening = false;
 
+  /// 周期自动扫描是否已暂停。暂停后 [scan] 仍可手动调用。
+  bool _paused = false;
+
   @override
   void listen(AdbScanListener _) {
     unawaited(cancel());
     _listening = true;
+    _startAutoScan();
+  }
+
+  /// 暂停周期自动扫描。只停 timer，进行中的一轮跑完为止；
+  /// [scan] 仍可手动调用。未 listen 时仅记录状态。
+  void pauseAutoScan() {
+    if (_paused) return;
+    _paused = true;
+    if (!_listening) return;
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  /// 恢复周期自动扫描，立即补扫一轮。
+  void resumeAutoScan() {
+    if (!_paused) return;
+    _paused = false;
+    if (!_listening) return;
+    _startAutoScan();
+  }
+
+  void _startAutoScan() {
+    if (_paused) return;
     _timer = Timer.periodic(_interval, (_) {
       unawaited(scan());
     });

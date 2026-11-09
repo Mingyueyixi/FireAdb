@@ -86,6 +86,12 @@ class LocalAdb {
 
   Future<void> refreshMdns() => _mdnsExtension.scan();
 
+  /// 暂停本机 mDNS 的周期自动扫描。仍可用 [refreshMdns] 手动扫一轮。
+  void pauseMdnsAutoScan() => _mdnsExtension.pauseAutoScan();
+
+  /// 恢复本机 mDNS 的周期自动扫描，立即补扫一轮。
+  void resumeMdnsAutoScan() => _mdnsExtension.resumeAutoScan();
+
   Future<void> close() async {
     await server.close();
     FireUsb.tryLoad()?.closeAll();
