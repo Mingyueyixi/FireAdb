@@ -74,12 +74,14 @@ def flutter_command() -> list[str]:
 def run_flutter(subcommand: str, commit: str, build_time: str, rest: list[str]) -> None:
     """带构建信息执行 flutter run / flutter build；stdin 原样继承，
     flutter run 的热重载按键（r/R/q）可直接使用。"""
+    # 子命令后必须紧跟目标（linux/apk），define 只能放目标之后，否则 flutter 解析报
+    # "Could not find an option named --dart-define"。
     command = [
         *flutter_command(),
         subcommand,
+        *rest,
         f"--dart-define=FIREADB_GIT_COMMIT={commit}",
         f"--dart-define=FIREADB_BUILD_TIME={build_time}",
-        *rest,
     ]
     print("> " + " ".join(command))
     result = subprocess.run(command, cwd=APP_DIR)
