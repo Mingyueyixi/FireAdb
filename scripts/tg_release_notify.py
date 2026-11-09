@@ -30,7 +30,7 @@ GROUP_LIMIT = 10
 # caption 上限（Telegram 对消息文本的限制，中文按 1 字符计）
 CAPTION_LIMIT = 1024
 
-INTRO = "FireAdb 是一个跨平台 ADB 工具箱，自实现 adb 协议，无需系统 adb 二进制，支持设备连接、文件管理、应用管理、截图录屏、shell 命令等功能。"
+INTRO = "FireAdb 是一个跨平台 ADB 工具箱，支持设备连接、文件管理、应用管理、截图录屏、shell 命令等功能。"
 
 
 def read_file(path):
@@ -133,12 +133,13 @@ def main():
     files_dir = Path(args.files_dir)
     files = sorted(p for p in (files_dir.glob("*") if files_dir.is_dir() else []) if p.is_file())
 
-    # 产物直链（含超过 50MB 只能附链接的）
+    # 只为超过 50MB 传不了的文件附直链；放得下的文件本身随消息发送，不再重复列链接
     link_base = f"https://github.com/{repo}/releases/download/{tag}/" if repo and tag else ""
     links = ""
     for p in files:
-        oversize = "" if p.stat().st_size <= MAX_UPLOAD else "（过大未上传）"
-        links += f'<a href="{link_base}{p.name}">{html.escape(p.name)}</a>{oversize}\n'
+        if p.stat().st_size <= MAX_UPLOAD:
+            continue
+        links += f'<a href="{link_base}{p.name}">{html.escape(p.name)}</a>（过大未上传）\n'
     links_str = ("\n<b>产物下载：</b>\n" + links) if links else ""
 
     bot = TgBot(token)

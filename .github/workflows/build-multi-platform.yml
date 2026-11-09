@@ -46,7 +46,11 @@ jobs:
         with:
           files: ${{ steps.build.outputs.artifact }}
           fail_on_unmatched_files: true
-          generate_release_notes: true
+          # 不用 generate_release_notes：那是「追加」语义，重打 tag 重跑会
+          # 重复追加 changelog；固定正文由 softprops 覆盖更新，重跑幂等
+          body: |
+            FireAdb 是一个跨平台 ADB 工具箱，支持设备连接、文件管理、应用管理、截图录屏、shell 命令等功能。
+            更新内容见 [提交记录](${{ github.server_url }}/${{ github.repository }}/commits/${{ github.ref_name }})。
 
   build-linux:
     name: Build Linux
@@ -96,7 +100,11 @@ jobs:
         with:
           files: ${{ steps.build.outputs.artifact }}
           fail_on_unmatched_files: true
-          generate_release_notes: true
+          # 不用 generate_release_notes：那是「追加」语义，重打 tag 重跑会
+          # 重复追加 changelog；固定正文由 softprops 覆盖更新，重跑幂等
+          body: |
+            FireAdb 是一个跨平台 ADB 工具箱，支持设备连接、文件管理、应用管理、截图录屏、shell 命令等功能。
+            更新内容见 [提交记录](${{ github.server_url }}/${{ github.repository }}/commits/${{ github.ref_name }})。
 
   notify-release:
     name: Notify Telegram
@@ -173,4 +181,8 @@ jobs:
         with:
           files: ${{ steps.build.outputs.artifact }}
           fail_on_unmatched_files: true
-          generate_release_notes: true
+          # 不用 generate_release_notes：那是「追加」语义，重打 tag 重跑会
+          # 重复追加 changelog；固定正文由 softprops 覆盖更新，重跑幂等
+          body: |
+            FireAdb 是一个跨平台 ADB 工具箱，支持设备连接、文件管理、应用管理、截图录屏、shell 命令等功能。
+            更新内容见 [提交记录](${{ github.server_url }}/${{ github.repository }}/commits/${{ github.ref_name }})。
