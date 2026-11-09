@@ -152,6 +152,8 @@ def emit_github_output(artifact: Path) -> None:
 
 
 def main() -> None:
+    # Windows CI 的 stdout 是 cp1252，打印中文会炸；强制 UTF-8。
+    sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="带构建信息编译并打包 FireAdb")
     parser.add_argument(
         "target",
