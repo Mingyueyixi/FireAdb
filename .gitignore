@@ -28,3 +28,6 @@ __pycache__/
 # 参考源码以 git submodule 引入（见 .gitmodules），内容由 submodule 管理
 # Widget Preview related
 .widget_preview/
+
+# 本地测试环境变量（含 bot token，不入库）
+scripts/.tg_test.env

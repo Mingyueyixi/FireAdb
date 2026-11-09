@@ -13,12 +13,13 @@ release 信息由 CI 里 `gh release view --json name,body,url` 落盘后经
   TG_BOT_TOKEN  机器人 token
   TG_CHAT_ID    目标聊天/频道 id（群组为负数，直接字符串传入）
 """
-import argparse
+import configparser
 import html
 import json
 import mimetypes
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 import requests
@@ -31,6 +32,14 @@ GROUP_LIMIT = 10
 CAPTION_LIMIT = 1024
 
 INTRO = "FireAdb 是一个跨平台 ADB 工具箱，支持设备连接、文件管理、应用管理、截图录屏、shell 命令等功能。"
+
+# 固定输入路径（与 .github/workflows/build-multi-platform.yml 的 notify-release 步骤对应，
+# gh release view/download 均在仓库根目录执行）
+RELEASE_JSON = Path("release.json")
+ASSETS_DIR = Path("tg_assets")
+
+# app 图标，与正文一起作为第一条消息发送
+ICON_PATH = Path(__file__).parent.parent / "app/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
 
 
 def read_file(path):
@@ -70,7 +79,12 @@ class TgBot:
         self.base = f"https://api.telegram.org/bot{token}"
 
     def _post(self, method, **kwargs):
-        res = requests.post(f"{self.base}/{method}", timeout=120, **kwargs)
+        try:
+            res = requests.post(f"{self.base}/{method}", timeout=120, **kwargs)
+        except requests.RequestException as e:
+            # 只打印异常类型，避免 traceback 把带 token 的完整 URL 泄漏进日志
+            print(f"{method} request failed: {e.__class__.__name__}")
+            return {"ok": False}
         result = res.json()
         if not result.get("ok"):
             print(f"{method} failed: {res.status_code} {res.text}")
@@ -120,31 +134,30 @@ class TgBot:
         }, files=files)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Release -> Telegram 通知")
-    parser.add_argument("--release", required=True, help="gh release view 导出的 json 文件")
-    parser.add_argument("--files-dir", required=True, help="release 产物目录")
-    parser.add_argument("--icon", default="", help="app 图标 png 路径，与正文一起发送")
-    args = parser.parse_args()
+def load_test_env():
+    """标准库 configparser 读取本地测试环境文件 scripts/.tg_test.env（不入库）。
+    进程已存在的环境变量优先，文件里的只做兜底。"""
+    env_file = Path(__file__).parent / ".tg_test.env"
+    if not env_file.is_file():
+        return
+    cp = configparser.ConfigParser()
+    cp.optionxform = str  # 保留键名大小写
+    cp.read_string("[env]\n" + env_file.read_text(encoding="utf-8"))
+    for key, value in cp["env"].items():
+        os.environ.setdefault(key, value.strip())
 
-    token = os.environ.get("TG_BOT_TOKEN", "")
-    chat_id = os.environ.get("TG_CHAT_ID", "")
-    if not token or not chat_id:
-        print("missing TG_BOT_TOKEN / TG_CHAT_ID")
-        return 1
-
-    release = json.loads(read_file(args.release).decode("utf-8"))
+def build_release_texts(release, files):
+    """构建发布文案。返回 (full_text, caption)：
+    full_text 用于无可上传文件时的普通消息（≤4096）；
+    caption 用于随图片/相册发送（≤1024），正文按剩余预算裁剪，
+    放不下就舍弃正文保链接。"""
     name = release.get("name") or ""
     body = html.escape(dedupe_lines(release.get("body") or "").strip())
     url = release.get("url") or ""
 
+    # 只为超过 50MB 传不了的文件附直链；放得下的文件本身随消息发送，不重复列链接
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     tag = os.environ.get("GITHUB_REF_NAME", "")
-
-    files_dir = Path(args.files_dir)
-    files = sorted(p for p in (files_dir.glob("*") if files_dir.is_dir() else []) if p.is_file())
-
-    # 只为超过 50MB 传不了的文件附直链；放得下的文件本身随消息发送，不再重复列链接
     link_base = f"https://github.com/{repo}/releases/download/{tag}/" if repo and tag else ""
     links = ""
     for p in files:
@@ -153,20 +166,13 @@ def main():
         links += f'<a href="{link_base}{p.name}">{html.escape(p.name)}</a>（过大未上传）\n'
     links_str = ("\n<b>产物下载：</b>\n" + links) if links else ""
 
-    bot = TgBot(token)
+    text = f"<b>{html.escape(name)}</b> 已发布\n{INTRO}\n"
+    if body:
+        text += f"<pre>{truncate(body, 2000)}</pre>\n"
+    if url:
+        text += f'<a href="{url}">Release 页面</a>\n'
+    text += links_str
 
-    # 没有可上传文件时用普通消息发完整说明
-    if not [p for p in files if p.stat().st_size <= MAX_UPLOAD]:
-        text = f"<b>{html.escape(name)}</b> 已发布\n{INTRO}\n"
-        if body:
-            text += f"<pre>{truncate(body, 2000)}</pre>\n"
-        if url:
-            text += f'<a href="{url}">Release 页面</a>\n'
-        text += links_str
-        return 0 if bot.send_message(chat_id, truncate(text, 4000)).get("ok") else 1
-
-    # 有产物：介绍与产物合并为一条消息，说明文字放 caption（上限 1024）。
-    # 正文按剩余预算裁剪，放不下就舍弃正文保链接。
     caption = f"<b>{html.escape(name)}</b> 已发布\n{INTRO}\n"
     if url:
         caption += f'<a href="{url}">Release 页面</a>\n'
@@ -175,28 +181,80 @@ def main():
         if budget > 30:
             caption += f"<pre>{truncate(body, budget)}</pre>\n"
     caption = truncate(caption + links_str, CAPTION_LIMIT)
+    return truncate(text, 4000), caption
 
-    # 上传放得下的文件；超过 50MB 的 Bot API 传不了，链接里已标注
-    upload = [p for p in files if p.stat().st_size <= MAX_UPLOAD]
+def send_release(bot: TgBot, chat_id, release, files, icon=None) -> bool:
+    """发送发布通知。返回是否全部成功。
 
-    # 图标放正文里：Bot API 相册不能混图片和文件，拆成两条消息——
-    # 先发「图标图片 + 正文 caption」（正文在图标下方、产物之前），
-    # 再发产物相册。发图失败则退回旧行为：正文挂相册最后一个文件
-    icon = Path(args.icon) if args.icon else None
+    - 无可上传文件：发一条普通消息（完整正文 + 直链）
+    - 有产物：先发「图标图片 + 正文 caption」（正文在图标下方、产物之前），
+      再发产物相册/文件。Bot API 相册不能混图片和文件，只能拆两条；
+      发图失败退回：正文 caption 挂相册最后一个文件（产物在前、正文垫底）
+    """
+    full_text, caption = build_release_texts(release, files)
+    upload = sorted((p for p in files if p.stat().st_size <= MAX_UPLOAD),
+                    key=lambda p: p.name)
+    if not upload:
+        return bot.send_message(chat_id, full_text).get("ok")
+
     album_caption = caption
-    if icon and icon.is_file():
-        if bot.send_photo(chat_id, icon, caption=caption).get("ok"):
+    if icon and Path(icon).is_file():
+        if bot.send_photo(chat_id, Path(icon), caption=caption).get("ok"):
             album_caption = None
 
-    if len(upload) == 1:
-        return 0 if bot.send_document(chat_id, upload[0], caption=album_caption).get("ok") else 1
-
     ok = True
-    for i in range(0, len(upload), GROUP_LIMIT):
-        res = bot.send_media_group(
-            chat_id, upload[i: i + GROUP_LIMIT], caption=album_caption if i == 0 else None)
-        ok = ok and res.get("ok")
-    return 0 if ok else 1
+    if len(upload) == 1:
+        ok = bot.send_document(chat_id, upload[0], caption=album_caption).get("ok")
+    else:
+        for i in range(0, len(upload), GROUP_LIMIT):
+            res = bot.send_media_group(
+                chat_id, upload[i: i + GROUP_LIMIT],
+                caption=album_caption if i == 0 else None)
+            ok = ok and res.get("ok")
+    return ok
+
+def test_send_notification():
+    """临时联调，与 main 流程一致，仅输入不同。运行：pytest scripts/tg_release_notify.py
+
+    前提：scripts/.tg_test.env 配好 TG_BOT_TOKEN / TG_TEST_CHAT_ID（不入库）。
+    需要调整测试场景时直接改本函数内的假数据即可。
+    """
+    import pytest  # 仅测试路径使用，避免运行时强依赖
+
+    load_test_env()
+    token = os.environ.get("TG_BOT_TOKEN", "")
+    chat_id = os.environ.get("TG_TEST_CHAT_ID", "")
+    if not token or not chat_id:
+        pytest.skip("scripts/.tg_test.env 缺少 TG_BOT_TOKEN / TG_TEST_CHAT_ID")
+
+    release = {
+        "name": "vTEST",
+        "body": "**Full Changelog**: https://github.com/Mingyueyixi/FireAdb/commits/vTEST\n"
+                "**Full Changelog**: https://github.com/Mingyueyixi/FireAdb/commits/vTEST\n"
+                "### Features\n- 测试正文去重：上一行只应出现一次\n- 测试 HTML 转义：<b>加粗</b>",
+        "url": "https://example.com/release",
+    }
+    tmp = Path(tempfile.mkdtemp(prefix="tg_notify_test_"))
+    files = []
+    for name in ("fireadb-android-vTEST.apk", "fireadb-windows-vTEST.zip"):
+        p = tmp / name
+        p.write_bytes(b"FireAdb TG notify test file\n")
+        files.append(p)
+
+    assert send_release(TgBot(token), chat_id, release, files, ICON_PATH)
+
+def main():
+    token = os.environ.get("TG_BOT_TOKEN", "")
+    chat_id = os.environ.get("TG_CHAT_ID", "")
+    if not token or not chat_id:
+        print("missing TG_BOT_TOKEN / TG_CHAT_ID")
+        return 1
+
+    release = json.loads(read_file(RELEASE_JSON).decode("utf-8"))
+    files = [p for p in (ASSETS_DIR.glob("*") if ASSETS_DIR.is_dir() else []) if p.is_file()]
+
+    bot = TgBot(token)
+    return 0 if send_release(bot, chat_id, release, files, ICON_PATH) else 1
 
 
 if __name__ == "__main__":
