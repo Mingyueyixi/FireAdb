@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:fireadb/apps/data/source/fire_app_service.dart';
+import 'package:fireadb/appservice/fire_app_service.dart';
 import 'package:fireadb/capture/data/capture_paths.dart';
 import 'package:fireadb/capture/data/capture_store.dart';
 import 'package:fireadb/capture/data/local_opener.dart';

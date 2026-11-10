@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:fireadb/apps/data/bean/installed_app.dart';
-import 'package:fireadb/apps/data/source/fire_app_service.dart';
+import 'package:fireadb/appservice/fire_app_service.dart';
+import 'package:fireadb/appservice/protocol/fire_app_message.dart';
 import 'package:fireadb/apps/loader/app_display_loader.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -25,74 +26,90 @@ void main() {
     );
   });
 
-  test('分片到达时仍能解析名称和图标帧', () {
-    final bytes =
-        (BytesBuilder()
-              ..add(_header(fireAppFrameReady))
-              ..add(_label('com.example.app', '示例应用'))
-              ..add(_header(fireAppFrameLabelsDone))
-              ..add(_icon('com.example.app', <int>[1, 2, 3, 4])))
-            .takeBytes();
-    final reader = FireAppFrameReader();
-    final frames = <FireAppFrame>[];
-    for (final byte in bytes) {
-      frames.addAll(reader.add(<int>[byte]));
-    }
-    expect(frames[0], isA<FireAppReady>());
-    final label = frames[1] as FireAppLabel;
-    expect(label.packageName, 'com.example.app');
-    expect(label.label, '示例应用');
-    expect(frames[2], isA<FireAppLabelsDone>());
+  test('hello 的 JSON 正文是 16 字节，头和正文用冒号分开', () {
+    final response = FireDataResponse.json(
+      name: 'clipboard.data',
+      id: 1,
+      body: <String, String>{'text': 'hello'},
+    );
+    final bytes = response.bytes;
     expect(
-      FireAppFrameReader().add(_header(fireAppFrameCatalogDone)).single,
-      isA<FireAppCatalogDone>(),
+      ascii.decode(bytes),
+      'clipboard.data json 1 16:{"text":"hello"}',
     );
-    final icon = frames[3] as FireAppIcon;
-    expect(icon.png, <int>[1, 2, 3, 4]);
+    expect(response.display, 'clipboard.data json 1 16:{"text":"hello"}');
+    expect(
+      FireDataRequest.none(name: 'clipboard.get', id: 1).display,
+      'clipboard.get none 1 0:',
+    );
   });
 
-  test('SHOW 帧带上版本和标记', () {
-    final frames = FireAppFrameReader().add(
-      _show(
-        packageName: 'com.example.app',
-        label: '示例',
-        versionName: '1.2.3',
-        versionCode: 12,
-        flags: fireAppFlagSystem | fireAppFlagSuspended | fireAppFlagDebug,
-        png: const <int>[9],
-        dataDir: '/data/user/0/com.example.app',
-        cacheDir: '/data/user/0/com.example.app/cache',
-        externalDir: '/sdcard/Android/data/com.example.app',
-      ),
-    );
-    final shown = frames.single as FireAppShow;
-    expect(shown.packageName, 'com.example.app');
-    expect(shown.label, '示例');
-    expect(shown.versionName, '1.2.3');
-    expect(shown.versionCode, 12);
-    expect(shown.isSystem, isTrue);
-    expect(shown.isSuspended, isTrue);
-    expect(shown.isDisabledUser, isFalse);
-    expect(shown.isDebuggable, isTrue);
-    expect(shown.png, <int>[9]);
-    expect(shown.dataDir, '/data/user/0/com.example.app');
-    expect(shown.cacheDir, '/data/user/0/com.example.app/cache');
-    expect(shown.externalDir, '/sdcard/Android/data/com.example.app');
+  test('分片到达时仍能解析，正文里的冒号和换行不算下一条', () {
+    final clip = jsonEncode(<String, String>{
+      'text': '剪贴板内容 line2\n中文:ok',
+    });
+    final bytes = Uint8List.fromList(<int>[
+      ...FireDataResponse.text(name: 'session.ready', id: 0, body: '1').bytes,
+      ...FireDataResponse.json(
+        name: 'clipboard.data',
+        id: 1,
+        body: jsonDecode(clip) as Map<String, dynamic>,
+      ).bytes,
+      ...FireDataResponse.none(name: 'clipboard.ok', id: 1).bytes,
+      ...FireDataResponse.text(name: 'session.error', id: 1, body: '未知命令').bytes,
+    ]);
+    final reader = FireDataResponseReader();
+    final messages = <FireDataResponse>[];
+    for (final byte in bytes) {
+      messages.addAll(reader.add(<int>[byte]));
+    }
+    expect(messages, hasLength(4));
+    expect(messages[0].name, 'session.ready');
+    expect(messages[0].text, '1');
+    expect(messages[1].name, 'clipboard.data');
+    expect(jsonDecode(messages[1].text)['text'], '剪贴板内容 line2\n中文:ok');
+    expect(messages[2].name, 'clipboard.ok');
+    expect(messages[2].type, 'none');
+    expect(messages[2].body, isEmpty);
+    expect(utf8.encode('未知命令'), hasLength(12));
+    expect(messages[3].text, '未知命令');
+    expect(reader.pendingBytes, 0);
   });
 
-  test('LIST 帧带上名称、版本和 Debug 标记', () {
-    final frames = FireAppFrameReader().add(
-      _summary(
-        packageName: 'com.example.app',
-        label: '示例',
-        versionName: '1.2.3',
-        versionCode: 12,
-        flags: fireAppFlagDebug,
-        apkPath: '/data/app/com.example.app/base.apk',
-        sizeBytes: 4096,
-      ),
-    );
-    final summary = frames.single as FireAppSummary;
+  test('头没到冒号时先等着', () {
+    final bytes = FireDataResponse.json(
+      name: 'clipboard.data',
+      id: 1,
+      body: <String, String>{'text': 'hello clipboard'},
+    ).bytes;
+    final reader = FireDataResponseReader();
+    expect(reader.add(bytes.sublist(0, 12)), isEmpty);
+    final message = reader.add(bytes.sublist(12)).single;
+    expect(jsonDecode(message.text)['text'], 'hello clipboard');
+  });
+
+  test('catalog.app 解析出名称、版本、标记和体积', () {
+    final message = FireDataResponseReader()
+        .add(
+          FireDataResponse.json(
+            name: 'catalog.app',
+            id: 4,
+            body: <String, Object>{
+              'package': 'com.example.app',
+              'label': '示例',
+              'versionName': '1.2.3',
+              'versionCode': 12,
+              'system': false,
+              'disabled': false,
+              'suspended': false,
+              'debuggable': true,
+              'apk': <String>['/data/app/com.example.app/base.apk'],
+              'size': 4096,
+            },
+          ).bytes,
+        )
+        .single;
+    final summary = fireAppSummaryFromJson(_json(message));
     expect(summary.label, '示例');
     expect(summary.versionName, '1.2.3');
     expect(summary.versionCode, 12);
@@ -111,159 +128,107 @@ void main() {
     expect(app.sizeBytes, 4096);
   });
 
-  test('版本号为 -1 时没有版本', () {
-    final frames = FireAppFrameReader().add(
-      _show(
-        packageName: 'com.example.app',
-        label: '',
-        versionName: '',
-        versionCode: -1,
-        flags: 0,
-        png: const <int>[],
-      ),
+  test('没有版本号、体积为 0、空图标时对应字段为空', () {
+    final shown = fireAppShowFromJson(
+      <String, Object>{
+        'package': 'com.example.app',
+        'label': '',
+        'versionName': '',
+        'system': true,
+        'disabled': false,
+        'suspended': true,
+        'debuggable': true,
+        'apk': <String>[],
+        'size': 0,
+        'dataDir': '/data/user/0/com.example.app',
+        'cacheDir': '/data/user/0/com.example.app/cache',
+        'externalDir': '/sdcard/Android/data/com.example.app',
+      },
+      png: Uint8List(0),
     );
-    final shown = frames.single as FireAppShow;
     expect(shown.versionCode, isNull);
     expect(shown.png, isNull);
+    expect(shown.isSystem, isTrue);
+    expect(shown.isSuspended, isTrue);
+    expect(shown.isDisabledUser, isFalse);
+    expect(shown.isDebuggable, isTrue);
+    expect(shown.dataDir, '/data/user/0/com.example.app');
+    expect(shown.cacheDir, '/data/user/0/com.example.app/cache');
+    expect(shown.externalDir, '/sdcard/Android/data/com.example.app');
   });
 
-  test('图标长度为 0 时没有 png', () {
-    final frames = FireAppFrameReader().add(
-      _icon('com.android.settings', const <int>[]),
-    );
-    final icon = frames.single as FireAppIcon;
-    expect(icon.packageName, 'com.android.settings');
-    expect(icon.png, isNull);
+  test('列表先到应用，再按包补名称，最后 session.done', () {
+    final bytes = Uint8List.fromList(<int>[
+      ...FireDataResponse.json(
+        name: 'catalog.app',
+        id: 4,
+        body: _app(label: ''),
+      ).bytes,
+      ...FireDataResponse.json(
+        name: 'catalog.app',
+        id: 4,
+        body: _app(label: '设置'),
+      ).bytes,
+      ...FireDataResponse.text(name: 'session.done', id: 4, body: 'ok').bytes,
+    ]);
+    final messages = FireDataResponseReader().add(bytes);
+    expect(messages.map((message) => message.name), <String>[
+      'catalog.app',
+      'catalog.app',
+      'session.done',
+    ]);
+    expect(fireAppSummaryFromJson(_json(messages[0])).label, isEmpty);
+    expect(fireAppSummaryFromJson(_json(messages[1])).label, '设置');
+    expect(messages[2].text, 'ok');
   });
 
-  test('剪贴板帧解析出文本与确认', () {
-    final text = '剪贴板内容 line2\n中文 ok';
-    final builder = BytesBuilder()
-      ..add(_header(fireAppFrameClipData))
-      ..add(_string(text))
-      ..add(_header(fireAppFrameClipOk));
-    final frames = FireAppFrameReader().add(builder.takeBytes());
-    final clip = frames[0] as FireAppClipData;
-    expect(clip.text, text);
-    expect(frames[1], isA<FireAppClipOk>());
+  test('剪贴板历史是 JSON 数组，新的在前', () {
+    final message = FireDataResponseReader()
+        .add(
+          FireDataResponse.json(
+            name: 'clipboard.history',
+            id: 2,
+            body: <String, Object>{
+              'items': <String>['最新一条', 'second', '第一条\n多行'],
+            },
+          ).bytes,
+        )
+        .single;
+    expect(jsonDecode(message.text)['items'], <String>[
+      '最新一条',
+      'second',
+      '第一条\n多行',
+    ]);
   });
 
-  test('剪贴板帧分片到达仍能解析', () {
-    final builder = BytesBuilder()
-      ..add(_header(fireAppFrameClipData))
-      ..add(_string('hello clipboard'));
-    final bytes = builder.takeBytes();
-    final reader = FireAppFrameReader();
-    expect(reader.add(bytes.sublist(0, 8)), isEmpty);
-    final frames = reader.add(bytes.sublist(8));
-    expect((frames.single as FireAppClipData).text, 'hello clipboard');
-  });
-
-  test('剪贴板历史帧解析出列表', () {
-    final count = ByteData(4)..setUint32(0, 3);
-    final builder = BytesBuilder()
-      ..add(_header(fireAppFrameClipList))
-      ..add(count.buffer.asUint8List())
-      ..add(_string('最新一条'))
-      ..add(_string('second'))
-      ..add(_string('第一条\n多行'));
-    final frame =
-        FireAppFrameReader().add(builder.takeBytes()).single as FireAppClipList;
-    expect(frame.texts, <String>['最新一条', 'second', '第一条\n多行']);
-  });
-
-  test('剪贴板历史帧分片到达仍能解析', () {
-    final count = ByteData(4)..setUint32(0, 2);
-    final builder = BytesBuilder()
-      ..add(_header(fireAppFrameClipList))
-      ..add(count.buffer.asUint8List())
-      ..add(_string('alpha'))
-      ..add(_string('beta'));
-    final bytes = builder.takeBytes();
-    final reader = FireAppFrameReader();
+  test('历史消息拆成两段仍能拼上', () {
+    final bytes = FireDataResponse.json(
+      name: 'clipboard.history',
+      id: 2,
+      body: <String, Object>{
+        'items': <String>['alpha', 'beta'],
+      },
+    ).bytes;
+    final reader = FireDataResponseReader();
     expect(reader.add(bytes.sublist(0, 12)), isEmpty);
-    final frame = reader.add(bytes.sublist(12)).single as FireAppClipList;
-    expect(frame.texts, <String>['alpha', 'beta']);
+    final message = reader.add(bytes.sublist(12)).single;
+    expect(jsonDecode(message.text)['items'], <String>['alpha', 'beta']);
   });
 }
 
-Uint8List _header(int type) => Uint8List.fromList(<int>[
-  ...ascii.encode(fireAppServiceMagic),
-  fireAppServiceVersion,
-  type,
-]);
+Map<String, dynamic> _json(FireDataResponse message) => message.json;
 
-Uint8List _label(String packageName, String label) {
-  final builder = BytesBuilder()
-    ..add(_header(fireAppFrameLabel))
-    ..add(_string(packageName))
-    ..add(_string(label));
-  return builder.takeBytes();
-}
-
-Uint8List _show({
-  required String packageName,
-  required String label,
-  required String versionName,
-  required int versionCode,
-  required int flags,
-  required List<int> png,
-  String dataDir = '',
-  String cacheDir = '',
-  String externalDir = '',
-}) {
-  final version = ByteData(4)..setInt32(0, versionCode);
-  final length = ByteData(4)..setUint32(0, png.length);
-  final builder = BytesBuilder()
-    ..add(_header(fireAppFrameShow))
-    ..add(_string(packageName))
-    ..add(_string(label))
-    ..add(_string(versionName))
-    ..add(version.buffer.asUint8List())
-    ..add(<int>[flags])
-    ..add(length.buffer.asUint8List())
-    ..add(png)
-    ..add(_string(dataDir))
-    ..add(_string(cacheDir))
-    ..add(_string(externalDir));
-  return builder.takeBytes();
-}
-
-Uint8List _summary({
-  required String packageName,
-  required String label,
-  required String versionName,
-  required int versionCode,
-  required int flags,
-  String apkPath = '',
-  int sizeBytes = 0,
-}) {
-  final version = ByteData(4)..setInt32(0, versionCode);
-  final size = ByteData(8)..setUint64(0, sizeBytes);
-  final builder = BytesBuilder()
-    ..add(_header(fireAppFrameApp))
-    ..add(_string(packageName))
-    ..add(_string(label))
-    ..add(_string(versionName))
-    ..add(version.buffer.asUint8List())
-    ..add(<int>[flags])
-    ..add(_string(apkPath))
-    ..add(size.buffer.asUint8List());
-  return builder.takeBytes();
-}
-
-Uint8List _icon(String packageName, List<int> png) {
-  final length = ByteData(4)..setUint32(0, png.length);
-  final builder = BytesBuilder()
-    ..add(_header(fireAppFrameIcon))
-    ..add(_string(packageName))
-    ..add(length.buffer.asUint8List())
-    ..add(png);
-  return builder.takeBytes();
-}
-
-Uint8List _string(String value) {
-  final utf = utf8.encode(value);
-  final length = ByteData(2)..setUint16(0, utf.length);
-  return Uint8List.fromList(<int>[...length.buffer.asUint8List(), ...utf]);
+Map<String, Object> _app({required String label}) {
+  return <String, Object>{
+    'package': 'com.android.settings',
+    'label': label,
+    'versionName': '14',
+    'versionCode': 34,
+    'system': true,
+    'disabled': false,
+    'suspended': false,
+    'debuggable': false,
+    'apk': <String>['/system/priv-app/Settings/Settings.apk'],
+    'size': 12345678,
+  };
 }

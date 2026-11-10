@@ -14,7 +14,7 @@ import '../../widgets/system_navigation_padding.dart';
 import '../apps_controller.dart';
 import '../data/bean/installed_app.dart';
 import '../data/source/app_inventory.dart';
-import '../data/source/fire_app_service.dart';
+import '../../appservice/fire_app_service.dart';
 import '../loader/app_display_loader.dart';
 import 'app_data_page.dart';
 import 'app_task_view.dart';

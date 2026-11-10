@@ -12,7 +12,7 @@ import 'data/bean/installed_app.dart';
 import 'data/repo/device_app_repository.dart';
 import 'data/source/app_freeze_settings.dart';
 import 'data/source/app_inventory.dart';
-import 'data/source/fire_app_service.dart';
+import '../appservice/fire_app_service.dart';
 import 'loader/app_display_loader.dart';
 
 /// 一次操作结束后给界面看的提示。

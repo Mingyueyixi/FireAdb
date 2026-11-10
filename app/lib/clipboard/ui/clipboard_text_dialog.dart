@@ -8,23 +8,63 @@ Future<String?> promptClipboardText(
   BuildContext context, {
   required String title,
   String preset = '',
-}) async {
-  final l10n = context.l10n;
-  final field = TextEditingController(text: preset);
-  final formKey = GlobalKey<FormState>();
-  final result = await showDialog<String>(
+}) {
+  return showDialog<String>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(title),
+    builder: (dialogContext) => _ClipboardTextDialog(
+      title: title,
+      preset: preset,
+    ),
+  );
+}
+
+/// 控制器跟着对话框的 State 走。`showDialog` 在弹出动画结束前就返回，
+/// 那时输入框还在树上，不能提前 dispose。
+class _ClipboardTextDialog extends StatefulWidget {
+  const _ClipboardTextDialog({required this.title, required this.preset});
+
+  final String title;
+  final String preset;
+
+  @override
+  State<_ClipboardTextDialog> createState() => _ClipboardTextDialogState();
+}
+
+class _ClipboardTextDialogState extends State<_ClipboardTextDialog> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  late final TextEditingController _field;
+
+  @override
+  void initState() {
+    super.initState();
+    _field = TextEditingController(text: widget.preset);
+  }
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_formKey.currentState?.validate() ?? false) {
+      Navigator.of(context).pop(_field.text);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return AlertDialog(
+      title: Text(widget.title),
       content: Form(
-        key: formKey,
+        key: _formKey,
         child: TextFormField(
-          controller: field,
+          controller: _field,
           autofocus: true,
           maxLines: 6,
           minLines: 3,
-          validator: (value) =>
-              (value == null || value.trim().isEmpty)
+          validator: (value) => (value == null || value.trim().isEmpty)
               ? l10n.clipboardSendTextEmpty
               : null,
           decoration: InputDecoration(
@@ -35,20 +75,14 @@ Future<String?> promptClipboardText(
       ),
       actions: <Widget>[
         TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: Text(MaterialLocalizations.of(dialogContext).cancelButtonLabel),
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
         ),
         FilledButton(
-          onPressed: () {
-            if (formKey.currentState?.validate() ?? false) {
-              Navigator.of(dialogContext).pop(field.text);
-            }
-          },
+          onPressed: _submit,
           child: Text(l10n.clipboardSend),
         ),
       ],
-    ),
-  );
-  field.dispose();
-  return result;
+    );
+  }
 }

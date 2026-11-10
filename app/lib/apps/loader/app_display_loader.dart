@@ -6,7 +6,7 @@ import '../../connection/model/connected_device.dart';
 import '../../log/app_log.dart';
 import '../data/bean/installed_app.dart';
 import '../data/repo/device_app_repository.dart';
-import '../data/source/fire_app_service.dart';
+import '../../appservice/fire_app_service.dart';
 
 /// 图标和体积在行显示出来之后再取。名称、版本和 Debug 标记来自列表。
 class AppDisplay {

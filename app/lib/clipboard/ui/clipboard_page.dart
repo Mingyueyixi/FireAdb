@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
-import '../../apps/data/source/fire_app_service.dart';
+import '../../appservice/fire_app_service.dart';
 import '../../connection/connection_manager.dart';
 import '../../l10n/fireadb_localizations_ext.dart';
 import '../../log/app_log.dart';

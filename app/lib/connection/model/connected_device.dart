@@ -116,7 +116,7 @@ class ConnectedDevice {
     return properties;
   }
 
-  /// 打开一条可读写的 `exec:`。没有终端，适合来回传输二进制帧。
+  /// 打开一条可读写的 `exec:`。没有终端，字节原样来回传。
   Future<ConnectedShell> openExec(String command) async {
     final device = _device;
     if (device != null) {

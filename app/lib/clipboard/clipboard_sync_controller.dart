@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
-import '../apps/data/source/fire_app_service.dart';
+import '../appservice/fire_app_service.dart';
 import '../connection/connection_manager.dart';
 import '../log/app_log.dart';
 import '../settings/app_settings_store.dart';

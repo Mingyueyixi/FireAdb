@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:get/get.dart';
 
-import '../apps/data/source/fire_app_service.dart';
+import '../appservice/fire_app_service.dart';
 import '../connection/connection_manager.dart';
 import '../connection/model/connected_device.dart';
 import '../files/data/source/remote_file_commands.dart';
