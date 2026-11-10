@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:characters/characters.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
@@ -24,7 +25,8 @@ class ClipOffer {
 
   String get preview {
     final compact = text.replaceAll('\n', ' ').trim();
-    return compact.length <= 60 ? compact : '${compact.substring(0, 60)}…';
+    final chars = compact.characters;
+    return chars.length <= 60 ? compact : '${chars.take(60)}…';
   }
 }
 
@@ -34,9 +36,9 @@ class ClipOffer {
 /// 等用户确认，不直接覆盖本机剪贴板。
 /// 方向二：FireAdb → 设备。只在用户显式操作时发送（单发或群发）。
 ///
-/// 多设备策略：不同设备的推送各自排队、互不覆盖；PC 写入设备后由
-/// 回声抑制（内容指纹 + 15 秒窗口，加上设备侧跳过同内容）丢弃设备
-/// WATCH 的回推，避免把自己发的内容再弹一次确认。
+/// 多设备策略：不同设备的推送各自排队、互不覆盖。写入设备的剪贴板
+/// label 为 FireAdb，设备见到这个标记就不再回推。桌面再留 15 秒内容
+/// 指纹，系统把 label 清掉时仍能挡住这一次回声。
 class ClipboardSyncController extends GetxController {
   ConnectionManager get manager => Get.find<ConnectionManager>();
   AppSettingsStore get _settings => Get.find<AppSettingsStore>();

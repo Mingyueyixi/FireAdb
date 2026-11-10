@@ -182,6 +182,17 @@ void main() {
     expect(messages[2].text, 'ok');
   });
 
+  test('剪贴板 JSON 保留 emoji', () {
+    const text = '你好 😀\n家族👨‍👩‍👧‍👦';
+    final bytes = FireDataRequest.json(
+      name: 'clipboard.set',
+      id: 3,
+      body: <String, String>{'text': text},
+    ).bytes;
+    final message = FireDataResponseReader().add(bytes).single;
+    expect(message.json['text'], text);
+  });
+
   test('剪贴板历史是 JSON 数组，新的在前', () {
     final message = FireDataResponseReader()
         .add(

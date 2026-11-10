@@ -32,6 +32,8 @@ public final class ClipboardProtocol implements CommandHandler {
     private static final String TAG = "FireAdb";
     private static final int HISTORY_MAX = 20;
     private static final String HISTORY_PATH = "/data/local/tmp/fire-adb-clip-history.json";
+    /** 本进程写入的剪贴板标记。监听时见到它就不再回推。 */
+    private static final String CLIP_LABEL = "FireAdb";
 
     private final FireDataWriter out;
     private final Context context;
@@ -40,8 +42,6 @@ public final class ClipboardProtocol implements CommandHandler {
             this::onClipChanged;
 
     private ClipboardManager clipboardManager;
-    /** 最近一次 clipboard.set 写入的内容。监听回推时跳过，避免桌面端回声。 */
-    private String lastSet = "";
     /** 命令线程写、主线程读。注册监听之前置位。 */
     private volatile boolean watching;
 
@@ -116,7 +116,7 @@ public final class ClipboardProtocol implements CommandHandler {
 
     private void handleGet(int id) {
         try {
-            out.send(FireDataResponse.json("clipboard.data", id, textJson(clipText(clipboard()))));
+            out.send(FireDataResponse.json("clipboard.data", id, textJson(clipText())));
         } catch (Throwable error) {
             out.sendQuiet(FireDataResponse.error(id, String.valueOf(error.getMessage())));
         }
@@ -125,7 +125,7 @@ public final class ClipboardProtocol implements CommandHandler {
     private void handleHistory(int id) {
         try {
             // WATCH 关着时，只有这里能把当前剪贴板纳入历史。
-            remember(clipText(clipboard()));
+            remember(clipText());
             String[] items;
             synchronized (history) {
                 items = history.toArray(new String[0]);
@@ -145,8 +145,7 @@ public final class ClipboardProtocol implements CommandHandler {
     private void handleSet(FireDataRequest request) {
         try {
             String text = request.json().optString("text", "");
-            clipboard().setPrimaryClip(ClipData.newPlainText("FireAdb", text));
-            lastSet = text;
+            clipboard().setPrimaryClip(ClipData.newPlainText(CLIP_LABEL, text));
             remember(text);
             out.send(FireDataResponse.none("clipboard.ok", request.id));
         } catch (Throwable error) {
@@ -174,15 +173,32 @@ public final class ClipboardProtocol implements CommandHandler {
         }
     }
 
-    /** 剪贴板变化回调（主 Looper）。与本机刚写入的内容相同时跳过。 */
+    /** 剪贴板变化回调（主 Looper）。label 是本进程写入的标记时不回推。 */
     private void onClipChanged() {
         try {
-            String text = clipText(clipboard());
-            if (watching && !text.equals(lastSet)) {
-                remember(text);
-                out.send(FireDataResponse.json("clipboard.event", 0, textJson(text)));
+            if (!watching || writtenByUs()) {
+                return;
             }
+            String text = clipText();
+            if (text.length() == 0) {
+                return;
+            }
+            remember(text);
+            out.send(FireDataResponse.json("clipboard.event", 0, textJson(text)));
         } catch (Throwable ignored) {
+        }
+    }
+
+    private boolean writtenByUs() {
+        try {
+            ClipData clip = clipboard().getPrimaryClip();
+            if (clip == null) {
+                return false;
+            }
+            CharSequence label = clip.getDescription().getLabel();
+            return label != null && CLIP_LABEL.contentEquals(label);
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -204,17 +220,31 @@ public final class ClipboardProtocol implements CommandHandler {
         return clipboardManager;
     }
 
-    private static String clipText(ClipboardManager clips) {
+    /**
+     * 取出剪贴板上的文本。{@link ClipData.Item#coerceToText} 得到的是原文，
+     * emoji 以 UTF-16 代理对留在字符串里，随消息正文按 UTF-8 传出。
+     */
+    private String clipText() {
         try {
+            ClipboardManager clips = clipboard();
             if (!clips.hasPrimaryClip()) {
                 return "";
             }
             ClipData clip = clips.getPrimaryClip();
-            if (clip == null || clip.getItemCount() == 0) {
+            if (clip == null) {
                 return "";
             }
-            CharSequence text = clip.getItemAt(0).getText();
-            return text == null ? "" : text.toString();
+            for (int i = 0; i < clip.getItemCount(); i++) {
+                CharSequence value = clip.getItemAt(i).coerceToText(context);
+                if (value == null) {
+                    continue;
+                }
+                String text = value.toString();
+                if (text.length() > 0) {
+                    return text;
+                }
+            }
+            return "";
         } catch (Throwable ignored) {
             return "";
         }
