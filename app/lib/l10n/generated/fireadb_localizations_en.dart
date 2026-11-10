@@ -1533,4 +1533,91 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get deviceSuFailed => 'su did not get root';
+
+  @override
+  String get homeSendClipboardToDevices => 'Send text to all devices';
+
+  @override
+  String homeClipboardSendDone(int ok) {
+    return 'Sent to $ok device(s)';
+  }
+
+  @override
+  String homeClipboardSendPartial(int ok, int failed) {
+    return 'Sent to $ok device(s), $failed failed';
+  }
+
+  @override
+  String homeClipboardSendFailed(Object error) {
+    return 'Sending clipboard failed: $error';
+  }
+
+  @override
+  String clipboardOfferTitle(Object device) {
+    return 'New clipboard from $device';
+  }
+
+  @override
+  String get clipboardOfferCopy => 'Copy';
+
+  @override
+  String get clipboardOfferIgnore => 'Ignore';
+
+  @override
+  String get workspaceClipboardTitle => 'Clipboard';
+
+  @override
+  String get workspaceClipboardDescription =>
+      'Exchange clipboard content between this machine and the device';
+
+  @override
+  String get clipboardWatchTitle => 'Sync clipboard to FireAdb';
+
+  @override
+  String get clipboardWatchSubtitle =>
+      'New device clipboard is pushed to FireAdb and copied only after you confirm';
+
+  @override
+  String get clipboardSendToDevice => 'Send text to the device';
+
+  @override
+  String get clipboardReadFromDevice => 'View device clipboard';
+
+  @override
+  String get clipboardReadEmpty =>
+      'No records yet — copy something on the device and it will appear here';
+
+  @override
+  String get clipboardReadDone => 'Copied to local clipboard';
+
+  @override
+  String get clipboardSendDone => 'Written to the device clipboard';
+
+  @override
+  String get clipboardDeviceDisconnected => 'Device not connected';
+
+  @override
+  String clipboardOperationFailed(Object error) {
+    return 'Failed: $error';
+  }
+
+  @override
+  String clipboardWatchFailed(Object error) {
+    return 'Toggling clipboard sync failed: $error';
+  }
+
+  @override
+  String get clipboardSendTextTitle => 'Send text to device';
+
+  @override
+  String get clipboardSendTextHint => 'Enter text to send';
+
+  @override
+  String get clipboardSendTextEmpty => 'Content is empty';
+
+  @override
+  String get clipboardSend => 'Send';
+
+  @override
+  String get clipboardHistoryTitle => 'Device clipboard';
 }

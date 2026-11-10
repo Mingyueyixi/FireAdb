@@ -11,6 +11,7 @@ class AppSettingsStore extends GetxController {
   static const String autoRefreshDevicesKey = 'autoRefreshDevices';
   static const String autoRefreshIntervalKey = 'autoRefreshIntervalSeconds';
   static const String refreshInBackgroundKey = 'refreshInBackground';
+  static const String clipboardSyncOffKey = 'clipboardSyncOffDevices';
   static const String logBufferKbKey = 'logBufferKb';
   static const String logRetentionDaysKey = 'logRetentionDays';
   static const int defaultAutoRefreshSeconds = 3;
@@ -28,6 +29,9 @@ class AppSettingsStore extends GetxController {
 
   /// 默认关闭：连接页不在前台，或应用进入后台时，不自动刷新。
   final RxBool refreshInBackground = false.obs;
+
+  /// 关闭「剪贴板同步到 FireAdb」的设备 serial。清单里没有的默认开启。
+  final RxList<String> clipboardSyncOffDevices = <String>[].obs;
   final RxInt autoRefreshIntervalSeconds = defaultAutoRefreshSeconds.obs;
   final RxInt logBufferKb = defaultLogBufferKb.obs;
   final RxInt logRetentionDays = defaultLogRetentionDays.obs;
@@ -41,6 +45,9 @@ class AppSettingsStore extends GetxController {
         preferences.getBool(autoRefreshDevicesKey) ?? true;
     refreshInBackground.value =
         preferences.getBool(refreshInBackgroundKey) ?? false;
+    clipboardSyncOffDevices.assignAll(
+      preferences.getStringList(clipboardSyncOffKey) ?? const <String>[],
+    );
     autoRefreshIntervalSeconds.value = _clampInterval(
       preferences.getInt(autoRefreshIntervalKey),
     );
@@ -69,6 +76,29 @@ class AppSettingsStore extends GetxController {
 
   Future<void> setRefreshInBackground(bool value) {
     return _save(refreshInBackground, refreshInBackgroundKey, value);
+  }
+
+  /// 开关某台设备的「剪贴板同步到 FireAdb」。默认开启，关闭清单才记录。
+  Future<void> setClipboardSync(String serial, bool enabled) async {
+    final previous = List<String>.of(clipboardSyncOffDevices);
+    if (enabled) {
+      clipboardSyncOffDevices.remove(serial);
+    } else if (!clipboardSyncOffDevices.contains(serial)) {
+      clipboardSyncOffDevices.add(serial);
+    }
+    try {
+      final preferences = _preferences ??= await SharedPreferences.getInstance();
+      final saved = await preferences.setStringList(
+        clipboardSyncOffKey,
+        clipboardSyncOffDevices.toList(),
+      );
+      if (!saved) {
+        throw StateError('SharedPreferences 未能保存设置');
+      }
+    } catch (_) {
+      clipboardSyncOffDevices.assignAll(previous);
+      rethrow;
+    }
   }
 
   Future<void> setAutoRefreshIntervalSeconds(int seconds) {

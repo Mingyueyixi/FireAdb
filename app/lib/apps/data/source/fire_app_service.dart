@@ -26,6 +26,9 @@ const int fireAppFrameError = 5;
 const int fireAppFrameShow = 6;
 const int fireAppFrameApp = 7;
 const int fireAppFrameCatalogDone = 8;
+const int fireAppFrameClipData = 9;
+const int fireAppFrameClipOk = 10;
+const int fireAppFrameClipList = 11;
 const int fireAppFlagSystem = 1;
 const int fireAppFlagDisabled = 2;
 const int fireAppFlagSuspended = 4;
@@ -157,6 +160,23 @@ class FireAppServiceError extends FireAppFrame {
   final String message;
 }
 
+/// 设备剪贴板文本：CLIP:GET 的应答，或 WATCH 开启后的变化推送。
+class FireAppClipData extends FireAppFrame {
+  FireAppClipData(this.text);
+
+  final String text;
+}
+
+/// CLIP:SET / CLIP:WATCH 已生效。
+class FireAppClipOk extends FireAppFrame {}
+
+/// 设备剪贴板历史（CLIP:HIST 应答），新的在前。
+class FireAppClipList extends FireAppFrame {
+  FireAppClipList(this.texts);
+
+  final List<String> texts;
+}
+
 /// 把陆续到达的字节解析成帧。数据不够时保留，下次再续。
 class FireAppFrameReader {
   final _pending = <int>[];
@@ -193,12 +213,35 @@ class FireAppFrameReader {
       case fireAppFrameReady:
       case fireAppFrameLabelsDone:
       case fireAppFrameCatalogDone:
+      case fireAppFrameClipOk:
         _pending.removeRange(0, 6);
         return switch (type) {
           fireAppFrameReady => FireAppReady(),
           fireAppFrameCatalogDone => FireAppCatalogDone(),
+          fireAppFrameClipOk => FireAppClipOk(),
           _ => FireAppLabelsDone(),
         };
+      case fireAppFrameClipData:
+        final clip = _peekString(6);
+        if (clip == null) return null;
+        _pending.removeRange(0, clip.next);
+        return FireAppClipData(clip.value);
+      case fireAppFrameClipList:
+        if (_pending.length < 10) return null;
+        final clipCount = _uint32(6);
+        if (clipCount > 1000) {
+          throw FormatException('设备剪贴板历史过大 $clipCount');
+        }
+        var clipOffset = 10;
+        final clipTexts = <String>[];
+        for (var index = 0; index < clipCount; index++) {
+          final item = _peekString(clipOffset);
+          if (item == null) return null;
+          clipTexts.add(item.value);
+          clipOffset = item.next;
+        }
+        _pending.removeRange(0, clipOffset);
+        return FireAppClipList(clipTexts);
       case fireAppFrameError:
         final message = _peekString(6);
         if (message == null) return null;
@@ -443,10 +486,38 @@ Future<FireAppShow> loadFireAppShow(
   return _hub(device).show(device, packageName);
 }
 
+/// 读取设备当前剪贴板文本（FAAS CLIP:GET）。shell uid 在 ClipboardService
+/// 里有测试豁免，走真实 ClipboardManager API，无版本事务码问题。
+Future<String> getFireAppClip(ConnectedDevice device) =>
+    _hub(device).clipGet(device);
+
+/// 把文本写入设备剪贴板（FAAS CLIP:SET，base64 编码走 stdin）。
+Future<void> setFireAppClip(ConnectedDevice device, String text) =>
+    _hub(device).clipSet(device, text);
+
+/// 读取设备剪贴板历史（FAAS CLIP:HIST），新的在前。
+/// 设备侧随复制/写入累积并落盘，最多 20 条。
+Future<List<String>> getFireAppClipHistory(ConnectedDevice device) =>
+    _hub(device).clipHistory(device);
+
+/// 开关设备剪贴板变化监听（FAAS CLIP:WATCH）。变化经
+/// [setFireAppClipListener] 推送。开启后 FAAS 进程常驻不空闲退出。
+Future<void> watchFireAppClip(ConnectedDevice device, bool on) =>
+    _hub(device).clipWatch(device, on);
+
 final _hubs = <String, _FireAppHub>{};
 
 _FireAppHub _hub(ConnectedDevice device) =>
-    _hubs.putIfAbsent(device.serial, _FireAppHub.new);
+    _hubs.putIfAbsent(device.serial, () => _FireAppHub(device.serial));
+
+/// WATCH 开启后，设备剪贴板变化从这里推送（serial, 文本）。
+typedef FireAppClipListener = void Function(String serial, String text);
+
+FireAppClipListener? _clipListener;
+
+void setFireAppClipListener(FireAppClipListener? listener) {
+  _clipListener = listener;
+}
 
 /// 设备断开时由连接层调用：关掉长活 FAAS exec，避免下次同 serial 复用死流。
 Future<void> releaseFireAppService(String serial) async {
@@ -456,6 +527,9 @@ Future<void> releaseFireAppService(String serial) async {
 }
 
 class _FireAppHub {
+  _FireAppHub(this.serial);
+
+  final String serial;
   Future<void> _chain = Future<void>.value();
   ConnectedShell? _shell;
   StreamSubscription<List<int>>? _subscription;
@@ -467,8 +541,13 @@ class _FireAppHub {
   var _listenEpoch = 0;
   Timer? _idle;
 
+  /// WATCH 开启时进程常驻，空闲不退出；CLIP:GET 应答在途时不走推送通道。
+  var _watching = false;
+  var _expectingClipData = false;
+
   Future<void> dispose() async {
     _epoch++;
+    _watching = false;
     _bumpSession();
     await _run(() => _dropShell());
   }
@@ -531,6 +610,101 @@ class _FireAppHub {
       }
     });
     return completer.future;
+  }
+
+  /// 读取设备当前剪贴板文本。
+  Future<String> clipGet(ConnectedDevice device) {
+    _bumpSession();
+    return _run(() async {
+      try {
+        await _ensureShell(device);
+        final shell = _shell;
+        if (shell == null) throw StateError('应用信息服务没有就绪');
+        _expectingClipData = true;
+        try {
+          await shell.write(utf8.encode('CLIP:GET\n'));
+          final frame = await _next().timeout(const Duration(seconds: 10));
+          if (frame is FireAppClipData) return frame.text;
+          if (frame is FireAppServiceError) {
+            throw StateError(frame.message.isEmpty ? '读取剪贴板失败' : frame.message);
+          }
+          throw StateError('剪贴板响应无效');
+        } finally {
+          _expectingClipData = false;
+        }
+      } finally {
+        _scheduleIdle();
+      }
+    });
+  }
+
+  /// 读取设备剪贴板历史。应答帧类型与 WATCH 推送（CLIP_DATA）不同，
+  /// 不需要 _expectingClipData 去重；推送帧若恰好插队会直达监听者。
+  Future<List<String>> clipHistory(ConnectedDevice device) {
+    _bumpSession();
+    return _run(() async {
+      try {
+        await _ensureShell(device);
+        final shell = _shell;
+        if (shell == null) throw StateError('应用信息服务没有就绪');
+        await shell.write(utf8.encode('CLIP:HIST\n'));
+        final frame = await _next().timeout(const Duration(seconds: 10));
+        if (frame is FireAppClipList) return frame.texts;
+        if (frame is FireAppServiceError) {
+          throw StateError(
+            frame.message.isEmpty ? '读取设备剪贴板历史失败' : frame.message,
+          );
+        }
+        throw StateError('设备剪贴板历史响应无效');
+      } finally {
+        _scheduleIdle();
+      }
+    });
+  }
+
+  /// 把文本写入设备剪贴板。内容较大时经 base64 走 stdin，无 shell 转义问题。
+  Future<void> clipSet(ConnectedDevice device, String text) {
+    _bumpSession();
+    return _run(() async {
+      try {
+        await _ensureShell(device);
+        final shell = _shell;
+        if (shell == null) throw StateError('应用信息服务没有就绪');
+        final payload = base64Encode(utf8.encode(text));
+        await shell.write(utf8.encode('CLIP:SET $payload\n'));
+        final frame = await _next().timeout(const Duration(seconds: 10));
+        if (frame is FireAppClipOk) return;
+        if (frame is FireAppServiceError) {
+          throw StateError(frame.message.isEmpty ? '写入剪贴板失败' : frame.message);
+        }
+        throw StateError('剪贴板写入响应无效');
+      } finally {
+        _scheduleIdle();
+      }
+    });
+  }
+
+  /// 开关设备剪贴板监听。开启后变化经 [setFireAppClipListener] 推送。
+  Future<void> clipWatch(ConnectedDevice device, bool on) {
+    _bumpSession();
+    return _run(() async {
+      try {
+        await _ensureShell(device);
+        final shell = _shell;
+        if (shell == null) throw StateError('应用信息服务没有就绪');
+        await shell.write(utf8.encode('CLIP:WATCH ${on ? 'ON' : 'OFF'}\n'));
+        final frame = await _next().timeout(const Duration(seconds: 10));
+        if (frame is FireAppServiceError) {
+          throw StateError(frame.message.isEmpty ? '切换剪贴板监听失败' : frame.message);
+        }
+        if (frame is! FireAppClipOk) {
+          throw StateError('剪贴板监听响应无效');
+        }
+        _watching = on;
+      } finally {
+        _scheduleIdle();
+      }
+    });
   }
 
   Future<FireAppListLoad> _listBody(
@@ -688,7 +862,19 @@ class _FireAppHub {
         final reader = _reader;
         if (reader == null) return;
         try {
-          _frames.addAll(reader.add(chunk));
+          final parsed = reader.add(chunk);
+          for (final frame in parsed) {
+            // WATCH 推送不进请求应答队列：直接交给监听者，避免
+            // 在途的 LIST/SHOW 消费到非应答帧。
+            if (frame is FireAppClipData && !_expectingClipData) {
+              final listener = _clipListener;
+              if (listener != null) {
+                listener(serial, frame.text);
+                continue;
+              }
+            }
+            _frames.add(frame);
+          }
         } catch (error, stackTrace) {
           final pending = _wait;
           if (pending != null && !pending.isCompleted) {
@@ -738,6 +924,8 @@ class _FireAppHub {
 
   void _scheduleIdle() {
     _idle?.cancel();
+    // WATCH 常驻：空闲计时器不退出进程，否则监听随进程一起消失。
+    if (_watching) return;
     final session = _session;
     _idle = Timer(const Duration(seconds: 20), () {
       unawaited(

@@ -1486,4 +1486,88 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get deviceSuFailed => 'su 没有取得 root';
+
+  @override
+  String get homeSendClipboardToDevices => '群发文本到设备';
+
+  @override
+  String homeClipboardSendDone(int ok) {
+    return '已发送到 $ok 台设备';
+  }
+
+  @override
+  String homeClipboardSendPartial(int ok, int failed) {
+    return '已发送到 $ok 台设备，$failed 台失败';
+  }
+
+  @override
+  String homeClipboardSendFailed(Object error) {
+    return '群发剪贴板失败：$error';
+  }
+
+  @override
+  String clipboardOfferTitle(Object device) {
+    return '「$device」复制了新内容';
+  }
+
+  @override
+  String get clipboardOfferCopy => '复制';
+
+  @override
+  String get clipboardOfferIgnore => '忽略';
+
+  @override
+  String get workspaceClipboardTitle => '剪贴板';
+
+  @override
+  String get workspaceClipboardDescription => '本机与设备互传剪贴板内容，可开启设备侧同步';
+
+  @override
+  String get clipboardWatchTitle => '剪贴板同步到 FireAdb';
+
+  @override
+  String get clipboardWatchSubtitle => '设备复制内容后推送到 FireAdb，确认后才进入本机剪贴板';
+
+  @override
+  String get clipboardSendToDevice => '发送文本到设备';
+
+  @override
+  String get clipboardReadFromDevice => '查看设备剪贴板';
+
+  @override
+  String get clipboardReadEmpty => '还没有记录。设备上复制内容后会出现在这里';
+
+  @override
+  String get clipboardReadDone => '已复制到本机剪贴板';
+
+  @override
+  String get clipboardSendDone => '已写入设备剪贴板';
+
+  @override
+  String get clipboardDeviceDisconnected => '设备未连接';
+
+  @override
+  String clipboardOperationFailed(Object error) {
+    return '操作失败：$error';
+  }
+
+  @override
+  String clipboardWatchFailed(Object error) {
+    return '切换剪贴板同步失败：$error';
+  }
+
+  @override
+  String get clipboardSendTextTitle => '发送文本到设备';
+
+  @override
+  String get clipboardSendTextHint => '输入要发送的文本';
+
+  @override
+  String get clipboardSendTextEmpty => '内容为空';
+
+  @override
+  String get clipboardSend => '发送';
+
+  @override
+  String get clipboardHistoryTitle => '设备剪贴板';
 }

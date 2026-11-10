@@ -2668,6 +2668,150 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'su 没有取得 root'**
   String get deviceSuFailed;
+
+  /// No description provided for @homeSendClipboardToDevices.
+  ///
+  /// In zh, this message translates to:
+  /// **'群发文本到设备'**
+  String get homeSendClipboardToDevices;
+
+  /// No description provided for @homeClipboardSendDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'已发送到 {ok} 台设备'**
+  String homeClipboardSendDone(int ok);
+
+  /// No description provided for @homeClipboardSendPartial.
+  ///
+  /// In zh, this message translates to:
+  /// **'已发送到 {ok} 台设备，{failed} 台失败'**
+  String homeClipboardSendPartial(int ok, int failed);
+
+  /// No description provided for @homeClipboardSendFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'群发剪贴板失败：{error}'**
+  String homeClipboardSendFailed(Object error);
+
+  /// No description provided for @clipboardOfferTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'「{device}」复制了新内容'**
+  String clipboardOfferTitle(Object device);
+
+  /// No description provided for @clipboardOfferCopy.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制'**
+  String get clipboardOfferCopy;
+
+  /// No description provided for @clipboardOfferIgnore.
+  ///
+  /// In zh, this message translates to:
+  /// **'忽略'**
+  String get clipboardOfferIgnore;
+
+  /// No description provided for @workspaceClipboardTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'剪贴板'**
+  String get workspaceClipboardTitle;
+
+  /// No description provided for @workspaceClipboardDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机与设备互传剪贴板内容，可开启设备侧同步'**
+  String get workspaceClipboardDescription;
+
+  /// No description provided for @clipboardWatchTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'剪贴板同步到 FireAdb'**
+  String get clipboardWatchTitle;
+
+  /// No description provided for @clipboardWatchSubtitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备复制内容后推送到 FireAdb，确认后才进入本机剪贴板'**
+  String get clipboardWatchSubtitle;
+
+  /// No description provided for @clipboardSendToDevice.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送文本到设备'**
+  String get clipboardSendToDevice;
+
+  /// No description provided for @clipboardReadFromDevice.
+  ///
+  /// In zh, this message translates to:
+  /// **'查看设备剪贴板'**
+  String get clipboardReadFromDevice;
+
+  /// No description provided for @clipboardReadEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有记录。设备上复制内容后会出现在这里'**
+  String get clipboardReadEmpty;
+
+  /// No description provided for @clipboardReadDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'已复制到本机剪贴板'**
+  String get clipboardReadDone;
+
+  /// No description provided for @clipboardSendDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'已写入设备剪贴板'**
+  String get clipboardSendDone;
+
+  /// No description provided for @clipboardDeviceDisconnected.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备未连接'**
+  String get clipboardDeviceDisconnected;
+
+  /// No description provided for @clipboardOperationFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'操作失败：{error}'**
+  String clipboardOperationFailed(Object error);
+
+  /// No description provided for @clipboardWatchFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'切换剪贴板同步失败：{error}'**
+  String clipboardWatchFailed(Object error);
+
+  /// No description provided for @clipboardSendTextTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送文本到设备'**
+  String get clipboardSendTextTitle;
+
+  /// No description provided for @clipboardSendTextHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入要发送的文本'**
+  String get clipboardSendTextHint;
+
+  /// No description provided for @clipboardSendTextEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'内容为空'**
+  String get clipboardSendTextEmpty;
+
+  /// No description provided for @clipboardSend.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送'**
+  String get clipboardSend;
+
+  /// No description provided for @clipboardHistoryTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'设备剪贴板'**
+  String get clipboardHistoryTitle;
 }
 
 class _FireAdbLocalizationsDelegate

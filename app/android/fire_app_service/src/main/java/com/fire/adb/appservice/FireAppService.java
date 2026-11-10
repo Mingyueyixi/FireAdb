@@ -1,5 +1,7 @@
 package com.fire.adb.appservice;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
@@ -10,6 +12,7 @@ import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Base64;
 import android.util.Log;
 
 import com.fire.adb.appservice.util.AndroidContexts;
@@ -36,6 +39,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <pre>
  * LIST
  * SHOW 包名
+ * CLIP:GET
+ * CLIP:SET &lt;base64 utf-8 文本&gt;
+ * CLIP:HIST
+ * CLIP:WATCH ON|OFF
  * QUIT
  * </pre>
  *
@@ -43,6 +50,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 类型 1 就绪，7 一个应用的包名、版本、标记、APK 路径和体积，8 列表已齐，
  * 2 补上应用名，3 名称结束，
  * 6 一个应用的名称、版本、标记、图标和目录，5 错误。
+ * 9 剪贴板文本（CLIP:GET 应答或 WATCH 推送），10 CLIP:SET/WATCH 已生效，
+ * 11 剪贴板历史（int32 条数 + 每条一条字符串，新的在前）。
  * 标记位：1 系统，2 已停用，4 已暂停，8 可调试。版本号为 -1 表示没有。
  * SHOW 的图标之后是数据目录、缓存目录、SD 卡目录，各一条字符串。
  */
@@ -57,6 +66,9 @@ public final class FireAppService {
     private static final int TYPE_SHOW = 6;
     private static final int TYPE_APP = 7;
     private static final int TYPE_CATALOG_DONE = 8;
+    private static final int TYPE_CLIP_DATA = 9;
+    private static final int TYPE_CLIP_OK = 10;
+    private static final int TYPE_CLIP_LIST = 11;
     private static final int FLAG_SYSTEM = 1;
     private static final int FLAG_DISABLED = 2;
     private static final int FLAG_SUSPENDED = 4;
@@ -65,6 +77,20 @@ public final class FireAppService {
 
     private static byte[] defaultIconPng = new byte[0];
     private static boolean defaultIconLoaded;
+
+    /** 帧输出锁：命令线程和剪贴板回调（主 Looper）都会写 stdout。 */
+    private static final Object OUT_LOCK = new Object();
+    private static ClipboardManager sClipboard;
+    /** 最近一次 CLIP:SET 写入的内容。监听回推时跳过，避免 PC 侧回声。 */
+    private static String sLastSet = "";
+    private static boolean sWatching;
+
+    /** 设备剪贴板历史（新的在前）。Android 只有当前一条，历史自己记并落盘。 */
+    private static final int CLIP_HISTORY_MAX = 20;
+    private static final String CLIP_HISTORY_PATH =
+            "/data/local/tmp/fire-adb-clip-history.json";
+    private static final java.util.ArrayDeque<String> sHistory =
+            new java.util.ArrayDeque<String>();
 
     private FireAppService() {}
 
@@ -102,6 +128,7 @@ public final class FireAppService {
         Context context = AndroidContexts.system();
         PackageManager manager = context.getPackageManager();
         Map<String, PackageInfo> byPackage = new HashMap<String, PackageInfo>();
+        loadClipHistory();
         writeHeader(out, TYPE_READY);
         out.flush();
 
@@ -114,6 +141,43 @@ public final class FireAppService {
             return;
         }
 
+        // stdin 命令挪到工作线程，主线程进 Looper：ClipboardManager 的变化
+        // 回调（注册时落在主线程 Handler 上）只有主线程在 loop() 里才派发。
+        // 命令应答与回调推送都写 stdout，帧完整性由 OUT_LOCK 保证。
+        // 注意：prepareMainLooper 建的队列 mQuitAllowed=false，quitSafely()
+        // 会抛 "Main thread not allowed to quit."——主 Looper 退不掉，命令
+        // 线程结束时直接 System.exit 终止进程（主线程停在 loop() 里没有
+        // 其他退出途径）。
+        Thread commands = new Thread(
+                () -> {
+                    try {
+                        readCommands(out, context, manager, byPackage);
+                    } catch (Throwable error) {
+                        Log.w(ICON_LOG_TAG, "命令循环退出", error);
+                        writeErrorQuiet(out, String.valueOf(error.getMessage()));
+                    } finally {
+                        try {
+                            out.flush();
+                        } catch (Throwable ignored) {
+                        }
+                        System.exit(0);
+                    }
+                },
+                "fire-app-commands");
+        commands.start();
+        Looper.loop();
+    }
+
+    private static void readCommands(
+            DataOutputStream out,
+            Context context,
+            PackageManager manager,
+            Map<String, PackageInfo> byPackage) throws Exception {
+        // 剪贴板必须用 shell 包名上下文：ClipboardService 会校验调用包名与
+        // uid 匹配，system context 的包名 "android" 属于 uid 1000，会被直接
+        // 拒绝（"Package android does not belong to 2000"）。伪装成
+        // com.android.shell 后与 shell uid (2000) 匹配，命中系统的测试豁免。
+        Context clipContext = new ShellContext(context);
         BufferedReader input = new BufferedReader(
                 new InputStreamReader(new FileInputStream(FileDescriptor.in), StandardCharsets.UTF_8));
         String line;
@@ -123,7 +187,8 @@ public final class FireAppService {
                 continue;
             }
             if ("QUIT".equals(line)) {
-                break;
+                // 不 quit 主 Looper（不允许），return 后 finally 里 System.exit。
+                return;
             }
             if ("LIST".equals(line)) {
                 writeList(out, context, manager);
@@ -134,11 +199,250 @@ public final class FireAppService {
                         manager,
                         byPackage,
                         line.substring("SHOW ".length()).trim());
+            } else if ("CLIP:GET".equals(line)) {
+                handleClipGet(out, clipContext);
+            } else if ("CLIP:HIST".equals(line)) {
+                handleClipHistory(out, clipContext);
+            } else if (line.startsWith("CLIP:SET ")) {
+                handleClipSet(out, clipContext, line.substring("CLIP:SET ".length()).trim());
+            } else if (line.startsWith("CLIP:WATCH ")) {
+                handleClipWatch(out, clipContext, line.substring("CLIP:WATCH ".length()).trim());
             } else {
                 writeError(out, "未知命令");
             }
         }
-        out.flush();
+        // stdin 结束（宿主断开）：return 后由命令线程的 finally 结束进程。
+    }
+
+    private static ClipboardManager clipboard(Context context) {
+        if (sClipboard == null) {
+            // context 是 ShellContext：getSystemService(CLIPBOARD_SERVICE) 被
+            // 重载为返回绑定该上下文（opPackageName=com.android.shell）的
+            // ClipboardManager。直接委托 base 的 ClipboardManager 内部记住
+            // 的包名是 "android"，会被 ClipboardService 校验拒绝。
+            sClipboard = (ClipboardManager)
+                    context.getSystemService(Context.CLIPBOARD_SERVICE);
+        }
+        return sClipboard;
+    }
+
+    private static void handleClipHistory(DataOutputStream out, Context context) {
+        synchronized (OUT_LOCK) {
+            try {
+                // 顺带把当前剪贴板纳入历史：WATCH 关着时只有这里能看到新内容。
+                rememberClip(clipText(clipboard(context)));
+                writeHeader(out, TYPE_CLIP_LIST);
+                String[] items;
+                synchronized (sHistory) {
+                    items = sHistory.toArray(new String[0]);
+                }
+                out.writeInt(items.length);
+                for (String item : items) {
+                    writeString(out, item);
+                }
+                out.flush();
+            } catch (Throwable error) {
+                writeErrorLocked(out, String.valueOf(error.getMessage()));
+            }
+        }
+    }
+
+    private static void handleClipGet(DataOutputStream out, Context context) {
+        synchronized (OUT_LOCK) {
+            try {
+                writeHeader(out, TYPE_CLIP_DATA);
+                writeString(out, clipText(clipboard(context)));
+                out.flush();
+            } catch (Throwable error) {
+                writeErrorLocked(out, String.valueOf(error.getMessage()));
+            }
+        }
+    }
+
+    private static void handleClipSet(DataOutputStream out, Context context, String base64) {
+        synchronized (OUT_LOCK) {
+            try {
+                byte[] raw = Base64.decode(base64, Base64.DEFAULT);
+                String text = new String(raw, StandardCharsets.UTF_8);
+                clipboard(context).setPrimaryClip(ClipData.newPlainText("FireAdb", text));
+                sLastSet = text;
+                rememberClip(text);
+                writeHeader(out, TYPE_CLIP_OK);
+                out.flush();
+            } catch (Throwable error) {
+                Log.w(ICON_LOG_TAG, "CLIP:SET 失败", error);
+                writeErrorLocked(out, "写入剪贴板失败: " + error.getMessage());
+            }
+        }
+    }
+
+    private static void handleClipWatch(DataOutputStream out, Context context, String mode) {
+        boolean on = "ON".equalsIgnoreCase(mode);
+        try {
+            ClipboardManager clips = clipboard(context);
+            if (on && !sWatching) {
+                sListenerOut = out;
+                sListenerContext = context;
+                sWatching = true;
+                clips.addPrimaryClipChangedListener(sClipListener);
+            } else if (!on && sWatching) {
+                sWatching = false;
+                clips.removePrimaryClipChangedListener(sClipListener);
+            }
+            writeClipOk(out);
+        } catch (Throwable error) {
+            sWatching = false;
+            writeErrorLocked(out, "监听剪贴板失败: " + error.getMessage());
+        }
+    }
+
+    /** 单一监听实例：注册与移除必须传同一个对象才匹配。 */
+    private static final ClipboardManager.OnPrimaryClipChangedListener sClipListener =
+            FireAppService::pushClipChanged;
+
+    private static volatile DataOutputStream sListenerOut;
+    private static volatile Context sListenerContext;
+
+    /** 剪贴板变化回调（主 Looper 线程）。与本机刚写入的内容相同时跳过。 */
+    private static void pushClipChanged() {
+        DataOutputStream out = sListenerOut;
+        Context context = sListenerContext;
+        if (out == null || context == null) return;
+        synchronized (OUT_LOCK) {
+            try {
+                String text = clipText(clipboard(context));
+                if (sWatching && !text.equals(sLastSet)) {
+                    rememberClip(text);
+                    writeHeader(out, TYPE_CLIP_DATA);
+                    writeString(out, text);
+                    out.flush();
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private static String clipText(ClipboardManager clips) {
+        try {
+            if (!clips.hasPrimaryClip()) {
+                return "";
+            }
+            ClipData clip = clips.getPrimaryClip();
+            if (clip == null || clip.getItemCount() == 0) {
+                return "";
+            }
+            CharSequence text = clip.getItemAt(0).getText();
+            return text == null ? "" : text.toString();
+        } catch (Throwable ignored) {
+            return "";
+        }
+    }
+
+    /** 记一条剪贴板历史：去重置顶，超限截尾，落盘供下次进程启动复用。 */
+    private static void rememberClip(String text) {
+        if (text == null || text.length() == 0) {
+            return;
+        }
+        synchronized (sHistory) {
+            sHistory.remove(text);
+            sHistory.addFirst(text);
+            while (sHistory.size() > CLIP_HISTORY_MAX) {
+                sHistory.removeLast();
+            }
+        }
+        saveClipHistory();
+    }
+
+    /**
+     * 历史落盘格式：每条 int32 UTF-8 长度 + 字节，新的在前。
+     * 坏文件直接丢弃，不阻塞剪贴板功能。
+     */
+    private static void loadClipHistory() {
+        try {
+            File file = new File(CLIP_HISTORY_PATH);
+            if (!file.isFile()) {
+                return;
+            }
+            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+            FileInputStream in = new FileInputStream(file);
+            try {
+                byte[] chunk = new byte[8192];
+                int got;
+                while ((got = in.read(chunk)) > 0) {
+                    buffer.write(chunk, 0, got);
+                }
+            } finally {
+                in.close();
+            }
+            byte[] data = buffer.toByteArray();
+            int offset = 0;
+            synchronized (sHistory) {
+                sHistory.clear();
+                while (offset + 4 <= data.length && sHistory.size() < CLIP_HISTORY_MAX) {
+                    int length = ((data[offset] & 0xFF) << 24)
+                            | ((data[offset + 1] & 0xFF) << 16)
+                            | ((data[offset + 2] & 0xFF) << 8)
+                            | (data[offset + 3] & 0xFF);
+                    offset += 4;
+                    if (length < 0 || offset + length > data.length) {
+                        break;
+                    }
+                    String text = new String(data, offset, length, StandardCharsets.UTF_8);
+                    offset += length;
+                    if (text.length() > 0) {
+                        sHistory.addLast(text);
+                    }
+                }
+            }
+        } catch (Throwable error) {
+            Log.w(ICON_LOG_TAG, "读取剪贴板历史失败", error);
+        }
+    }
+
+    private static void saveClipHistory() {
+        try {
+            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+            synchronized (sHistory) {
+                for (String text : sHistory) {
+                    byte[] utf = text.getBytes(StandardCharsets.UTF_8);
+                    buffer.write((utf.length >>> 24) & 0xFF);
+                    buffer.write((utf.length >>> 16) & 0xFF);
+                    buffer.write((utf.length >>> 8) & 0xFF);
+                    buffer.write(utf.length & 0xFF);
+                    buffer.write(utf);
+                }
+            }
+            FileOutputStream out = new FileOutputStream(CLIP_HISTORY_PATH);
+            try {
+                buffer.writeTo(out);
+            } finally {
+                out.close();
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void writeClipOk(DataOutputStream out) throws Exception {
+        synchronized (OUT_LOCK) {
+            writeHeader(out, TYPE_CLIP_OK);
+            out.flush();
+        }
+    }
+
+    private static void writeErrorQuiet(DataOutputStream out, String message) {
+        try {
+            writeError(out, message);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void writeErrorLocked(DataOutputStream out, String message) {
+        try {
+            writeHeader(out, TYPE_ERROR);
+            writeString(out, message == null ? "" : message);
+            out.flush();
+        } catch (Throwable ignored) {
+        }
     }
 
     private static void writeShow(
@@ -151,20 +455,22 @@ public final class FireAppService {
         ApplicationInfo app = info == null ? null : info.applicationInfo;
         byte[] png = app == null ? new byte[0] : iconOf(manager, app);
         String[] directories = directories(context, app, packageName);
-        writeHeader(out, TYPE_SHOW);
-        writeString(out, packageName);
-        writeString(out, app == null ? "" : labelOf(manager, app));
-        writeString(out, info == null || info.versionName == null ? "" : info.versionName);
-        out.writeInt(info == null ? -1 : versionCodeOf(info));
-        out.writeByte(flagsOf(app));
-        out.writeInt(png.length);
-        if (png.length > 0) {
-            out.write(png);
+        synchronized (OUT_LOCK) {
+            writeHeader(out, TYPE_SHOW);
+            writeString(out, packageName);
+            writeString(out, app == null ? "" : labelOf(manager, app));
+            writeString(out, info == null || info.versionName == null ? "" : info.versionName);
+            out.writeInt(info == null ? -1 : versionCodeOf(info));
+            out.writeByte(flagsOf(app));
+            out.writeInt(png.length);
+            if (png.length > 0) {
+                out.write(png);
+            }
+            writeString(out, directories[0]);
+            writeString(out, directories[1]);
+            writeString(out, directories[2]);
+            out.flush();
         }
-        writeString(out, directories[0]);
-        writeString(out, directories[1]);
-        writeString(out, directories[2]);
-        out.flush();
     }
 
     /**
@@ -209,14 +515,16 @@ public final class FireAppService {
         int written = 0;
         for (PackageInfo info : apps) {
             ApplicationInfo app = info.applicationInfo;
-            writeHeader(out, TYPE_APP);
-            writeString(out, info.packageName);
-            writeString(out, "");
-            writeString(out, info.versionName == null ? "" : info.versionName);
-            out.writeInt(versionCodeOf(info));
-            out.writeByte(flagsOf(app));
-            writeString(out, apkPaths(app));
-            out.writeLong(apkBytes(app));
+            synchronized (OUT_LOCK) {
+                writeHeader(out, TYPE_APP);
+                writeString(out, info.packageName);
+                writeString(out, "");
+                writeString(out, info.versionName == null ? "" : info.versionName);
+                out.writeInt(versionCodeOf(info));
+                out.writeByte(flagsOf(app));
+                writeString(out, apkPaths(app));
+                out.writeLong(apkBytes(app));
+            }
             written++;
             // Flush early so the host idle timer sees catalog bytes while the
             // rest of the list is still being packed (ADB stream window is 1).
@@ -252,9 +560,11 @@ public final class FireAppService {
             if (label.length() == 0 || label.equals(packageName)) {
                 continue;
             }
-            writeHeader(out, TYPE_LABEL);
-            writeString(out, packageName);
-            writeString(out, label);
+            synchronized (OUT_LOCK) {
+                writeHeader(out, TYPE_LABEL);
+                writeString(out, packageName);
+                writeString(out, label);
+            }
             labelCount++;
             // Keep the host idle timer fed while the rest of the names resolve.
             if ((labelCount & 15) == 0) {

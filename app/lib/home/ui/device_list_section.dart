@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:libadb/libadb.dart';
 
+import '../../clipboard/clipboard_sync_controller.dart';
+import '../../clipboard/ui/clipboard_text_dialog.dart';
 import '../../connection/model/device_profile.dart';
 import '../../l10n/fireadb_localizations_ext.dart';
 import '../../settings/app_settings_store.dart';
@@ -39,6 +42,10 @@ class DeviceListSection extends GetView<HomeController> {
           devices.length + additionalConnectedProfiles.length + wireless.length;
       final loading =
           controller.loadingAdbDevices.value || controller.scanning.value;
+      // Widget 测试环境不注册剪贴板控制器；未注册时不渲染群发按钮和横幅。
+      final clipboard = Get.isRegistered<ClipboardSyncController>()
+          ? Get.find<ClipboardSyncController>()
+          : null;
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -52,6 +59,16 @@ class DeviceListSection extends GetView<HomeController> {
                   title: l10n.homeDeviceCount(total),
                 ),
                 actions: <Widget>[
+                  if (clipboard != null)
+                    IconButton(
+                      tooltip: l10n.homeSendClipboardToDevices,
+                      visualDensity: VisualDensity.compact,
+                      style: IconButton.styleFrom(
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: () => unawaited(_sendClipboard(context)),
+                      icon: const Icon(Icons.content_paste_go),
+                    ),
                   HomeAutoRefreshToggle(
                     checkboxKey: const ValueKey<String>(
                       'home-auto-refresh-devices',
@@ -76,6 +93,8 @@ class DeviceListSection extends GetView<HomeController> {
                 ],
               ),
               const SizedBox(height: 4),
+              if (clipboard != null)
+                for (final offer in clipboard.offers) _ClipOfferTile(offer: offer),
               if (controller.manager.localUsbError.value case final localUsb?)
                 Text(
                   l10n.homeUsbDevicesReadError(localUsb),
@@ -168,6 +187,107 @@ class DeviceListSection extends GetView<HomeController> {
         ),
       );
     });
+  }
+}
+
+Future<void> _sendClipboard(BuildContext context) async {
+  final controller = Get.find<ClipboardSyncController>();
+  final l10n = context.l10n;
+  final messenger = ScaffoldMessenger.of(context);
+  // 预填本机剪贴板内容，用户可任意改写后再群发。
+  final preset = (await Clipboard.getData(Clipboard.kTextPlain))?.text ?? '';
+  if (!context.mounted) return;
+  final text = await promptClipboardText(
+    context,
+    title: l10n.homeSendClipboardToDevices,
+    preset: preset,
+  );
+  if (text == null || text.trim().isEmpty) return;
+  try {
+    final result = await controller.sendToAll(text);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            result.failed == 0
+                ? l10n.homeClipboardSendDone(result.ok)
+                : l10n.homeClipboardSendPartial(result.ok, result.failed),
+          ),
+        ),
+      );
+  } catch (error) {
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(l10n.homeClipboardSendFailed('$error'))),
+      );
+  }
+}
+
+class _ClipOfferTile extends StatelessWidget {
+  const _ClipOfferTile({required this.offer});
+
+  final ClipOffer offer;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final controller = Get.find<ClipboardSyncController>();
+    return Card(
+      color: theme.colorScheme.secondaryContainer,
+      margin: const EdgeInsets.only(bottom: 4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(
+                  Icons.content_paste,
+                  size: 16,
+                  color: theme.colorScheme.onSecondaryContainer,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    context.l10n.clipboardOfferTitle(offer.deviceLabel),
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: theme.colorScheme.onSecondaryContainer,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              offer.preview,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSecondaryContainer,
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                TextButton(
+                  onPressed: () => controller.dismiss(offer),
+                  child: Text(context.l10n.clipboardOfferIgnore),
+                ),
+                const SizedBox(width: 4),
+                FilledButton.tonal(
+                  onPressed: () => unawaited(controller.accept(offer)),
+                  child: Text(context.l10n.clipboardOfferCopy),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

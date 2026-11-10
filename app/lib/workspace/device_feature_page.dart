@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../apps/ui/apps_page.dart';
 import '../capture/ui/screenrecord_page.dart';
 import '../capture/ui/screenshot_page.dart';
+import '../clipboard/ui/clipboard_page.dart';
 import '../device_overview/device_overview_page.dart';
 import '../files/ui/files_page.dart';
 import '../shell/shell_page.dart';
@@ -22,6 +23,7 @@ Widget deviceFeatureBody({
     'files' => FilesPage(key: key, serial: serial),
     'screenshot' => ScreenshotPage(key: key, serial: serial),
     'screenrecord' => ScreenrecordPage(key: key, serial: serial),
+    'clipboard' => ClipboardPage(key: key, serial: serial),
     _ => PlaceholderFeatureBody(key: key, spec: spec),
   };
 }

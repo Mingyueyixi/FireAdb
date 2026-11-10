@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'app_locale_controller.dart';
 import 'app_shell/app_shell.dart';
 import 'apps/data/source/fire_app_service.dart';
+import 'clipboard/clipboard_sync_controller.dart';
 import 'connection/connection_manager.dart';
 import 'connection/model/device_profile.dart';
 import 'home/home_controller.dart';
@@ -40,12 +41,15 @@ Future<void> main() async {
   final deviceRoot = DeviceRootStore();
   await deviceRoot.load();
   Get.put<DeviceRootStore>(deviceRoot, permanent: true);
+  final clipboardSync = ClipboardSyncController();
+  Get.put<ClipboardSyncController>(clipboardSync, permanent: true);
   manager.afterConnect = (serial) async {
     await activateSavedAdbRoot(serial);
     dismissUnexpectedDisconnectDialog();
     if (Get.isRegistered<WorkspaceController>()) {
       Get.find<WorkspaceController>().notifySessionRestored(serial);
     }
+    unawaited(clipboardSync.startWatch(serial));
   };
   manager.afterDisconnect = releaseFireAppService;
   manager.onUnexpectedDisconnect = (serial, {DeviceProfile? profile}) {

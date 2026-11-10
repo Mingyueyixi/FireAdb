@@ -135,6 +135,56 @@ void main() {
     expect(icon.packageName, 'com.android.settings');
     expect(icon.png, isNull);
   });
+
+  test('剪贴板帧解析出文本与确认', () {
+    final text = '剪贴板内容 line2\n中文 ok';
+    final builder = BytesBuilder()
+      ..add(_header(fireAppFrameClipData))
+      ..add(_string(text))
+      ..add(_header(fireAppFrameClipOk));
+    final frames = FireAppFrameReader().add(builder.takeBytes());
+    final clip = frames[0] as FireAppClipData;
+    expect(clip.text, text);
+    expect(frames[1], isA<FireAppClipOk>());
+  });
+
+  test('剪贴板帧分片到达仍能解析', () {
+    final builder = BytesBuilder()
+      ..add(_header(fireAppFrameClipData))
+      ..add(_string('hello clipboard'));
+    final bytes = builder.takeBytes();
+    final reader = FireAppFrameReader();
+    expect(reader.add(bytes.sublist(0, 8)), isEmpty);
+    final frames = reader.add(bytes.sublist(8));
+    expect((frames.single as FireAppClipData).text, 'hello clipboard');
+  });
+
+  test('剪贴板历史帧解析出列表', () {
+    final count = ByteData(4)..setUint32(0, 3);
+    final builder = BytesBuilder()
+      ..add(_header(fireAppFrameClipList))
+      ..add(count.buffer.asUint8List())
+      ..add(_string('最新一条'))
+      ..add(_string('second'))
+      ..add(_string('第一条\n多行'));
+    final frame =
+        FireAppFrameReader().add(builder.takeBytes()).single as FireAppClipList;
+    expect(frame.texts, <String>['最新一条', 'second', '第一条\n多行']);
+  });
+
+  test('剪贴板历史帧分片到达仍能解析', () {
+    final count = ByteData(4)..setUint32(0, 2);
+    final builder = BytesBuilder()
+      ..add(_header(fireAppFrameClipList))
+      ..add(count.buffer.asUint8List())
+      ..add(_string('alpha'))
+      ..add(_string('beta'));
+    final bytes = builder.takeBytes();
+    final reader = FireAppFrameReader();
+    expect(reader.add(bytes.sublist(0, 12)), isEmpty);
+    final frame = reader.add(bytes.sublist(12)).single as FireAppClipList;
+    expect(frame.texts, <String>['alpha', 'beta']);
+  });
 }
 
 Uint8List _header(int type) => Uint8List.fromList(<int>[

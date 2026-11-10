@@ -26,6 +26,7 @@ String featureTitle(BuildContext context, FeatureSpec feature) {
     'screenshot' => l10n.workspaceScreenshotTitle,
     'screenrecord' => l10n.workspaceScreenrecordTitle,
     'shell' => l10n.workspaceShellTitle,
+    'clipboard' => l10n.workspaceClipboardTitle,
     _ => feature.id,
   };
 }
@@ -39,6 +40,7 @@ String featureDescription(BuildContext context, FeatureSpec feature) {
     'screenshot' => l10n.workspaceScreenshotDescription,
     'screenrecord' => l10n.workspaceScreenrecordDescription,
     'shell' => l10n.workspaceShellDescription,
+    'clipboard' => l10n.workspaceClipboardDescription,
     _ => '',
   };
 }
@@ -58,6 +60,7 @@ const List<FeatureSpec> kDeviceFeatures = <FeatureSpec>[
   ),
   FeatureSpec(id: 'screenrecord', icon: Icons.videocam, implemented: true),
   FeatureSpec(id: 'shell', icon: Icons.terminal, implemented: true),
+  FeatureSpec(id: 'clipboard', icon: Icons.content_paste, implemented: true),
 ];
 
 FeatureSpec featureSpecById(String id) {
