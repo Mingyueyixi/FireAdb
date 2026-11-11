@@ -1414,10 +1414,120 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String get navConnection => 'Connect';
 
   @override
+  String get navGroup => 'Chat';
+
+  @override
   String get navLogs => 'Logs';
 
   @override
   String get navAbout => 'About';
+
+  @override
+  String get chatTitle => 'Chat';
+
+  @override
+  String get chatEmpty =>
+      'Start a direct chat, or create a group. A channel shows up here after its owner adds you.';
+
+  @override
+  String get chatHint => 'Message';
+
+  @override
+  String get chatSend => 'Send';
+
+  @override
+  String get chatSelf => 'This device';
+
+  @override
+  String get chatOnline => 'Online';
+
+  @override
+  String get chatOffline => 'Offline';
+
+  @override
+  String get chatAttach => 'Send a file';
+
+  @override
+  String get chatDelete => 'Delete';
+
+  @override
+  String chatSendFailed(Object error) {
+    return 'Send failed: $error';
+  }
+
+  @override
+  String get chatFileMissing => 'File is missing';
+
+  @override
+  String get chatMyChannel => 'My channel';
+
+  @override
+  String get chatKindChannel => 'Channel';
+
+  @override
+  String get chatKindDirect => 'Direct';
+
+  @override
+  String get chatKindGroup => 'Group';
+
+  @override
+  String get chatNewGroup => 'New group';
+
+  @override
+  String get chatNewDirect => 'New direct chat';
+
+  @override
+  String get chatInfo => 'Conversation info';
+
+  @override
+  String get chatMembers => 'Members';
+
+  @override
+  String get chatAddMember => 'Add member';
+
+  @override
+  String get chatRemove => 'Remove';
+
+  @override
+  String get chatRename => 'Rename';
+
+  @override
+  String get chatNoDevices =>
+      'No devices to choose. Connect one from the Connect tab first.';
+
+  @override
+  String get chatReachable => 'Reachable now';
+
+  @override
+  String get chatUnreachable => 'Not reachable now';
+
+  @override
+  String get chatNameLabel => 'Name';
+
+  @override
+  String get chatCreate => 'Create';
+
+  @override
+  String get chatSave => 'Save';
+
+  @override
+  String get chatPreviewEmpty => 'No messages yet';
+
+  @override
+  String get chatSelect => 'Select a conversation';
+
+  @override
+  String get chatRoleOwner => 'Owner';
+
+  @override
+  String get chatRoleMember => 'Member';
+
+  @override
+  String get chatSerial => 'Id';
+
+  @override
+  String get chatNeedMembers =>
+      'No other members yet. Open conversation info and add a device.';
 
   @override
   String get logClear => 'Clear';

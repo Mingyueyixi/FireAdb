@@ -30,6 +30,17 @@ class FireDataRequest {
          body: Uint8List.fromList(utf8.encode(body)),
        );
 
+  FireDataRequest.bytes({
+    required String name,
+    required int id,
+    required List<int> body,
+  }) : this._(
+         name: name,
+         type: 'bytes',
+         id: id,
+         body: Uint8List.fromList(body),
+       );
+
   FireDataRequest._({
     required this.name,
     required this.type,

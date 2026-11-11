@@ -116,6 +116,17 @@ class ConnectedDevice {
     return properties;
   }
 
+  /// 打开任意设备服务，例如 `tcp:28165`。字节原样来回传。
+  Future<ConnectedShell> openService(String name) async {
+    final device = _device;
+    if (device != null) {
+      return ConnectedShell.direct(await device.connection.open(name));
+    }
+    return ConnectedShell.viaHost(
+      await _hostClient!.openDeviceService(_adbSerial!, name),
+    );
+  }
+
   /// 打开一条可读写的 `exec:`。没有终端，字节原样来回传。
   Future<ConnectedShell> openExec(String command) async {
     final device = _device;

@@ -10,6 +10,7 @@ import android.os.Environment
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
@@ -28,6 +29,34 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "fireadb/chat")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "start" -> {
+                        ChatHub.connect()
+                        result.success(null)
+                    }
+                    "send" -> {
+                        val bytes = call.arguments as? ByteArray
+                        result.success(bytes != null && ChatHub.send(bytes))
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, "fireadb/chat-events")
+            .setStreamHandler(
+                object : EventChannel.StreamHandler {
+                    override fun onListen(arguments: Any?, sink: EventChannel.EventSink?) {
+                        ChatHub.onBytes = { bytes -> sink?.success(bytes) }
+                        ChatHub.onLinked = { sink?.success("linked") }
+                    }
+
+                    override fun onCancel(arguments: Any?) {
+                        ChatHub.onBytes = null
+                        ChatHub.onLinked = null
+                    }
+                },
+            )
     }
 
     private fun hasAllFilesAccess(): Boolean {

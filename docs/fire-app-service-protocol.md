@@ -1,6 +1,6 @@
 # FireAppService 消息格式
 
-桌面端和设备上的 `FireAppService` 用同一种消息说话。通道仍是 ADB `exec:` 的标准输入和标准输出：原始字节，没有终端，也不做换行转换。
+桌面端和设备上的 `FireAppService` 用同一种消息说话。通道仍是 ADB `exec:` 的标准输入和标准输出：原始字节，没有终端，也不做换行转换。聊天使用同一帧格式，通道是设备服务 `tcp:28165`，见 [chat-channel.md](chat-channel.md)。
 
 ## 一条消息
 

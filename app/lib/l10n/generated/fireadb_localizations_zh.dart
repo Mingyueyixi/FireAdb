@@ -1372,10 +1372,117 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get navConnection => '连接';
 
   @override
+  String get navGroup => '聊天';
+
+  @override
   String get navLogs => '日志';
 
   @override
   String get navAbout => '关于';
+
+  @override
+  String get chatTitle => '聊天';
+
+  @override
+  String get chatEmpty => '可以在这里发起私聊，或新建一个群。别人把你加进他的频道后，也会出现在这里。';
+
+  @override
+  String get chatHint => '输入消息';
+
+  @override
+  String get chatSend => '发送';
+
+  @override
+  String get chatSelf => '本机';
+
+  @override
+  String get chatOnline => '在线';
+
+  @override
+  String get chatOffline => '未连接';
+
+  @override
+  String get chatAttach => '发送文件';
+
+  @override
+  String get chatDelete => '删除';
+
+  @override
+  String chatSendFailed(Object error) {
+    return '发送失败：$error';
+  }
+
+  @override
+  String get chatFileMissing => '文件不在了';
+
+  @override
+  String get chatMyChannel => '我的频道';
+
+  @override
+  String get chatKindChannel => '频道';
+
+  @override
+  String get chatKindDirect => '私聊';
+
+  @override
+  String get chatKindGroup => '群';
+
+  @override
+  String get chatNewGroup => '新建群';
+
+  @override
+  String get chatNewDirect => '发起私聊';
+
+  @override
+  String get chatInfo => '会话信息';
+
+  @override
+  String get chatMembers => '成员';
+
+  @override
+  String get chatAddMember => '添加成员';
+
+  @override
+  String get chatRemove => '移出';
+
+  @override
+  String get chatRename => '修改名称';
+
+  @override
+  String get chatNoDevices => '没有可选的设备。先在连接页连上设备。';
+
+  @override
+  String get chatReachable => '当前能送达';
+
+  @override
+  String get chatUnreachable => '当前送不到';
+
+  @override
+  String get chatNameLabel => '名称';
+
+  @override
+  String get chatCreate => '创建';
+
+  @override
+  String get chatSave => '保存';
+
+  @override
+  String get chatPreviewEmpty => '还没有消息';
+
+  @override
+  String get chatSelect => '选择一个会话';
+
+  @override
+  String get chatRoleOwner => '群主';
+
+  @override
+  String get chatRoleMember => '成员';
+
+  @override
+  String get chatSerial => '标识';
+
+  @override
+  String get chatNeedMembers => '还没有其他成员。打开右上角的会话信息，把设备加进来。';
 
   @override
   String get logClear => '清理';

@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'app_locale_controller.dart';
 import 'app_shell/app_shell.dart';
 import 'appservice/fire_app_service.dart';
+import 'chat/chat_controller.dart';
 import 'clipboard/clipboard_sync_controller.dart';
 import 'connection/connection_manager.dart';
 import 'connection/model/device_profile.dart';
@@ -43,6 +44,9 @@ Future<void> main() async {
   Get.put<DeviceRootStore>(deviceRoot, permanent: true);
   final clipboardSync = ClipboardSyncController();
   Get.put<ClipboardSyncController>(clipboardSync, permanent: true);
+  final chat = ChatController();
+  await chat.init();
+  Get.put<ChatController>(chat, permanent: true);
   manager.afterConnect = (serial) async {
     await activateSavedAdbRoot(serial);
     dismissUnexpectedDisconnectDialog();
@@ -50,8 +54,12 @@ Future<void> main() async {
       Get.find<WorkspaceController>().notifySessionRestored(serial);
     }
     unawaited(clipboardSync.startWatch(serial));
+    unawaited(chat.onDeviceConnected(serial));
   };
-  manager.afterDisconnect = releaseFireAppService;
+  manager.afterDisconnect = (serial) async {
+    await releaseFireAppService(serial);
+    await chat.onDeviceDisconnected(serial);
+  };
   manager.onUnexpectedDisconnect = (serial, {DeviceProfile? profile}) {
     unawaited(
       handleUnexpectedDeviceDisconnect(serial, profile: profile),

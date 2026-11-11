@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_channel">Chat</string>
+    <string name="chat_notification_title">FireAdb chat</string>
+    <string name="chat_notification_text">This device can receive chat messages</string>
+</resources>

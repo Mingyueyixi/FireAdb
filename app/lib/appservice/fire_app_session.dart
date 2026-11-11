@@ -14,6 +14,10 @@ FireAppSession fireAppSession(ConnectedDevice device) =>
     _sessions.putIfAbsent(device.serial, () => FireAppSession(device.serial));
 
 /// 设备断开时由连接层调用：关掉长活 exec，避免下次同 serial 复用死流。
+void releaseChatHold(String serial) {
+  _sessions[serial]?.releaseChat();
+}
+
 Future<void> releaseFireAppService(String serial) async {
   final session = _sessions.remove(serial);
   if (session == null) return;
@@ -28,8 +32,14 @@ class FireAppSession {
 
   final String serial;
 
-  /// 主动推送。同一进程里只有一个监听位，由剪贴板接上。
+  /// 主动推送。剪贴板占用 [onPush]，其他功能用 [addPush]，避免互相覆盖。
   static FireAppPush? onPush;
+  static final List<FireAppPush> _pushes = <FireAppPush>[];
+
+  static void addPush(FireAppPush push) {
+    if (_pushes.contains(push)) return;
+    _pushes.add(push);
+  }
 
   Future<void> _chain = Future<void>.value();
   ConnectedShell? _shell;
@@ -46,6 +56,9 @@ class FireAppSession {
   /// 监听开启时进程常驻，空闲不退出。
   var watching = false;
 
+  /// 聊天需要这条进程留着，好让成员来拉。和剪贴板监听互不影响。
+  var chatHold = false;
+
   int get epoch => _epoch;
 
   int get pendingBytes => _reader?.pendingBytes ?? 0;
@@ -58,6 +71,7 @@ class FireAppSession {
   Future<void> dispose() async {
     _epoch++;
     watching = false;
+    chatHold = false;
     cancelIdle();
     await run(drop);
   }
@@ -84,9 +98,19 @@ class FireAppSession {
     _idle = null;
   }
 
+  void holdChat() {
+    chatHold = true;
+    cancelIdle();
+  }
+
+  void releaseChat() {
+    chatHold = false;
+    scheduleIdle();
+  }
+
   void scheduleIdle() {
     _idle?.cancel();
-    if (watching) return;
+    if (watching || chatHold) return;
     final generation = _generation;
     _idle = Timer(const Duration(seconds: 20), () {
       unawaited(
@@ -214,6 +238,9 @@ class FireAppSession {
                 message.name != 'session.ready' &&
                 message.name != 'session.error') {
               onPush?.call(serial, message);
+              for (final push in _pushes) {
+                push(serial, message);
+              }
               continue;
             }
             _responses.add(message);

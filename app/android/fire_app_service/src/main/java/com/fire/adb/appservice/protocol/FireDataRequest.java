@@ -30,6 +30,10 @@ public final class FireDataRequest {
         return new JSONObject(text());
     }
 
+    public byte[] body() {
+        return body;
+    }
+
     String display() {
         return FireDataCodec.display(name, type, id, body);
     }

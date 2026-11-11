@@ -23,7 +23,8 @@ import java.io.FileInputStream;
  *
  * <p>请求和响应都是 {@code name type id length:} 加正文。
  * {@code catalog.*} 由 {@link AppCatalogProtocol} 实现，{@code clipboard.*} 由
- * {@link ClipboardProtocol} 实现。新功能实现 {@link CommandHandler}，再放进命令数组。
+ * {@link ClipboardProtocol} 实现。聊天不经过这里：手机监听本机端口，桌面用 adb 直连。
+ * 新功能实现 {@link CommandHandler}，再放进命令数组。
  */
 public final class FireAppService {
     private FireAppService() {}
@@ -78,7 +79,9 @@ public final class FireAppService {
         // 注意：prepareMainLooper 建的队列 mQuitAllowed=false，quitSafely()
         // 会抛 "Main thread not allowed to quit."——主 Looper 退不掉，命令
         // 线程结束时直接 System.exit 终止进程。
-        CommandHandler[] handlers = new CommandHandler[] {catalog, clipboard};
+        CommandHandler[] handlers = new CommandHandler[] {
+                catalog, clipboard
+        };
         Thread commands = new Thread(
                 () -> {
                     try {

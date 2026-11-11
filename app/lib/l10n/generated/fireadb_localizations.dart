@@ -2459,6 +2459,12 @@ abstract class FireAdbLocalizations {
   /// **'连接'**
   String get navConnection;
 
+  /// No description provided for @navGroup.
+  ///
+  /// In zh, this message translates to:
+  /// **'聊天'**
+  String get navGroup;
+
   /// No description provided for @navLogs.
   ///
   /// In zh, this message translates to:
@@ -2470,6 +2476,210 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'关于'**
   String get navAbout;
+
+  /// No description provided for @chatTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'聊天'**
+  String get chatTitle;
+
+  /// No description provided for @chatEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'可以在这里发起私聊，或新建一个群。别人把你加进他的频道后，也会出现在这里。'**
+  String get chatEmpty;
+
+  /// No description provided for @chatHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'输入消息'**
+  String get chatHint;
+
+  /// No description provided for @chatSend.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送'**
+  String get chatSend;
+
+  /// No description provided for @chatSelf.
+  ///
+  /// In zh, this message translates to:
+  /// **'本机'**
+  String get chatSelf;
+
+  /// No description provided for @chatOnline.
+  ///
+  /// In zh, this message translates to:
+  /// **'在线'**
+  String get chatOnline;
+
+  /// No description provided for @chatOffline.
+  ///
+  /// In zh, this message translates to:
+  /// **'未连接'**
+  String get chatOffline;
+
+  /// No description provided for @chatAttach.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送文件'**
+  String get chatAttach;
+
+  /// No description provided for @chatDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除'**
+  String get chatDelete;
+
+  /// No description provided for @chatSendFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'发送失败：{error}'**
+  String chatSendFailed(Object error);
+
+  /// No description provided for @chatFileMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件不在了'**
+  String get chatFileMissing;
+
+  /// No description provided for @chatMyChannel.
+  ///
+  /// In zh, this message translates to:
+  /// **'我的频道'**
+  String get chatMyChannel;
+
+  /// No description provided for @chatKindChannel.
+  ///
+  /// In zh, this message translates to:
+  /// **'频道'**
+  String get chatKindChannel;
+
+  /// No description provided for @chatKindDirect.
+  ///
+  /// In zh, this message translates to:
+  /// **'私聊'**
+  String get chatKindDirect;
+
+  /// No description provided for @chatKindGroup.
+  ///
+  /// In zh, this message translates to:
+  /// **'群'**
+  String get chatKindGroup;
+
+  /// No description provided for @chatNewGroup.
+  ///
+  /// In zh, this message translates to:
+  /// **'新建群'**
+  String get chatNewGroup;
+
+  /// No description provided for @chatNewDirect.
+  ///
+  /// In zh, this message translates to:
+  /// **'发起私聊'**
+  String get chatNewDirect;
+
+  /// No description provided for @chatInfo.
+  ///
+  /// In zh, this message translates to:
+  /// **'会话信息'**
+  String get chatInfo;
+
+  /// No description provided for @chatMembers.
+  ///
+  /// In zh, this message translates to:
+  /// **'成员'**
+  String get chatMembers;
+
+  /// No description provided for @chatAddMember.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加成员'**
+  String get chatAddMember;
+
+  /// No description provided for @chatRemove.
+  ///
+  /// In zh, this message translates to:
+  /// **'移出'**
+  String get chatRemove;
+
+  /// No description provided for @chatRename.
+  ///
+  /// In zh, this message translates to:
+  /// **'修改名称'**
+  String get chatRename;
+
+  /// No description provided for @chatNoDevices.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有可选的设备。先在连接页连上设备。'**
+  String get chatNoDevices;
+
+  /// No description provided for @chatReachable.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前能送达'**
+  String get chatReachable;
+
+  /// No description provided for @chatUnreachable.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前送不到'**
+  String get chatUnreachable;
+
+  /// No description provided for @chatNameLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'名称'**
+  String get chatNameLabel;
+
+  /// No description provided for @chatCreate.
+  ///
+  /// In zh, this message translates to:
+  /// **'创建'**
+  String get chatCreate;
+
+  /// No description provided for @chatSave.
+  ///
+  /// In zh, this message translates to:
+  /// **'保存'**
+  String get chatSave;
+
+  /// No description provided for @chatPreviewEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有消息'**
+  String get chatPreviewEmpty;
+
+  /// No description provided for @chatSelect.
+  ///
+  /// In zh, this message translates to:
+  /// **'选择一个会话'**
+  String get chatSelect;
+
+  /// No description provided for @chatRoleOwner.
+  ///
+  /// In zh, this message translates to:
+  /// **'群主'**
+  String get chatRoleOwner;
+
+  /// No description provided for @chatRoleMember.
+  ///
+  /// In zh, this message translates to:
+  /// **'成员'**
+  String get chatRoleMember;
+
+  /// No description provided for @chatSerial.
+  ///
+  /// In zh, this message translates to:
+  /// **'标识'**
+  String get chatSerial;
+
+  /// No description provided for @chatNeedMembers.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有其他成员。打开右上角的会话信息，把设备加进来。'**
+  String get chatNeedMembers;
 
   /// No description provided for @logClear.
   ///

@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../about/about_page.dart';
+import '../chat/chat_controller.dart';
+import '../chat/ui/chat_page.dart';
 import '../home/home_page.dart';
 import '../l10n/fireadb_localizations_ext.dart';
 import '../log/log_page.dart';
 import '../widgets/adaptive.dart';
 
-/// 应用外壳：连接、日志、关于。
+/// 应用外壳：连接、聊天、日志、关于。
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -27,20 +29,26 @@ class _AppShellState extends State<AppShell> {
   /// 需要这个信号（路由/dispose 不再随 tab 切换变化）。
   final ValueNotifier<bool> _homeVisible = ValueNotifier<bool>(true);
 
-  void _select(int index) => setState(() {
-    _index = index;
-    _visited.add(index);
-    _homeVisible.value = index == 0;
-  });
+  void _select(int index) {
+    setState(() {
+      _index = index;
+      _visited.add(index);
+      _homeVisible.value = index == 0;
+    });
+    if (index == 1 && Get.isRegistered<ChatController>()) {
+      Get.find<ChatController>().refreshMembers();
+    }
+  }
 
-  /// 三个槽位始终对齐 tab 下标；未访问的槽位用空占位。
+  /// 四个槽位始终对齐 tab 下标；未访问的槽位用空占位。
   List<Widget> _stackChildren() => <Widget>[
     if (_visited.contains(0))
       HomePage(tabVisible: _homeVisible)
     else
       const SizedBox.shrink(),
-    if (_visited.contains(1)) const LogPage() else const SizedBox.shrink(),
-    if (_visited.contains(2)) const AboutPage() else const SizedBox.shrink(),
+    if (_visited.contains(1)) const ChatPage() else const SizedBox.shrink(),
+    if (_visited.contains(2)) const LogPage() else const SizedBox.shrink(),
+    if (_visited.contains(3)) const AboutPage() else const SizedBox.shrink(),
   ];
 
   @override
@@ -48,6 +56,7 @@ class _AppShellState extends State<AppShell> {
     final l10n = context.l10n;
     final destinations = <_Destination>[
       _Destination(l10n.navConnection, Icons.link_outlined, Icons.link),
+      _Destination(l10n.navGroup, Icons.forum_outlined, Icons.forum),
       _Destination(l10n.navLogs, Icons.article_outlined, Icons.article),
       _Destination(l10n.navAbout, Icons.info_outline, Icons.info),
     ];
@@ -59,7 +68,7 @@ class _AppShellState extends State<AppShell> {
     );
     return Scaffold(
       // 窄屏底栏已经标出当前页。日志页自带标题栏，这里不再叠一条。
-      appBar: wide || _index == 1
+      appBar: wide || _index == 2
           ? null
           : AppBar(
               forceMaterialTransparency: true,
