@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import '../connection/model/connected_device.dart';
+import '../link/device_link.dart';
 import '../log/app_log.dart';
-import 'fire_app_launch.dart';
 import 'protocol/fire_app_message.dart';
 
 /// 请求号为 0、且不是 `session.ready` 的推送。剪贴板从这里认领自己的事件。
@@ -42,15 +42,12 @@ class FireAppSession {
   }
 
   Future<void> _chain = Future<void>.value();
-  ConnectedShell? _shell;
-  StreamSubscription<List<int>>? _subscription;
-  FireDataResponseReader? _reader;
   final _responses = <FireDataResponse>[];
   Completer<void>? _wait;
   var _epoch = 0;
   var _generation = 0;
-  var _listenEpoch = 0;
   var _nextRequestId = 1;
+  var _linkReady = false;
   Timer? _idle;
 
   /// 监听开启时进程常驻，空闲不退出。
@@ -61,7 +58,7 @@ class FireAppSession {
 
   int get epoch => _epoch;
 
-  int get pendingBytes => _reader?.pendingBytes ?? 0;
+  int get pendingBytes => 0;
 
   /// 刷新列表时递增，让还在排队的单条查询失效。
   void advanceEpoch() => _epoch++;
@@ -122,17 +119,45 @@ class FireAppSession {
     });
   }
 
+  /// 服务那条连接断了。下一次就绪要重新等 `session.ready`。
+  void markLinkDown() {
+    _linkReady = false;
+    _responses.clear();
+    final pending = _wait;
+    _wait = null;
+    if (pending != null && !pending.isCompleted) {
+      pending.completeError(StateError('应用信息服务已断开'));
+    }
+  }
+
+  /// 反向连接上的一帧。hello 已由 [DeviceLink] 核对过。
+  void ingest(FireDataResponse message) {
+    log.info('响应 ${message.display}');
+    if (message.name == 'session.ready') {
+      if (_linkReady) return;
+    } else if (message.id == 0 && message.name != 'session.error') {
+      onPush?.call(serial, message);
+      for (final push in _pushes) {
+        push(serial, message);
+      }
+      return;
+    }
+    _responses.add(message);
+    final pending = _wait;
+    if (pending != null && !pending.isCompleted) pending.complete();
+  }
+
   Future<({int jarMs, int readyMs})> ensureReady(ConnectedDevice device) async {
-    if (_shell != null) return (jarMs: 0, readyMs: 0);
+    if (_linkReady && DeviceLink.serviceReady(device.serial)) {
+      return (jarMs: 0, readyMs: 0);
+    }
     final clock = Stopwatch()..start();
-    await ensureFireAppService(device);
+    await DeviceLink.open(device);
     final jarMs = clock.elapsedMilliseconds;
+    if (_linkReady && DeviceLink.serviceReady(device.serial)) {
+      return (jarMs: jarMs, readyMs: 0);
+    }
     clock.reset();
-    final shell = await device.openExec(
-      fireAppServiceCommand(fireAppServiceRemotePath),
-    );
-    _shell = shell;
-    _listen(shell);
     try {
       final ready = await next().timeout(const Duration(seconds: 30));
       if (ready.name == 'session.error') {
@@ -141,17 +166,17 @@ class FireAppSession {
       if (ready.name != 'session.ready' || ready.text != '1') {
         throw StateError('应用信息服务没有就绪');
       }
+      _linkReady = true;
       return (jarMs: jarMs, readyMs: clock.elapsedMilliseconds);
     } catch (error) {
-      await drop();
+      _linkReady = false;
       rethrow;
     }
   }
 
   Future<void> send(FireDataRequest request) {
-    final shell = _shell;
-    if (shell == null) throw StateError('应用信息服务没有就绪');
-    return _write(shell, request);
+    log.info('请求 ${request.display}');
+    return DeviceLink.writeService(serial, request.bytes);
   }
 
   Future<FireDataResponse> reply(int id, Duration timeout) async {
@@ -179,96 +204,22 @@ class FireAppSession {
 
   /// 丢掉当前进程。调用方可以接着再开一次。
   Future<void> drop() async {
-    _listenEpoch++;
-    final subscription = _subscription;
-    final shell = _shell;
-    _subscription = null;
-    _shell = null;
-    _reader = null;
+    _linkReady = false;
     _responses.clear();
     final pending = _wait;
     _wait = null;
     if (pending != null && !pending.isCompleted) {
       pending.completeError(StateError('应用信息服务已结束'));
     }
-    await subscription?.cancel();
-    if (shell == null) return;
-    try {
-      await _write(
-        shell,
-        FireDataRequest.none(name: 'session.quit', id: nextId()),
-      ).timeout(const Duration(milliseconds: 300));
-    } catch (_) {}
-    try {
-      await shell.close().timeout(const Duration(seconds: 2));
-    } catch (_) {}
+    await DeviceLink.close(serial);
   }
 
   Future<void> _quit() async {
-    final shell = _shell;
-    if (shell == null) return;
     try {
-      await _write(
-        shell,
+      await send(
         FireDataRequest.none(name: 'session.quit', id: nextId()),
       ).timeout(const Duration(seconds: 2));
     } catch (_) {}
     await drop();
-  }
-
-  Future<void> _write(ConnectedShell shell, FireDataRequest request) {
-    log.info('请求 ${request.display}');
-    return shell.write(request.bytes);
-  }
-
-  void _listen(ConnectedShell shell) {
-    final epoch = ++_listenEpoch;
-    _reader = FireDataResponseReader();
-    _responses.clear();
-    _subscription = shell.readStream.listen(
-      (chunk) {
-        if (epoch != _listenEpoch) return;
-        final reader = _reader;
-        if (reader == null) return;
-        try {
-          final parsed = reader.add(chunk);
-          for (final message in parsed) {
-            log.info('响应 ${message.display}');
-            if (message.id == 0 &&
-                message.name != 'session.ready' &&
-                message.name != 'session.error') {
-              onPush?.call(serial, message);
-              for (final push in _pushes) {
-                push(serial, message);
-              }
-              continue;
-            }
-            _responses.add(message);
-          }
-        } catch (error, stackTrace) {
-          final pending = _wait;
-          if (pending != null && !pending.isCompleted) {
-            pending.completeError(error, stackTrace);
-          }
-          return;
-        }
-        final pending = _wait;
-        if (pending != null && !pending.isCompleted) pending.complete();
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (epoch != _listenEpoch) return;
-        final pending = _wait;
-        if (pending != null && !pending.isCompleted) {
-          pending.completeError(error, stackTrace);
-        }
-      },
-      onDone: () {
-        if (epoch != _listenEpoch) return;
-        final pending = _wait;
-        if (pending != null && !pending.isCompleted) {
-          pending.completeError(StateError('应用信息服务已结束'));
-        }
-      },
-    );
   }
 }

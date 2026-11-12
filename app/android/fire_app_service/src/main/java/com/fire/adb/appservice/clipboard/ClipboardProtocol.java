@@ -154,6 +154,17 @@ public final class ClipboardProtocol implements CommandHandler {
         }
     }
 
+    public void stopWatch() {
+        if (!watching) {
+            return;
+        }
+        watching = false;
+        try {
+            clipboard().removePrimaryClipChangedListener(clipListener);
+        } catch (Throwable ignored) {
+        }
+    }
+
     private void handleWatch(FireDataRequest request) {
         boolean on = false;
         try {

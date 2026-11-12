@@ -216,6 +216,9 @@ class AdbConnection {
   /// 握手状态变化。本机 ADB Server 用它把设备标成 `unauthorized` 或 `device`。
   final void Function(AdbConnectionState state)? onStateChanged;
 
+  /// 设备主动 OPEN（adb reverse 回连）。未设置时只关掉这条流。
+  static void Function(AdbStream stream, String destination)? onPeerOpen;
+
   final List<void Function(AdbConnectionState)> _stateListeners =
       <void Function(AdbConnectionState)>[];
 
@@ -389,6 +392,8 @@ class AdbConnection {
         _onWrite(msg);
       case cmd.commandClose:
         _onClose(msg);
+      case cmd.commandOpen:
+        _onPeerOpen(msg);
       case cmd.commandStls:
         await _onStls(msg);
       default:
@@ -550,6 +555,25 @@ class AdbConnection {
     if (stream != null) {
       stream._onPeerClose();
     }
+  }
+
+  void _onPeerOpen(AdbMessage msg) {
+    final localId = _nextLocalId++;
+    final remoteId = msg.arg0;
+    final text = utf8.decode(
+      msg.data.takeWhile((byte) => byte != 0).toList(),
+      allowMalformed: true,
+    );
+    final stream = AdbStream._(this, localId);
+    stream._remoteId = remoteId;
+    _streams[localId] = stream;
+    unawaited(_sendMessage(cmd.commandOkay, localId, remoteId, const []));
+    final handler = onPeerOpen;
+    if (handler == null) {
+      unawaited(stream.close());
+      return;
+    }
+    handler(stream, text);
   }
 
   /// 打开一条服务流，如 `shell:getprop`、`shell:ls -l /`、`sync:`。

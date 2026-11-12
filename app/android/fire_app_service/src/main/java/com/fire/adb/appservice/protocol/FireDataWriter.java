@@ -24,6 +24,10 @@ public final class FireDataWriter {
                 new BufferedOutputStream(new FileOutputStream(FileDescriptor.out))));
     }
 
+    public static FireDataWriter of(java.io.OutputStream raw) {
+        return new FireDataWriter(new DataOutputStream(new BufferedOutputStream(raw)));
+    }
+
     public void send(FireDataResponse response) throws IOException {
         byte[] header = response.header();
         byte[] body = response.body();

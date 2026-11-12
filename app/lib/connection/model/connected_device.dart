@@ -116,7 +116,18 @@ class ConnectedDevice {
     return properties;
   }
 
-  /// 打开任意设备服务，例如 `tcp:28165`。字节原样来回传。
+  /// 让设备上的 adbd 把 `remote` 上的连接交回本机 `local`。
+  /// 例如 `remote: tcp:28170`，`local: tcp:43123`。
+  Future<void> reverse({required String remote, required String local}) async {
+    final owned = _device;
+    if (owned != null) {
+      await owned.reverse(remote: remote, local: local);
+      return;
+    }
+    await serviceText('reverse:forward:$remote;$local');
+  }
+
+  /// 打开任意设备服务，例如 `tcp:28170`。字节原样来回传。
   Future<ConnectedShell> openService(String name) async {
     final device = _device;
     if (device != null) {

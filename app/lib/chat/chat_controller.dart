@@ -6,17 +6,16 @@ import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../appservice/fire_app_launch.dart';
 import '../appservice/fire_app_session.dart';
 import '../appservice/protocol/fire_app_message.dart';
 import '../connection/connection_manager.dart';
 import '../connection/model/connected_device.dart';
 import '../connection/model/device_profile.dart';
+import '../link/device_link.dart';
 import '../log/app_log.dart';
 import 'chat_bridge.dart';
 import 'chat_conversation.dart';
 import 'chat_message.dart';
-import 'chat_pipe.dart';
 import 'chat_store.dart';
 
 const String _selfIdKey = 'chatSelfId';
@@ -58,7 +57,6 @@ class ChatController extends GetxController with WidgetsBindingObserver {
   String _selfName = '';
   var _memberToken = 0;
   final _reader = FireDataResponseReader();
-  final _pipes = <String, ChatPipe>{};
   final _deviceChain = <String, Future<void>>{};
   Future<void> _bridgeChain = Future<void>.value();
   Future<void> _sendChain = Future<void>.value();
@@ -83,6 +81,12 @@ class ChatController extends GetxController with WidgetsBindingObserver {
     await _ensureMine(preferences);
     await reload();
     WidgetsBinding.instance.addObserver(this);
+    DeviceLink.onAppFrame = (serial, frame) {
+      final previous = _deviceChain[serial] ?? Future<void>.value();
+      _deviceChain[serial] = previous
+          .catchError((Object _) {})
+          .then((_) => _onDeviceFrame(serial, frame));
+    };
     if (_bridge.available) {
       _bridge.listen(_onBridgeChunk, onLinked: () => unawaited(_announceSelf()));
       unawaited(_connectBridge());
@@ -440,16 +444,14 @@ class ChatController extends GetxController with WidgetsBindingObserver {
     final device = _manager.deviceOf(serial);
     if (device == null) return;
     try {
-      await ensureFireAppService(device);
+      await DeviceLink.open(device);
     } catch (error, stack) {
-      log.warning('聊天服务包没有更新', error, stack);
+      log.warning('聊天通道没有打开', error, stack);
     }
-    _pipe(device).start();
   }
 
   Future<void> onDeviceDisconnected(String serial) async {
-    final pipe = _pipes.remove(serial);
-    if (pipe != null) unawaited(pipe.close());
+    await DeviceLink.close(serial);
     releaseChatHold(serial);
     refreshMembers();
   }
@@ -588,17 +590,6 @@ class ChatController extends GetxController with WidgetsBindingObserver {
     return message.copyWith(bytes: bytes, size: bytes.length);
   }
 
-  ChatPipe _pipe(ConnectedDevice device) {
-    return _pipes.putIfAbsent(device.serial, () {
-      return ChatPipe(device, (frame) {
-        final previous = _deviceChain[device.serial] ?? Future<void>.value();
-        _deviceChain[device.serial] = previous
-            .catchError((Object _) {})
-            .then((_) => _onDeviceFrame(device.serial, frame));
-      });
-    });
-  }
-
   Future<void> _onDeviceFrame(String serial, FireDataResponse frame) async {
     try {
       switch (frame.name) {
@@ -629,7 +620,7 @@ class ChatController extends GetxController with WidgetsBindingObserver {
 
   Future<void> _connectBridge() async {
     try {
-      await _bridge.start();
+      await _bridge.start(selfId.value);
       await _announceSelf();
     } catch (error, stack) {
       log.warning('连接聊天通道失败', error, stack);
@@ -1246,7 +1237,7 @@ class ChatController extends GetxController with WidgetsBindingObserver {
     ConnectedDevice device,
     FireDataRequest Function(int id) build,
   ) async {
-    return _pipe(device).exchange(build);
+    return DeviceLink.exchangeApp(device.serial, build);
   }
 }
 

@@ -229,18 +229,22 @@ class AdbDevice {
     required String local,
     bool noRebind = false,
   }) async {
-    final spec = noRebind ? 'reverse:norebind:$remote;$local' : 'reverse:$remote;$local';
+    // 设备侧命令是 reverse:forward:<设备>;<主机>。少了 forward: 时，
+    // 本机 adb server 会在 UpdateReverseConfig 里直接终止进程。
+    final spec = noRebind
+        ? 'reverse:forward:norebind:$remote;$local'
+        : 'reverse:forward:$remote;$local';
     await _connection.service(spec);
   }
 
   /// 移除反向转发规则。
   Future<void> reverseRemove({required String remote}) async {
-    await _connection.service('reverse:remove:$remote');
+    await _connection.service('reverse:killforward:$remote');
   }
 
   /// 列出所有反向转发规则。
   Future<List<ReverseRule>> listReverses() async {
-    final output = await _connection.service('reverse:list');
+    final output = await _connection.service('reverse:list-forward');
     final text = utf8.decode(output, allowMalformed: true);
     return _parseReverseList(text);
   }
