@@ -66,6 +66,13 @@ class _ChatTranscriptState extends State<ChatTranscript> {
     final l10n = context.l10n;
     return Column(
       children: <Widget>[
+        Obx(() {
+          final room = _room(widget.conversationId);
+          if (room == null || room.kind != kChatDirect) {
+            return const SizedBox.shrink();
+          }
+          return ChatStatusBanner(room: room);
+        }),
         if (_selecting) _selectionBar(context),
         Expanded(
           child: Obx(() {
@@ -87,13 +94,6 @@ class _ChatTranscriptState extends State<ChatTranscript> {
             );
           }),
         ),
-        Obx(() {
-          final room = _room(widget.conversationId);
-          if (room != null && room.kind == kChatDirect) {
-            return ChatStatusBanner(room: room);
-          }
-          return const SizedBox.shrink();
-        }),
         Obx(() {
           final room = _room(widget.conversationId);
           final alone =

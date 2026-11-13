@@ -7,6 +7,7 @@ import '../../l10n/fireadb_localizations_ext.dart';
 import '../../widgets/adaptive.dart';
 import '../chat_controller.dart';
 import '../chat_conversation.dart';
+import 'chat_discover_page.dart';
 import 'chat_info_page.dart';
 import 'chat_plaza.dart';
 import 'chat_room_page.dart';
@@ -175,6 +176,17 @@ class _ChatListState extends State<_ChatList> {
                     icon: const Icon(Icons.checklist),
                   ),
                 IconButton(
+                  tooltip: l10n.chatDiscover,
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ChatDiscoverPage(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.travel_explore),
+                ),
+                IconButton(
                   tooltip: l10n.chatNewDirect,
                   onPressed: () => _direct(context),
                   icon: const Icon(Icons.add_comment_outlined),
@@ -225,7 +237,9 @@ class _ChatListState extends State<_ChatList> {
             ),
       title: Text(title, overflow: TextOverflow.ellipsis),
       subtitle: Text(
-        room.isMyChannel(selfId)
+        room.closed
+            ? l10n.chatChannelClosed
+            : room.isMyChannel(selfId)
             ? chatPreview(l10n, room)
             : '${chatKindLabel(l10n, room, selfId)} · ${chatPreview(l10n, room)}',
         maxLines: 1,
@@ -507,8 +521,9 @@ class _ChatListState extends State<_ChatList> {
   Future<void> _direct(BuildContext context) async {
     final picked = await showChatDevicePicker(
       context,
-      devices: _chat.knownDevices(),
+      devices: _chat.onlineChatDevices(),
       title: context.l10n.chatNewDirect,
+      empty: context.l10n.chatNoOnlineDevices,
     );
     if (picked == null || !context.mounted) return;
     final id = await _chat.startDirect(picked.serial, picked.displayName);

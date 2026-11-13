@@ -5,6 +5,7 @@ import '../../app_feedback.dart';
 import '../../capture/data/local_opener.dart';
 import '../../l10n/fireadb_localizations_ext.dart';
 import '../chat_controller.dart';
+import '../chat_conversation.dart';
 import '../chat_message.dart';
 import '../chat_post.dart';
 import 'chat_compose_page.dart';
@@ -59,6 +60,8 @@ class _ChatPostPageState extends State<ChatPostPage> {
       final images = _children(post.seq, 'image');
       final files = _children(post.seq, 'file');
       final comments = _children(post.seq, 'text');
+      final room = _room();
+      final canWrite = room != null && _chat.canPost(room);
       return Scaffold(
         appBar: AppBar(
           title: Text(post.senderName),
@@ -66,19 +69,21 @@ class _ChatPostPageState extends State<ChatPostPage> {
             if (_chat.canRevise(post))
               IconButton(
                 tooltip: l10n.chatEditPost,
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => ChatComposePage(
-                        conversationId: widget.conversationId,
-                        editing: post,
-                        initialText: text,
-                        existingImages: images,
-                        existingFiles: files,
-                      ),
-                    ),
-                  );
-                },
+                onPressed: canWrite
+                    ? () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => ChatComposePage(
+                              conversationId: widget.conversationId,
+                              editing: post,
+                              initialText: text,
+                              existingImages: images,
+                              existingFiles: files,
+                            ),
+                          ),
+                        );
+                      }
+                    : null,
                 icon: const Icon(Icons.edit_outlined),
               ),
           ],
@@ -146,17 +151,18 @@ class _ChatPostPageState extends State<ChatPostPage> {
                     Expanded(
                       child: TextField(
                         controller: _comment,
+                        enabled: canWrite,
                         decoration: InputDecoration(
                           hintText: l10n.chatDiscussHint,
                           border: const OutlineInputBorder(),
                           isDense: true,
                         ),
-                        onSubmitted: (_) => _sendComment(),
+                        onSubmitted: canWrite ? (_) => _sendComment() : null,
                       ),
                     ),
                     IconButton(
                       tooltip: l10n.chatSend,
-                      onPressed: _sendComment,
+                      onPressed: canWrite ? _sendComment : null,
                       icon: const Icon(Icons.send),
                     ),
                   ],
@@ -167,6 +173,13 @@ class _ChatPostPageState extends State<ChatPostPage> {
         ),
       );
     });
+  }
+
+  ChatConversation? _room() {
+    for (final item in _chat.conversations) {
+      if (item.id == widget.conversationId) return item;
+    }
+    return null;
   }
 
   ChatMessage? _post() {

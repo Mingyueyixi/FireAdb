@@ -2675,6 +2675,12 @@ abstract class FireAdbLocalizations {
   /// **'没有可选的设备。先在连接页连上设备。'**
   String get chatNoDevices;
 
+  /// No description provided for @chatNoOnlineDevices.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有在线的对方。对方的聊天通道接上之后才能发起私聊。'**
+  String get chatNoOnlineDevices;
+
   /// No description provided for @chatReachable.
   ///
   /// In zh, this message translates to:
@@ -2932,6 +2938,66 @@ abstract class FireAdbLocalizations {
   /// In zh, this message translates to:
   /// **'通道没接上，内容会留在本机'**
   String get chatNobodyReached;
+
+  /// No description provided for @chatOwnChannel.
+  ///
+  /// In zh, this message translates to:
+  /// **'这是你主持的频道，帖子留在本机'**
+  String get chatOwnChannel;
+
+  /// No description provided for @chatChannelClosed.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个频道已经解散'**
+  String get chatChannelClosed;
+
+  /// No description provided for @chatDiscover.
+  ///
+  /// In zh, this message translates to:
+  /// **'发现频道'**
+  String get chatDiscover;
+
+  /// No description provided for @chatDiscovering.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在查找附近的频道'**
+  String get chatDiscovering;
+
+  /// No description provided for @chatDiscoverEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'附近没有可加入的频道'**
+  String get chatDiscoverEmpty;
+
+  /// No description provided for @chatJoin.
+  ///
+  /// In zh, this message translates to:
+  /// **'加入'**
+  String get chatJoin;
+
+  /// No description provided for @chatJoined.
+  ///
+  /// In zh, this message translates to:
+  /// **'已加入'**
+  String get chatJoined;
+
+  /// No description provided for @chatJoinFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有加入这个频道'**
+  String get chatJoinFailed;
+
+  /// No description provided for @chatNotJoined.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没加入'**
+  String get chatNotJoined;
+
+  /// No description provided for @chatJoinOnPost.
+  ///
+  /// In zh, this message translates to:
+  /// **'发帖或讨论会加入这个频道'**
+  String get chatJoinOnPost;
 
   /// No description provided for @chatReachCount.
   ///

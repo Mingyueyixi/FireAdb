@@ -558,6 +558,12 @@ class ChatStore {
     });
   }
 
+  Future<void> markClosed(String id) => setCursor(id, 'closed', 1);
+
+  Future<bool> hasClosed(String id) async {
+    return (await cursor(id, 'closed')) > 0;
+  }
+
   Future<bool> hasLeft(String id) async {
     final rows = await _database.query(
       'chat_cursor',
@@ -682,7 +688,11 @@ class ChatStore {
             )
           ORDER BY m.created_at DESC
           LIMIT 1
-        ) AS last_kind
+        ) AS last_kind,
+        (
+          SELECT COUNT(*) FROM chat_cursor k
+          WHERE k.conversation_id = c.id AND k.peer = 'closed'
+        ) AS closed
       FROM chat_conversation c
       ORDER BY c.updated_at DESC
       ''',

@@ -25,6 +25,7 @@ class ChatConversation {
     this.lastAt = 0,
     this.lastKind,
     this.unread = 0,
+    this.closed = false,
   });
 
   final String id;
@@ -44,6 +45,9 @@ class ChatConversation {
   final String? lastKind;
   final int unread;
 
+  /// 频道主已经解散。记录还留在本机，但不能再发帖。
+  final bool closed;
+
   bool ownedBy(String selfId) => ownerId == selfId && kind != kChatDirect;
 
   bool isMyChannel(String selfId) => id == myChannelId(selfId);
@@ -62,6 +66,7 @@ class ChatConversation {
       lastAt: lastAt,
       lastKind: lastKind,
       unread: unread,
+      closed: closed,
     );
   }
 
@@ -91,6 +96,7 @@ class ChatConversation {
       lastAt: _asInt(row['last_at']),
       lastKind: _optional(row['last_kind']),
       unread: _asInt(row['unread']),
+      closed: _asInt(row['closed']) > 0,
     );
   }
 }

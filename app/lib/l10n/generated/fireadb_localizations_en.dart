@@ -1532,6 +1532,10 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
       'No devices to choose. Connect one from the Connect tab first.';
 
   @override
+  String get chatNoOnlineDevices =>
+      'Nobody is online. A direct chat can start after their chat channel is connected.';
+
+  @override
   String get chatReachable => 'Channel connected';
 
   @override
@@ -1668,6 +1672,37 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   @override
   String get chatNobodyReached =>
       'The channel is not connected. This stays on this device.';
+
+  @override
+  String get chatOwnChannel =>
+      'This channel is yours. Posts stay on this device.';
+
+  @override
+  String get chatChannelClosed => 'This channel has been disbanded';
+
+  @override
+  String get chatDiscover => 'Discover channels';
+
+  @override
+  String get chatDiscovering => 'Looking for nearby channels';
+
+  @override
+  String get chatDiscoverEmpty => 'No channels nearby to join';
+
+  @override
+  String get chatJoin => 'Join';
+
+  @override
+  String get chatJoined => 'Joined';
+
+  @override
+  String get chatJoinFailed => 'Could not join this channel';
+
+  @override
+  String get chatNotJoined => 'Not joined yet';
+
+  @override
+  String get chatJoinOnPost => 'Posting or commenting joins this channel';
 
   @override
   String chatReachCount(int count) {

@@ -81,6 +81,17 @@ class DeviceLink {
     await door.close();
   }
 
+  static Future<void> replyApp(
+    String serial,
+    int id,
+    String name,
+    Object body,
+  ) async {
+    final peer = _doors[serial]?.app;
+    if (peer == null || id == 0) return;
+    await peer.write(FireDataRequest.json(name: name, id: id, body: body).bytes);
+  }
+
   static Future<FireDataResponse> exchangeApp(
     String serial,
     FireDataRequest Function(int id) build,

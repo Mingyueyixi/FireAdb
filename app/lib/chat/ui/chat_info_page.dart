@@ -93,12 +93,12 @@ class _ChatInfoPageState extends State<ChatInfoPage> {
                 title: Text(owned ? l10n.chatDisband : l10n.chatLeave),
                 onTap: () => owned ? _disband(context) : _leave(context),
               ),
-            if (_chat.desktopOnlyReach &&
-                room != null &&
-                room.ownedBy(_chat.selfId.value))
+            if (room != null &&
+                room.ownedBy(_chat.selfId.value) &&
+                _chat.ownerReachCount() > 0)
               ListTile(
-                leading: const Icon(Icons.computer),
-                title: Text(l10n.chatDesktopOnline),
+                leading: const Icon(Icons.forum_outlined),
+                title: Text(l10n.chatReachCount(_chat.ownerReachCount())),
                 subtitle: Text(l10n.chatReachable),
               ),
             for (final member in _chat.members)
@@ -413,6 +413,7 @@ Future<DeviceProfile?> showChatDevicePicker(
   BuildContext context, {
   required List<DeviceProfile> devices,
   required String title,
+  String? empty,
 }) {
   final l10n = context.l10n;
   return showDialog<DeviceProfile>(
@@ -424,7 +425,7 @@ Future<DeviceProfile?> showChatDevicePicker(
           width: 420,
           height: devices.isEmpty ? null : 320,
           child: devices.isEmpty
-              ? Text(l10n.chatNoDevices)
+              ? Text(empty ?? l10n.chatNoDevices)
               : ListView(
                   children: <Widget>[
                     for (final device in devices)

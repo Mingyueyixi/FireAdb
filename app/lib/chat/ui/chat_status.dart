@@ -21,13 +21,14 @@ class ChatStatusBanner extends StatelessWidget {
           : switch (presence) {
         ChatPresence.ready when room.kind == kChatDirect => l10n.chatPeerOnline,
         ChatPresence.ready when room.ownedBy(chat.selfId.value) =>
-          chat.desktopOnlyReach
-              ? l10n.chatDesktopOnline
+          chat.ownerReachCount() == 0
+              ? l10n.chatOwnChannel
               : l10n.chatReachCount(chat.ownerReachCount()),
         ChatPresence.ready => l10n.chatHostOnline,
         ChatPresence.peerOffline => l10n.chatPeerOffline,
         ChatPresence.hostOffline => l10n.chatHostOffline,
         ChatPresence.nobodyReached => l10n.chatNobodyReached,
+        ChatPresence.removed => l10n.chatChannelClosed,
       };
       return Material(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,

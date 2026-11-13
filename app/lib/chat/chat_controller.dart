@@ -25,7 +25,7 @@ const String _selfSerialsKey = 'chatSelfSerials';
 const String _migratedKey = 'chatMigratedDefault';
 const int _pullRounds = 20;
 
-enum ChatPresence { ready, hostOffline, nobodyReached, peerOffline }
+enum ChatPresence { ready, hostOffline, nobodyReached, peerOffline, removed }
 
 class ChatMember {
   const ChatMember({
@@ -441,7 +441,7 @@ class ChatController extends GetxController with WidgetsBindingObserver {
     }
     await reload();
     final room = await store.conversation(id);
-    if (room == null || room.ownedBy(selfId.value)) return;
+    if (room == null || room.ownedBy(selfId.value) || room.closed) return;
     unawaited(_syncRoom(room));
   }
 
@@ -454,15 +454,24 @@ class ChatController extends GetxController with WidgetsBindingObserver {
     if (activeId.value == room.id) unawaited(_loadImages(room));
   }
 
-  /// 频道主页和下拉刷新都走这里：要当前帖子列表。
-  Future<void> refreshChannel(String id) async {
+  /// 下拉刷新。自己的频道只重读本机。连不上频道主时马上结束，不再空等。
+  Future<bool> refreshChannel(String id) async {
     final room = await store.conversation(id);
-    if (room == null || room.kind == kChatDirect) return;
+    if (room == null || room.kind == kChatDirect) return true;
+    if (room.closed) return false;
     if (room.ownedBy(selfId.value)) {
       await reload();
-      return;
+      return true;
     }
-    await _syncRoom(room);
+    if (!canPost(room)) return false;
+    try {
+      await _pullFeed(room, wait: false).timeout(const Duration(seconds: 8));
+      if (activeId.value == room.id) unawaited(_loadImages(room));
+      return true;
+    } catch (error, stack) {
+      log.warning('刷新频道失败', error, stack);
+      return false;
+    }
   }
 
   Future<String> createChannel(String title) async {
@@ -618,7 +627,192 @@ class ChatController extends GetxController with WidgetsBindingObserver {
     final room = await store.conversation(id);
     if (room == null || room.kind == kChatDirect) return;
     if (!room.ownedBy(selfId.value)) return;
+    await _announceClosed(room);
     await _dropRoom(id);
+  }
+
+  Future<void> _announceClosed(ChatConversation room) async {
+    final body = <String, Object?>{
+      'conversationId': room.id,
+      'title': room.title,
+      'ownerId': room.ownerId,
+      'kind': room.kind,
+      'closed': true,
+    };
+    for (final serial in await _memberSerials(room)) {
+      if (_isSelfTransport(serial) || !DeviceLink.appReady(serial)) continue;
+      try {
+        await _sendJson(serial, 'chat.closed', body);
+      } catch (error, stack) {
+        log.warning('通知频道解散失败 $serial', error, stack);
+      }
+    }
+    if (_bridge.available) await _bridgeSend('chat.closed', body);
+  }
+
+  Future<void> _noteClosed(String id) async {
+    if (id.isEmpty) return;
+    final room = await store.conversation(id);
+    if (room == null || room.kind == kChatDirect || room.ownedBy(selfId.value)) {
+      return;
+    }
+    if (room.closed) return;
+    await store.markClosed(id);
+    await reload();
+  }
+
+  Future<Map<String, Object?>> _catalogBody() async {
+    final rooms = await store.conversations();
+    return <String, Object?>{
+      'channels': <Object?>[
+        for (final room in rooms)
+          if (room.kind != kChatDirect && room.ownedBy(selfId.value) && !room.closed)
+            <String, Object?>{
+              'id': room.id,
+              'title': room.title,
+              'ownerId': room.ownerId,
+              'ownerName': _selfName,
+              'kind': room.kind,
+            },
+      ],
+    };
+  }
+
+  Future<void> _serveJoin(Map<String, dynamic> json, String serial) async {
+    final id = '${json['conversationId'] ?? ''}';
+    final room = await store.conversation(id);
+    if (room == null || room.kind == kChatDirect || !room.ownedBy(selfId.value)) {
+      throw StateError('频道已经解散');
+    }
+    final offered = '${json['serial'] ?? ''}'.trim();
+    final caller = serial.isNotEmpty
+        ? serial
+        : (offered.isNotEmpty ? offered : '${json['selfId'] ?? ''}'.trim());
+    final name = '${json['name'] ?? ''}'.trim();
+    if (caller.isEmpty) throw StateError('没有加入路径');
+    await addMember(id, caller, name.isEmpty ? caller : name);
+  }
+
+  Future<List<ChatListing>> discoverChannels() async {
+    final found = <String, ChatListing>{};
+    void take(FireDataResponse reply, String via) {
+      final raw = reply.json['channels'];
+      if (raw is! List) return;
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final id = '${item['id'] ?? ''}';
+        final ownerId = '${item['ownerId'] ?? ''}';
+        if (id.isEmpty || ownerId == selfId.value || found.containsKey(id)) {
+          continue;
+        }
+        found[id] = ChatListing(
+          id: id,
+          title: '${item['title'] ?? ''}',
+          ownerId: ownerId,
+          ownerName: '${item['ownerName'] ?? ''}',
+          via: via,
+        );
+      }
+    }
+
+    for (final device in _manager.devices) {
+      if (!DeviceLink.appReady(device.serial)) continue;
+      try {
+        final reply = await _exchange(
+          device.serial,
+          (id) => FireDataRequest.json(
+            name: 'chat.catalog',
+            id: id,
+            body: const <String, Object?>{},
+          ),
+        );
+        take(reply, device.serial);
+      } catch (error, stack) {
+        log.warning('读取频道目录失败 ${device.serial}', error, stack);
+      }
+    }
+    if (_bridge.linked) {
+      try {
+        take(await _bridge.exchange('chat.catalog', const <String, Object?>{}), '');
+      } catch (error, stack) {
+        log.warning('读取频道目录失败', error, stack);
+      }
+    }
+    final listed = found.values.toList();
+    listed.sort((a, b) => a.title.compareTo(b.title));
+    return listed;
+  }
+
+  /// 只读取频道主上的帖子，不在本机建立订阅。
+  Future<List<ChatMessage>> previewChannel(ChatListing channel) async {
+    final body = <String, Object?>{
+      'conversationId': channel.id,
+      'list': true,
+    };
+    final FireDataResponse reply;
+    if (channel.via.isNotEmpty) {
+      reply = await _exchange(
+        channel.via,
+        (id) => FireDataRequest.json(name: 'chat.pull', id: id, body: body),
+      );
+    } else if (_bridge.linked) {
+      reply = await _bridge.exchange('chat.pull', body);
+    } else {
+      throw StateError('聊天通道还没接上');
+    }
+    if (reply.json['closed'] == true) throw StateError('频道已经解散');
+    if (reply.name != 'chat.batch') {
+      throw StateError(reply.errorText('没有拉到聊天记录'));
+    }
+    final messages = ChatSlice.fromJson(reply.json).messages;
+    messages.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return messages;
+  }
+
+  Future<String> joinChannel(ChatListing channel) async {
+    final body = <String, Object?>{
+      'conversationId': channel.id,
+      'selfId': selfId.value,
+      'name': _selfName,
+      'serial': _localSerial,
+    };
+    final FireDataResponse reply;
+    if (channel.via.isNotEmpty) {
+      reply = await _exchange(
+        channel.via,
+        (id) => FireDataRequest.json(name: 'chat.join', id: id, body: body),
+      );
+    } else if (_bridge.linked) {
+      reply = await _bridge.exchange('chat.join', body);
+    } else {
+      throw StateError('聊天通道还没接上');
+    }
+    if (reply.name == 'chat.closed' || reply.json['closed'] == true) {
+      await _noteClosed(channel.id);
+      throw StateError('频道已经解散');
+    }
+    if (reply.name != 'chat.ok' && reply.name != 'chat.join') {
+      throw StateError(reply.errorText('没有加入这个频道'));
+    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await store.ensureConversation(
+      ChatConversation(
+        id: channel.id,
+        kind: kChatChannel,
+        title: channel.title,
+        ownerId: channel.ownerId,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+    if (channel.via.isNotEmpty) await store.addRoute(channel.id, channel.via);
+    await store.upsertMember(
+      channel.id,
+      ChatPerson(id: channel.ownerId, name: channel.ownerName, role: kChatOwner),
+    );
+    await reload();
+    await openConversation(channel.id);
+    return channel.id;
   }
 
   /// 成员退出别人主持的频道。
@@ -710,6 +904,20 @@ class ChatController extends GetxController with WidgetsBindingObserver {
     await reload();
   }
 
+  /// 现在能发起私聊的对方：聊天通道已经接上，或正连着的本机。不含历史连接。
+  List<DeviceProfile> onlineChatDevices() {
+    final profiles = <String, DeviceProfile>{};
+    for (final device in _manager.devices) {
+      final serial = device.serial;
+      if (!DeviceLink.appReady(serial) && !_isSelfTransport(serial)) continue;
+      profiles[serial] =
+          _manager.profileOf(serial) ?? DeviceProfile(serial: serial);
+    }
+    final values = profiles.values.toList();
+    values.sort((a, b) => a.displayName.compareTo(b.displayName));
+    return values;
+  }
+
   List<DeviceProfile> knownDevices() {
     final profiles = <String, DeviceProfile>{};
     for (final profile in _manager.history) {
@@ -749,6 +957,7 @@ class ChatController extends GetxController with WidgetsBindingObserver {
 
   ChatPresence presenceOf(ChatConversation room) {
     final _ = linkTick.value;
+    if (room.closed) return ChatPresence.removed;
     if (isSelfChat(room)) return ChatPresence.ready;
     if (room.kind == kChatDirect) {
       final serial = room.peerSerial ?? '';
@@ -760,16 +969,20 @@ class ChatController extends GetxController with WidgetsBindingObserver {
       if (_deviceChatUp(serial)) return ChatPresence.ready;
       return ChatPresence.peerOffline;
     }
-    if (room.ownedBy(selfId.value)) {
-      if (ownerReachCount() == 0) return ChatPresence.nobodyReached;
-      return ChatPresence.ready;
-    }
+    if (room.ownedBy(selfId.value)) return ChatPresence.ready;
     if (channelUp && onlinePeers.contains(room.ownerId)) return ChatPresence.ready;
     final ownerOnline = members.any(
       (member) => member.role == kChatOwner && member.online,
     );
     if (ownerOnline) return ChatPresence.ready;
     return ChatPresence.hostOffline;
+  }
+
+  /// 别人主持的频道，连不上频道主时不能发帖。自己主持的频道写在本机。
+  bool canPost(ChatConversation room) {
+    if (room.closed || room.kind == kChatDirect) return false;
+    if (room.ownedBy(selfId.value)) return true;
+    return presenceOf(room) == ChatPresence.ready;
   }
 
   int ownerReachCount() {
@@ -780,13 +993,6 @@ class ChatController extends GetxController with WidgetsBindingObserver {
         .where((member) => !member.self && member.online)
         .length;
     return viaBridge > devices ? viaBridge : devices;
-  }
-
-  /// 别人连到了本机，当前能送达的只有那一侧。
-  bool get desktopOnlyReach {
-    if (!_bridge.available || !_bridge.linked) return false;
-    final others = onlinePeers.where((id) => id != selfId.value).length;
-    return others > 0 && members.every((member) => member.self || !member.online);
   }
 
   bool canRevise(ChatMessage post) {
@@ -1022,6 +1228,8 @@ class ChatController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<ChatMessage> _sendToHost(ChatConversation room, ChatMessage draft) async {
+    if (room.closed) throw StateError('频道已经解散');
+    if (!canPost(room)) throw StateError('连不上频道主');
     final body = (await _withBytes(draft)).wireJson();
     final serial = await _connectedHost(room);
     ChatMessage accepted;
@@ -1030,6 +1238,10 @@ class ChatController extends GetxController with WidgetsBindingObserver {
         serial,
         (id) => FireDataRequest.json(name: 'chat.submit', id: id, body: body),
       );
+      if (reply.name == 'chat.closed' || reply.json['closed'] == true) {
+        await _noteClosed(room.id);
+        throw StateError('频道已经解散');
+      }
       if (reply.name != 'chat.accepted') {
         throw StateError(reply.errorText('聊天没有写入服务端'));
       }
@@ -1186,13 +1398,60 @@ class ChatController extends GetxController with WidgetsBindingObserver {
         case 'chat.push':
           await _servePush(frame.json);
         case 'chat.pull':
-          _later(() => _servePull(serial, frame.json));
+          if (frame.id != 0) {
+            final served = await _answer(frame.json);
+            await DeviceLink.replyApp(
+              serial,
+              frame.id,
+              'chat.batch',
+              served ??
+                  <String, Object?>{
+                    'conversationId': '${frame.json['conversationId'] ?? ''}',
+                    'head': 0,
+                    'cursor': _asInt(frame.json['after']),
+                    'senderId': '',
+                    'messages': <Object?>[],
+                  },
+            );
+          } else {
+            _later(() => _servePull(serial, frame.json));
+          }
         case 'chat.submit':
-          await _serveSubmit(serial, frame.json);
+          await _serveSubmit(serial, frame.json, replyId: frame.id);
         case 'chat.deliver':
           await _serveDeliver(frame.json, serial);
         case 'chat.delete':
           await _serveDelete(frame.json);
+        case 'chat.closed':
+          await _noteClosed('${frame.json['conversationId'] ?? ''}');
+        case 'chat.catalog':
+          if (frame.id != 0) {
+            await DeviceLink.replyApp(
+              serial,
+              frame.id,
+              'chat.catalog',
+              await _catalogBody(),
+            );
+          }
+        case 'chat.join':
+          if (frame.id != 0) {
+            try {
+              await _serveJoin(frame.json, serial);
+              await DeviceLink.replyApp(
+                serial,
+                frame.id,
+                'chat.ok',
+                const <String, Object?>{},
+              );
+            } catch (error) {
+              await DeviceLink.replyApp(
+                serial,
+                frame.id,
+                'session.error',
+                <String, Object?>{'error': '$error'},
+              );
+            }
+          }
         case 'chat.ack':
           await store.setCursor(
             '${frame.json['conversationId'] ?? ''}',
@@ -1233,6 +1492,20 @@ class ChatController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> _onBridgeFrame(FireDataResponse frame) async {
+    if (_bridge.take(frame)) return;
+    if (frame.id != 0 && frame.name == 'chat.catalog') {
+      await _bridgeSend('chat.catalog', await _catalogBody(), id: frame.id);
+      return;
+    }
+    if (frame.id != 0 && frame.name == 'chat.join') {
+      try {
+        await _serveJoin(frame.json, '');
+        await _bridgeSend('chat.ok', const <String, Object?>{}, id: frame.id);
+      } catch (error) {
+        await _bridgeSend('session.error', '$error', id: frame.id, asText: true);
+      }
+      return;
+    }
     if (frame.id != 0 &&
         (frame.name == 'chat.pull' ||
             frame.name == 'chat.submit' ||
@@ -1250,7 +1523,16 @@ class ChatController extends GetxController with WidgetsBindingObserver {
         await _servePush(frame.json);
       case 'chat.delete':
         await _serveDelete(frame.json);
+      case 'chat.closed':
+        await _noteClosed('${frame.json['conversationId'] ?? ''}');
+        final waiting = _acceptWait;
+        if (frame.id != 0 && waiting != null && !waiting.isCompleted) {
+          waiting.completeError(StateError('频道已经解散'));
+        }
       case 'chat.batch':
+        if (frame.json['closed'] == true) {
+          await _noteClosed('${frame.json['conversationId'] ?? ''}');
+        }
         final slice = ChatSlice.fromJson(frame.json);
         final waiter = _batchWait;
         if (waiter != null && !waiter.isCompleted) {
@@ -1301,10 +1583,12 @@ class ChatController extends GetxController with WidgetsBindingObserver {
       final message = await _acceptSubmit(frame.json);
       if (message == null) {
         await _bridgeSend(
-          'session.error',
-          '不是这个会话的服务端',
+          'chat.closed',
+          <String, Object?>{
+            'conversationId': '${frame.json['groupId'] ?? frame.json['conversationId'] ?? ''}',
+            'closed': true,
+          },
           id: frame.id,
-          asText: true,
         );
         return;
       }
@@ -1397,12 +1681,16 @@ class ChatController extends GetxController with WidgetsBindingObserver {
     };
   }
 
-  Future<void> _pullFeed(ChatConversation room) {
+  Future<void> _pullFeed(ChatConversation room, {bool wait = true}) {
     return _runPull(() async {
-      final slice = await _pullSlice(room, <String, Object?>{
-        'conversationId': room.id,
-        'list': true,
-      });
+      final slice = await _pullSlice(
+        room,
+        <String, Object?>{
+          'conversationId': room.id,
+          'list': true,
+        },
+        wait: wait,
+      );
       await _applySlice(room.id, '', slice, advance: false);
       if (activeId.value == room.id) await reload();
     });
@@ -1685,8 +1973,9 @@ class ChatController extends GetxController with WidgetsBindingObserver {
 
   Future<ChatSlice> _pullSlice(
     ChatConversation room,
-    Map<String, Object?> body,
-  ) async {
+    Map<String, Object?> body, {
+    bool wait = true,
+  }) async {
     final String? serial;
     if (room.kind == kChatDirect) {
       serial = room.peerSerial;
@@ -1698,36 +1987,47 @@ class ChatController extends GetxController with WidgetsBindingObserver {
         serial,
         (id) => FireDataRequest.json(name: 'chat.pull', id: id, body: body),
       );
+      if (reply.json['closed'] == true) {
+        await _noteClosed(room.id);
+        return const ChatSlice(head: 0, cursor: 0, messages: <ChatMessage>[]);
+      }
       if (reply.name != 'chat.batch') {
         throw StateError(reply.errorText('没有拉到附件'));
       }
       return ChatSlice.fromJson(reply.json);
     }
     if (!_bridge.available) throw StateError('聊天通道还没接上');
-    final deadline = DateTime.now().add(const Duration(seconds: 20));
+    if (!wait && !_bridge.linked) throw StateError('聊天通道还没接上');
+    final budget = wait ? const Duration(seconds: 12) : const Duration(seconds: 8);
+    final deadline = DateTime.now().add(budget);
+    var pause = const Duration(seconds: 2);
     while (true) {
       final left = deadline.difference(DateTime.now());
       if (left <= Duration.zero) {
-        throw TimeoutException('拉取超时', const Duration(seconds: 20));
+        throw TimeoutException('拉取超时', budget);
       }
       if (!_bridge.linked) {
-        await Future<void>.delayed(const Duration(milliseconds: 200));
+        if (!wait) throw StateError('聊天通道还没接上');
+        await Future<void>.delayed(pause);
+        final grown = pause.inMilliseconds * 2;
+        pause = Duration(milliseconds: grown > 8000 ? 8000 : grown);
         continue;
       }
       final waiter = Completer<ChatSlice>();
       _batchWait = waiter;
       try {
         if (!await _bridgeSend('chat.pull', body)) {
-          await Future<void>.delayed(const Duration(milliseconds: 200));
+          if (!wait) throw StateError('聊天通道还没接上');
+          await Future<void>.delayed(pause);
           continue;
         }
         return await waiter.future.timeout(left);
       } on TimeoutException {
-        if (!DateTime.now().isBefore(deadline)) rethrow;
+        if (!wait || !DateTime.now().isBefore(deadline)) rethrow;
       } catch (error) {
         final text = '$error';
         final dropped = text.contains('断开') || text.contains('还没接上');
-        if (!dropped || !DateTime.now().isBefore(deadline)) rethrow;
+        if (!wait || !dropped || !DateTime.now().isBefore(deadline)) rethrow;
       } finally {
         if (identical(_batchWait, waiter)) _batchWait = null;
       }
@@ -1809,9 +2109,21 @@ class ChatController extends GetxController with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _serveSubmit(String serial, Map<String, dynamic> json) async {
+  Future<void> _serveSubmit(
+    String serial,
+    Map<String, dynamic> json, {
+    int replyId = 0,
+  }) async {
     final message = await _acceptSubmit(json);
-    if (message == null) return;
+    if (message == null) {
+      if (replyId != 0 && serial.isNotEmpty) {
+        await DeviceLink.replyApp(serial, replyId, 'chat.closed', <String, Object?>{
+          'conversationId': '${json['groupId'] ?? json['conversationId'] ?? ''}',
+          'closed': true,
+        });
+      }
+      return;
+    }
     await _sendJson(serial, 'chat.accepted', message.wireJson());
     await _pushChannel(message);
   }
@@ -1920,7 +2232,17 @@ class ChatController extends GetxController with WidgetsBindingObserver {
   Future<Map<String, Object?>?> _answer(Map<String, dynamic> json) async {
     final id = '${json['conversationId'] ?? ''}';
     final room = await store.conversation(id);
-    if (room == null) return null;
+    if (room == null) {
+      if (id.isEmpty) return null;
+      return <String, Object?>{
+        'conversationId': id,
+        'closed': true,
+        'head': 0,
+        'cursor': 0,
+        'senderId': '',
+        'messages': <Object?>[],
+      };
+    }
     final onlySeq = _asInt(json['seq']);
     final onlySender = '${json['senderId'] ?? ''}';
     if (onlySeq > 0 && onlySender.isNotEmpty) {
@@ -2061,6 +2383,7 @@ class ChatController extends GetxController with WidgetsBindingObserver {
     final id = '${json['conversationId'] ?? ''}';
     final kind = '${json['kind'] ?? ''}';
     if (id.isEmpty || kind.isEmpty || await store.hasLeft(id)) return;
+    if (await store.hasClosed(id)) return;
     final now = DateTime.now().millisecondsSinceEpoch;
     await store.ensureConversation(
       ChatConversation(
@@ -2184,6 +2507,24 @@ bool pEqualsDir(String path, String directory) {
       ? directory
       : '$directory${Platform.pathSeparator}';
   return path.startsWith(prefix);
+}
+
+class ChatListing {
+  const ChatListing({
+    required this.id,
+    required this.title,
+    required this.ownerId,
+    required this.ownerName,
+    required this.via,
+  });
+
+  final String id;
+  final String title;
+  final String ownerId;
+  final String ownerName;
+
+  /// 空字符串表示从当前聊天通道问到的，否则是本机连上的设备序列号。
+  final String via;
 }
 
 String? _optional(Object? value) {

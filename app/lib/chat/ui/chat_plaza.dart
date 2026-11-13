@@ -36,7 +36,7 @@ class ChatPlaza extends StatelessWidget {
           if (room != null) ChatStatusBanner(room: room),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: () => _chat.refreshChannel(conversationId),
+              onRefresh: () => _refresh(context),
               child: posts.isEmpty
                 ? ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -139,13 +139,16 @@ class ChatPlaza extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => ChatComposePage(conversationId: conversationId),
-                      ),
-                    );
-                  },
+                  onPressed: room != null && _chat.canPost(room)
+                      ? () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  ChatComposePage(conversationId: conversationId),
+                            ),
+                          );
+                        }
+                      : null,
                   icon: const Icon(Icons.edit_outlined),
                   label: Text(l10n.chatNewPost),
                 ),
@@ -155,6 +158,22 @@ class ChatPlaza extends StatelessWidget {
         ],
       );
     });
+  }
+
+  Future<void> _refresh(BuildContext context) async {
+    final reached = await _chat.refreshChannel(conversationId);
+    if (reached || !context.mounted) return;
+    final l10n = context.l10n;
+    final room = _room();
+    showAppMessage(
+      ScaffoldMessenger.of(context),
+      Theme.of(context),
+      title: l10n.chatTitle,
+      message: room != null && room.closed
+          ? l10n.chatChannelClosed
+          : l10n.chatHostOffline,
+      isError: true,
+    );
   }
 
   ChatConversation? _room() {

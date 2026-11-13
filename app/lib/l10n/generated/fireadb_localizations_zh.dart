@@ -1482,6 +1482,9 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get chatNoDevices => '没有可选的设备。先在连接页连上设备。';
 
   @override
+  String get chatNoOnlineDevices => '没有在线的对方。对方的聊天通道接上之后才能发起私聊。';
+
+  @override
   String get chatReachable => '通道已接上';
 
   @override
@@ -1611,6 +1614,36 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get chatNobodyReached => '通道没接上，内容会留在本机';
+
+  @override
+  String get chatOwnChannel => '这是你主持的频道，帖子留在本机';
+
+  @override
+  String get chatChannelClosed => '这个频道已经解散';
+
+  @override
+  String get chatDiscover => '发现频道';
+
+  @override
+  String get chatDiscovering => '正在查找附近的频道';
+
+  @override
+  String get chatDiscoverEmpty => '附近没有可加入的频道';
+
+  @override
+  String get chatJoin => '加入';
+
+  @override
+  String get chatJoined => '已加入';
+
+  @override
+  String get chatJoinFailed => '没有加入这个频道';
+
+  @override
+  String get chatNotJoined => '还没加入';
+
+  @override
+  String get chatJoinOnPost => '发帖或讨论会加入这个频道';
 
   @override
   String chatReachCount(int count) {
