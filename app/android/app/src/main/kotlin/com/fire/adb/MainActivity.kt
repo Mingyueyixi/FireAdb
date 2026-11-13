@@ -29,6 +29,13 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "fireadb/device")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "localSerial" -> result.success(localSerial())
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "fireadb/chat")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -57,6 +64,36 @@ class MainActivity : FlutterActivity() {
                     }
                 },
             )
+    }
+
+    private fun localSerial(): String {
+        for (key in arrayOf("ro.serialno", "ro.boot.serialno", "ril.serialnumber")) {
+            val value = systemProperty(key)
+            if (value.isNotEmpty()) return value
+        }
+        val fromBuild = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                Build.getSerial()
+            } catch (_: SecurityException) {
+                ""
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            Build.SERIAL
+        }
+        if (fromBuild.isNotEmpty() && fromBuild != Build.UNKNOWN) return fromBuild
+        return ""
+    }
+
+    private fun systemProperty(key: String): String {
+        return try {
+            val clazz = Class.forName("android.os.SystemProperties")
+            val get = clazz.getMethod("get", String::class.java, String::class.java)
+            val value = get.invoke(null, key, "") as String
+            if (value.isEmpty() || value == Build.UNKNOWN) "" else value
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     private fun hasAllFilesAccess(): Boolean {

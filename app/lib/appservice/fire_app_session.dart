@@ -2,7 +2,6 @@ import 'dart:async';
 
 import '../connection/model/connected_device.dart';
 import '../link/device_link.dart';
-import '../log/app_log.dart';
 import 'protocol/fire_app_message.dart';
 
 /// 请求号为 0、且不是 `session.ready` 的推送。剪贴板从这里认领自己的事件。
@@ -132,7 +131,6 @@ class FireAppSession {
 
   /// 反向连接上的一帧。hello 已由 [DeviceLink] 核对过。
   void ingest(FireDataResponse message) {
-    log.info('响应 ${message.display}');
     if (message.name == 'session.ready') {
       if (_linkReady) return;
     } else if (message.id == 0 && message.name != 'session.error') {
@@ -175,7 +173,6 @@ class FireAppSession {
   }
 
   Future<void> send(FireDataRequest request) {
-    log.info('请求 ${request.display}');
     return DeviceLink.writeService(serial, request.bytes);
   }
 

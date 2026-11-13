@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
+
 import 'chat_conversation.dart';
 
 const String kDefaultChatGroup = 'default';
@@ -19,6 +21,7 @@ class ChatMessage {
     this.filePath,
     this.mime,
     this.size = 0,
+    this.parentSeq = 0,
     this.pending = false,
     this.deleted = false,
     this.conversation,
@@ -31,13 +34,16 @@ class ChatMessage {
   final String senderId;
   final String senderName;
 
-  /// `text`、`image` 或 `file`。
+  /// `text`、`image`、`file`、`post` 或 `revise`。
   final String kind;
   final String body;
   final String? filePath;
   final String? mime;
   final int size;
   final int createdAt;
+
+  /// 属于哪一篇帖子。0 表示本身就是一条独立消息或帖子。
+  final int parentSeq;
 
   /// 私聊里对方还没拉到。
   final bool pending;
@@ -58,6 +64,7 @@ class ChatMessage {
 
   ChatMessage copyWith({
     String? filePath,
+    int? parentSeq,
     bool? pending,
     int? size,
     bool? deleted,
@@ -72,6 +79,7 @@ class ChatMessage {
       body: body,
       createdAt: createdAt,
       filePath: filePath ?? this.filePath,
+      parentSeq: parentSeq ?? this.parentSeq,
       mime: mime,
       size: size ?? this.size,
       pending: pending ?? this.pending,
@@ -94,6 +102,7 @@ class ChatMessage {
       filePath: filePath,
       mime: mime,
       size: size,
+      parentSeq: parentSeq,
       pending: pending,
       deleted: deleted,
       conversation: room ?? conversation,
@@ -111,6 +120,7 @@ class ChatMessage {
       'senderName': senderName,
       'kind': kind,
       'body': body,
+      'parentSeq': parentSeq,
       'mime': mime ?? '',
       'size': size,
       'createdAt': createdAt,
@@ -136,6 +146,7 @@ class ChatMessage {
       senderName: '${json['senderName'] ?? ''}',
       kind: '${json['kind'] ?? 'text'}',
       body: '${json['body'] ?? ''}',
+      parentSeq: _asInt(json['parentSeq']),
       filePath: _optional(json['filePath']),
       mime: _optional(json['mime']),
       size: _asInt(json['size']),
@@ -165,6 +176,7 @@ class ChatMessage {
       senderName: '${row['sender_name']}',
       kind: '${row['kind']}',
       body: '${row['body']}',
+      parentSeq: _asInt(row['parent_seq']),
       filePath: _optional(row['file_path']),
       mime: _optional(row['mime']),
       size: _asInt(row['size']),
@@ -182,6 +194,7 @@ class ChatMessage {
       'sender_name': senderName,
       'kind': kind,
       'body': body,
+      'parent_seq': parentSeq,
       'file_path': filePath,
       'mime': mime,
       'size': size,
@@ -197,11 +210,13 @@ class ChatSlice {
     required this.head,
     required this.cursor,
     required this.messages,
+    this.dropped = const <ChatDropped>[],
   });
 
   final int head;
   final int cursor;
   final List<ChatMessage> messages;
+  final List<ChatDropped> dropped;
 
   Map<String, Object?> toJson({String senderId = ''}) {
     return <String, Object?>{
@@ -209,6 +224,8 @@ class ChatSlice {
       'cursor': cursor,
       'senderId': senderId,
       'messages': <Object?>[for (final message in messages) message.wireJson()],
+      if (dropped.isNotEmpty)
+        'dropped': <Object?>[for (final item in dropped) item.toJson()],
     };
   }
 
@@ -226,8 +243,134 @@ class ChatSlice {
       head: _asInt(json['head']),
       cursor: _asInt(json['cursor']),
       messages: messages,
+      dropped: ChatDropped.list(json['dropped']),
     );
   }
+}
+
+class ChatDropped {
+  const ChatDropped(this.senderId, this.seq);
+
+  final String senderId;
+  final int seq;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{'senderId': senderId, 'seq': seq};
+  }
+
+  static List<ChatDropped> list(Object? raw) {
+    if (raw is! List) return const <ChatDropped>[];
+    final items = <ChatDropped>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final seq = _asInt(item['seq']);
+      final senderId = '${item['senderId'] ?? ''}';
+      if (senderId.isEmpty || seq <= 0) continue;
+      items.add(ChatDropped(senderId, seq));
+    }
+    return items;
+  }
+}
+
+/// 图片和附件的正文编号。形式是 `chat-img:发送者/内容摘要.后缀`，
+/// 不用 file://，以免和本机文件地址撞上。
+const chatImageMark = 'chat-img:';
+const chatFileMark = 'chat-file:';
+
+bool chatMediaMarked(String body) {
+  return body.startsWith(chatImageMark) ||
+      body.startsWith(chatFileMark) ||
+      body.startsWith('img://') ||
+      body.startsWith('file://');
+}
+
+/// 只有图片和附件才认编号。普通正文里出现同样的字也不当文件。
+/// 编号相对聊天目录，例如 `发送者/md5.jpg`。旧消息仍是 `发送者-序号`。
+String? chatMediaId(ChatMessage message) {
+  if (message.kind != 'image' && message.kind != 'file') return null;
+  final marked = _markedParts(message.body);
+  if (marked != null) return marked.$1;
+  return '${message.senderId}-${message.seq}';
+}
+
+String chatMediaName(ChatMessage message) {
+  if (message.kind != 'file') {
+    if (message.kind == 'image' && chatMediaMarked(message.body)) return '';
+    return message.body;
+  }
+  final marked = _markedParts(message.body);
+  if (marked != null) return marked.$2 ?? '';
+  if (chatMediaMarked(message.body)) return '';
+  return message.body;
+}
+
+String chatMediaRef({
+  required bool image,
+  required String id,
+  String name = '',
+}) {
+  if (image || name.isEmpty) {
+    return '${image ? chatImageMark : chatFileMark}$id';
+  }
+  return '$chatFileMark$id/$name';
+}
+
+String chatMediaHash(List<int> bytes) => md5.convert(bytes).toString();
+
+String chatMediaExt(String name, String? mime) {
+  final dot = name.lastIndexOf('.');
+  var ext = dot >= 0 && dot + 1 < name.length ? name.substring(dot + 1) : '';
+  ext = ext.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  if (ext.length > 8) ext = ext.substring(0, 8);
+  if (ext.isNotEmpty) return ext;
+  switch (mime?.toLowerCase()) {
+    case 'image/jpeg':
+      return 'jpg';
+    case 'image/png':
+      return 'png';
+    case 'image/gif':
+      return 'gif';
+    case 'image/webp':
+      return 'webp';
+    default:
+      return 'bin';
+  }
+}
+
+/// 内容没变时编号不变，所以本地有这份文件就不必再向频道主要。
+String chatContentId({
+  required String senderId,
+  required List<int> bytes,
+  required String ext,
+}) {
+  return '$senderId/${chatMediaHash(bytes)}.$ext';
+}
+
+(String, String?)? _markedParts(String body) {
+  for (final mark in <String>[chatImageMark, chatFileMark, 'img://', 'file://']) {
+    if (!body.startsWith(mark)) continue;
+    return _splitMedia(body.substring(mark.length));
+  }
+  return null;
+}
+
+(String, String?) _splitMedia(String rest) {
+  final parts = rest.split('/');
+  if (parts.length >= 2 && _isHashName(parts[1])) {
+    final name = parts.length > 2 ? parts.sublist(2).join('/') : null;
+    return ('${parts[0]}/${parts[1]}', name);
+  }
+  final slash = rest.indexOf('/');
+  if (slash < 0) return (rest, null);
+  final name = rest.substring(slash + 1);
+  return (rest.substring(0, slash), name.isEmpty ? null : name);
+}
+
+bool _isHashName(String part) {
+  final dot = part.lastIndexOf('.');
+  if (dot != 32) return false;
+  final hash = part.substring(0, dot);
+  return RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(hash);
 }
 
 String newChatId() {

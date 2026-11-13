@@ -23,8 +23,6 @@ String chatKindLabel(
   switch (room.kind) {
     case kChatDirect:
       return l10n.chatKindDirect;
-    case kChatGroup:
-      return l10n.chatKindGroup;
     default:
       return l10n.chatKindChannel;
   }

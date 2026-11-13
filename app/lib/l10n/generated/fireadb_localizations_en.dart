@@ -1427,7 +1427,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get chatEmpty =>
-      'Start a direct chat, or create a group. A channel shows up here after its owner adds you.';
+      'Start a direct chat, or create a channel. A channel shows up here after its owner adds you.';
 
   @override
   String get chatHint => 'Message';
@@ -1459,6 +1459,9 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String get chatFileMissing => 'File is missing';
 
   @override
+  String get chatFileDownload => 'Tap to download';
+
+  @override
   String get chatMyChannel => 'My channel';
 
   @override
@@ -1468,13 +1471,46 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String get chatKindDirect => 'Direct';
 
   @override
-  String get chatKindGroup => 'Group';
+  String get chatKindGroup => 'Channel';
 
   @override
-  String get chatNewGroup => 'New group';
+  String get chatNewGroup => 'New channel';
 
   @override
   String get chatNewDirect => 'New direct chat';
+
+  @override
+  String get chatRemoveConversation => 'Remove conversation';
+
+  @override
+  String get chatRemoveConversationConfirm =>
+      'This conversation will disappear from the list.';
+
+  @override
+  String get chatDeleteConversation => 'Delete conversation';
+
+  @override
+  String get chatDeleteConversationConfirm =>
+      'This direct chat and its messages will be removed from this device.';
+
+  @override
+  String get chatClearHistory => 'Clear history';
+
+  @override
+  String get chatClearHistoryConfirm =>
+      'Messages here will be removed from this device. The conversation stays.';
+
+  @override
+  String get chatRemoveSelectedConfirm =>
+      'The selected conversations will disappear from the list.';
+
+  @override
+  String get chatDisbandSelectedConfirm =>
+      'The selected channels and their messages will be removed from this device.';
+
+  @override
+  String get chatApplySelectedConfirm =>
+      'Owned channels will be disbanded, joined channels will be left, and direct chats will leave the list.';
 
   @override
   String get chatInfo => 'Conversation info';
@@ -1496,10 +1532,10 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
       'No devices to choose. Connect one from the Connect tab first.';
 
   @override
-  String get chatReachable => 'Reachable now';
+  String get chatReachable => 'Channel connected';
 
   @override
-  String get chatUnreachable => 'Not reachable now';
+  String get chatUnreachable => 'Channel not connected';
 
   @override
   String get chatNameLabel => 'Name';
@@ -1517,7 +1553,44 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String get chatSelect => 'Select a conversation';
 
   @override
-  String get chatRoleOwner => 'Owner';
+  String get chatRoleOwner => 'Channel owner';
+
+  @override
+  String get chatDisband => 'Disband channel';
+
+  @override
+  String get chatDisbandConfirm =>
+      'This channel and its messages will be removed from this device.';
+
+  @override
+  String get chatLeave => 'Leave channel';
+
+  @override
+  String get chatLeaveConfirm =>
+      'This channel will disappear from this device.';
+
+  @override
+  String get chatForward => 'Forward';
+
+  @override
+  String get chatCopy => 'Copy';
+
+  @override
+  String get chatCopied => 'Copied';
+
+  @override
+  String get chatSelectMore => 'Select';
+
+  @override
+  String chatSelected(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String get chatForwardTo => 'Forward to';
+
+  @override
+  String get chatNoForward => 'No other conversation to forward to.';
 
   @override
   String get chatRoleMember => 'Member';
@@ -1528,6 +1601,78 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   @override
   String get chatNeedMembers =>
       'No other members yet. Open conversation info and add a device.';
+
+  @override
+  String get chatPlazaEmpty => 'No posts yet';
+
+  @override
+  String get chatNewPost => 'New post';
+
+  @override
+  String get chatEditPost => 'Edit post';
+
+  @override
+  String get chatPostTitle => 'Title';
+
+  @override
+  String get chatPostBody => 'Body';
+
+  @override
+  String get chatPreview => 'Preview';
+
+  @override
+  String get chatBold => 'Bold';
+
+  @override
+  String get chatList => 'List';
+
+  @override
+  String get chatInsertImage => 'Insert image';
+
+  @override
+  String get chatAddFile => 'Add attachment';
+
+  @override
+  String get chatDiscuss => 'Discussion';
+
+  @override
+  String get chatDiscussHint => 'Write a comment';
+
+  @override
+  String get chatImagePending => 'Image has not arrived';
+
+  @override
+  String get chatRemoveImage => 'Remove image';
+
+  @override
+  String get chatSelfDirect =>
+      'This is a chat on this device. The history stays here.';
+
+  @override
+  String get chatPeerOnline => 'The channel is connected';
+
+  @override
+  String get chatPeerOffline =>
+      'The channel is not connected. The message stays on this device.';
+
+  @override
+  String get chatHostOnline => 'Connected to the channel owner';
+
+  @override
+  String get chatHostOffline =>
+      'Cannot reach the channel owner, so this cannot be sent.';
+
+  @override
+  String get chatDesktopOnline => 'The computer channel is connected';
+
+  @override
+  String get chatNobodyReached =>
+      'The channel is not connected. This stays on this device.';
+
+  @override
+  String chatReachCount(int count) {
+    return 'Channel connected. Can reach $count members';
+  }
 
   @override
   String get logClear => 'Clear';

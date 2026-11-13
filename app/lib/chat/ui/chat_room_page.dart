@@ -5,6 +5,7 @@ import '../../l10n/fireadb_localizations_ext.dart';
 import '../chat_controller.dart';
 import '../chat_conversation.dart';
 import 'chat_info_page.dart';
+import 'chat_plaza.dart';
 import 'chat_title.dart';
 import 'chat_transcript.dart';
 
@@ -23,9 +24,16 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   @override
   void initState() {
     super.initState();
+    _chat.watch(widget.conversationId);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _chat.openConversation(widget.conversationId);
     });
+  }
+
+  @override
+  void dispose() {
+    _chat.unwatch(widget.conversationId);
+    super.dispose();
   }
 
   @override
@@ -46,11 +54,17 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
               _chat.refreshMembers();
               openChatInfo(context, widget.conversationId);
             },
-            icon: const Icon(Icons.info_outline),
+            icon: const Icon(Icons.more_vert),
           ),
         ],
       ),
-      body: ChatTranscript(conversationId: widget.conversationId),
+      body: Obx(() {
+        final room = _find(_chat);
+        if (room != null && room.kind != kChatDirect) {
+          return ChatPlaza(conversationId: widget.conversationId);
+        }
+        return ChatTranscript(conversationId: widget.conversationId);
+      }),
     );
   }
 

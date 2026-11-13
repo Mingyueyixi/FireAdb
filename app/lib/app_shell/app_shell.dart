@@ -53,6 +53,15 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    return Obx(() {
+      final alert = Get.find<ChatController>().conversations.any(
+        (room) => room.unread > 0,
+      );
+      return _scaffold(context, alert);
+    });
+  }
+
+  Widget _scaffold(BuildContext context, bool alert) {
     final l10n = context.l10n;
     final destinations = <_Destination>[
       _Destination(l10n.navConnection, Icons.link_outlined, Icons.link),
@@ -67,8 +76,8 @@ class _AppShellState extends State<AppShell> {
       icon: const Icon(Icons.settings_outlined),
     );
     return Scaffold(
-      // 窄屏底栏已经标出当前页。日志页自带标题栏，这里不再叠一条。
-      appBar: wide || _index == 2
+      // 窄屏底栏已经标出当前页。聊天和日志自带标题栏，这里不再叠一条。
+      appBar: wide || _index == 1 || _index == 2
           ? null
           : AppBar(
               forceMaterialTransparency: true,
@@ -96,21 +105,29 @@ class _AppShellState extends State<AppShell> {
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                     ),
-                    trailing: Expanded(
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: settingsButton,
-                        ),
-                      ),
-                    ),
+                    trailing: _index == 1
+                        ? const SizedBox.shrink()
+                        : Expanded(
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: settingsButton,
+                              ),
+                            ),
+                          ),
                     destinations: <NavigationRailDestination>[
-                      for (final destination in destinations)
+                      for (var index = 0; index < destinations.length; index++)
                         NavigationRailDestination(
-                          icon: Icon(destination.icon),
-                          selectedIcon: Icon(destination.selectedIcon),
-                          label: Text(destination.label),
+                          icon: _navIcon(
+                            destinations[index].icon,
+                            alert: alert && index == 1,
+                          ),
+                          selectedIcon: _navIcon(
+                            destinations[index].selectedIcon,
+                            alert: alert && index == 1,
+                          ),
+                          label: Text(destinations[index].label),
                         ),
                     ],
                   ),
@@ -131,14 +148,30 @@ class _AppShellState extends State<AppShell> {
               selectedIndex: _index,
               onDestinationSelected: _select,
               destinations: <NavigationDestination>[
-                for (final destination in destinations)
+                for (var index = 0; index < destinations.length; index++)
                   NavigationDestination(
-                    icon: Icon(destination.icon),
-                    selectedIcon: Icon(destination.selectedIcon),
-                    label: destination.label,
+                    icon: _navIcon(
+                      destinations[index].icon,
+                      alert: alert && index == 1,
+                    ),
+                    selectedIcon: _navIcon(
+                      destinations[index].selectedIcon,
+                      alert: alert && index == 1,
+                    ),
+                    label: destinations[index].label,
                   ),
               ],
             ),
+    );
+  }
+
+  Widget _navIcon(IconData icon, {required bool alert}) {
+    final child = Icon(icon);
+    if (!alert) return child;
+    return Badge(
+      backgroundColor: const Color(0xFFE53935),
+      smallSize: 8,
+      child: child,
     );
   }
 }

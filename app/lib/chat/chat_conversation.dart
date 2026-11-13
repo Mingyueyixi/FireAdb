@@ -10,7 +10,7 @@ String myChannelId(String selfId) => 'channel:$selfId';
 /// 本机和某一台设备的私聊。
 String directChatId(String selfId, String serial) => 'dm:$selfId:$serial';
 
-/// 频道、私聊或群。成员单独存放。
+/// 频道或私聊。成员单独存放。
 class ChatConversation {
   const ChatConversation({
     required this.id,
@@ -24,11 +24,12 @@ class ChatConversation {
     this.lastSender,
     this.lastAt = 0,
     this.lastKind,
+    this.unread = 0,
   });
 
   final String id;
 
-  /// [kChatChannel]、[kChatDirect] 或 [kChatGroup]。
+  /// [kChatChannel]、[kChatDirect]。较早的记录里还有 [kChatGroup]，界面上同样当作频道。
   final String kind;
   final String title;
   final String ownerId;
@@ -41,10 +42,11 @@ class ChatConversation {
   final String? lastSender;
   final int lastAt;
   final String? lastKind;
+  final int unread;
 
   bool ownedBy(String selfId) => ownerId == selfId && kind != kChatDirect;
 
-  bool isMyChannel(String selfId) => kind == kChatChannel && ownerId == selfId;
+  bool isMyChannel(String selfId) => id == myChannelId(selfId);
 
   ChatConversation copyWith({int? updatedAt}) {
     return ChatConversation(
@@ -59,6 +61,7 @@ class ChatConversation {
       lastSender: lastSender,
       lastAt: lastAt,
       lastKind: lastKind,
+      unread: unread,
     );
   }
 
@@ -87,6 +90,7 @@ class ChatConversation {
       lastSender: _optional(row['last_sender']),
       lastAt: _asInt(row['last_at']),
       lastKind: _optional(row['last_kind']),
+      unread: _asInt(row['unread']),
     );
   }
 }

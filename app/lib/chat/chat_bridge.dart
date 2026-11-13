@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../appservice/protocol/fire_app_message.dart';
 import '../link/device_link.dart';
+import '../log/app_log.dart';
 
 /// 安卓应用作为客户端，连 FireAppService 写下的本机端口。桌面端没有这条通道。
 class ChatBridge {
@@ -15,16 +16,24 @@ class ChatBridge {
   var _linked = false;
   String _selfId = '';
   void Function(Uint8List bytes)? _onBytes;
-  void Function()? _onLinked;
+  void Function(bool linked)? _onLink;
 
   bool get available => Platform.isAndroid;
 
+  bool get linked => _linked;
+
   void listen(
     void Function(Uint8List bytes) onBytes, {
-    void Function()? onLinked,
+    void Function(bool linked)? onLink,
   }) {
     _onBytes = onBytes;
-    _onLinked = onLinked;
+    _onLink = onLink;
+  }
+
+  void _setLinked(bool value) {
+    if (_linked == value) return;
+    _linked = value;
+    _onLink?.call(value);
   }
 
   Future<void> start(String selfId) async {
@@ -36,13 +45,17 @@ class ChatBridge {
 
   Future<bool> send(Uint8List bytes) async {
     final socket = _socket;
-    if (!_linked || socket == null || bytes.isEmpty) return false;
+    if (!_linked || socket == null || bytes.isEmpty) {
+      log.info('聊天帧未发出：通道未连接 ${bytes.length} 字节');
+      return false;
+    }
     try {
       socket.add(bytes);
       await socket.flush();
       return true;
-    } catch (_) {
-      _linked = false;
+    } catch (error) {
+      log.warning('聊天帧写出失败', error);
+      _setLinked(false);
       _socket = null;
       return false;
     }
@@ -62,6 +75,25 @@ class ChatBridge {
           timeout: const Duration(seconds: 3),
         );
         socket.setOption(SocketOption.tcpNoDelay, true);
+        _socket = socket;
+        final done = Completer<void>();
+        socket.listen(
+          (chunk) {
+            try {
+              _onBytes?.call(Uint8List.fromList(chunk));
+            } catch (error, stack) {
+              log.warning('聊天通道读帧失败', error, stack);
+            }
+          },
+          onError: (Object error) {
+            log.warning('聊天通道出错', error);
+            if (!done.isCompleted) done.complete();
+          },
+          onDone: () {
+            log.info('聊天通道已断开');
+            if (!done.isCompleted) done.complete();
+          },
+        );
         final hello = FireDataRequest.json(
           name: linkHelloName,
           id: 0,
@@ -73,24 +105,10 @@ class ChatBridge {
         );
         socket.add(hello.bytes);
         await socket.flush();
-        _socket = socket;
-        _linked = true;
-        _onLinked?.call();
-        final done = Completer<void>();
-        socket.listen(
-          (chunk) {
-            _onBytes?.call(Uint8List.fromList(chunk));
-          },
-          onError: (Object _) {
-            if (!done.isCompleted) done.complete();
-          },
-          onDone: () {
-            if (!done.isCompleted) done.complete();
-          },
-        );
+        _setLinked(true);
         await done.future;
       } catch (_) {}
-      _linked = false;
+      _setLinked(false);
       final socket = _socket;
       _socket = null;
       try {

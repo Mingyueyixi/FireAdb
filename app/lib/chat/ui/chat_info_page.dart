@@ -37,19 +37,21 @@ class _ChatInfoPageState extends State<ChatInfoPage> {
     _chat.useSelfName(l10n.chatSelf);
     return Obx(() {
       final room = _room();
+      final _ = _chat.linkTick.value;
       final title = chatConversationTitle(l10n, room, _chat.selfId.value);
       final owned = room?.ownedBy(_chat.selfId.value) ?? false;
+      final direct = room?.kind == kChatDirect;
       return Scaffold(
         appBar: AppBar(
           title: Text(l10n.chatInfo),
           actions: <Widget>[
-            if (owned)
+            if (owned && !direct)
               IconButton(
                 tooltip: l10n.chatRename,
                 onPressed: () => _rename(context, title),
                 icon: const Icon(Icons.edit_outlined),
               ),
-            if (owned)
+            if (owned && !direct)
               IconButton(
                 tooltip: l10n.chatAddMember,
                 onPressed: () => _add(context),
@@ -58,7 +60,9 @@ class _ChatInfoPageState extends State<ChatInfoPage> {
           ],
         ),
         body: ListView(
-          children: <Widget>[
+          children: direct && room != null
+              ? _directInfo(context, room, title)
+              : <Widget>[
             ListTile(
               title: Text(title),
               subtitle: Text(
@@ -75,11 +79,36 @@ class _ChatInfoPageState extends State<ChatInfoPage> {
                 style: Theme.of(context).textTheme.titleSmall,
               ),
             ),
+            if (room != null && room.kind != kChatDirect)
+              ListTile(
+                iconColor: owned
+                    ? Theme.of(context).colorScheme.error
+                    : null,
+                textColor: owned
+                    ? Theme.of(context).colorScheme.error
+                    : null,
+                leading: Icon(
+                  owned ? Icons.delete_outline : Icons.logout,
+                ),
+                title: Text(owned ? l10n.chatDisband : l10n.chatLeave),
+                onTap: () => owned ? _disband(context) : _leave(context),
+              ),
+            if (_chat.desktopOnlyReach &&
+                room != null &&
+                room.ownedBy(_chat.selfId.value))
+              ListTile(
+                leading: const Icon(Icons.computer),
+                title: Text(l10n.chatDesktopOnline),
+                subtitle: Text(l10n.chatReachable),
+              ),
             for (final member in _chat.members)
               if (_chat.activeId.value == widget.conversationId)
                 ListTile(
                   leading: Icon(
-                    member.self ? Icons.computer : Icons.phone_android,
+                    member.self &&
+                            Theme.of(context).platform != TargetPlatform.android
+                        ? Icons.computer
+                        : Icons.phone_android,
                   ),
                   title: Text(member.name),
                   subtitle: Text(_subtitle(context, member)),
@@ -101,6 +130,69 @@ class _ChatInfoPageState extends State<ChatInfoPage> {
     });
   }
 
+  List<Widget> _directInfo(
+    BuildContext context,
+    ChatConversation room,
+    String title,
+  ) {
+    final l10n = context.l10n;
+    final self = _chat.isSelfChat(room);
+    final serial = room.peerSerial ?? '';
+    DeviceProfile? profile;
+    if (!self && serial.isNotEmpty && serial != 'self') {
+      for (final device in _chat.knownDevices()) {
+        if (device.serial == serial) {
+          profile = device;
+          break;
+        }
+      }
+    }
+    final presence = _chat.presenceOf(room);
+    final status = self
+        ? l10n.chatSelfDirect
+        : presence == ChatPresence.ready
+        ? l10n.chatPeerOnline
+        : l10n.chatPeerOffline;
+    final address = profile?.connectionAddress ?? '';
+    return <Widget>[
+      ListTile(
+        leading: CircleAvatar(
+          child: Icon(self ? Icons.phone_android : Icons.person),
+        ),
+        title: Text(title),
+        subtitle: Text(self ? l10n.chatSelf : l10n.chatKindDirect),
+      ),
+      if (!self && serial.isNotEmpty && serial != 'self')
+        ListTile(
+          leading: const Icon(Icons.tag),
+          title: Text(l10n.chatSerial),
+          subtitle: Text(serial),
+        ),
+      if (address.isNotEmpty && address != serial)
+        ListTile(
+          leading: const Icon(Icons.lan_outlined),
+          title: Text(address),
+        ),
+      ListTile(
+        leading: const Icon(Icons.info_outline),
+        title: Text(status),
+      ),
+      const Divider(height: 1),
+      ListTile(
+        leading: const Icon(Icons.delete_sweep_outlined),
+        title: Text(l10n.chatClearHistory),
+        onTap: () => _clear(context),
+      ),
+      ListTile(
+        iconColor: Theme.of(context).colorScheme.error,
+        textColor: Theme.of(context).colorScheme.error,
+        leading: const Icon(Icons.delete_outline),
+        title: Text(l10n.chatDeleteConversation),
+        onTap: () => _deleteDirect(context),
+      ),
+    ];
+  }
+
   ChatConversation? _room() {
     for (final item in _chat.conversations) {
       if (item.id == widget.conversationId) return item;
@@ -115,6 +207,10 @@ class _ChatInfoPageState extends State<ChatInfoPage> {
         : member.role == kChatOwner
         ? l10n.chatRoleOwner
         : l10n.chatRoleMember;
+    final room = _room();
+    if (member.self || (room != null && _chat.isSelfChat(room))) {
+      return l10n.chatSelf;
+    }
     final reach = member.online ? l10n.chatReachable : l10n.chatUnreachable;
     return '$role · $reach';
   }
@@ -159,6 +255,65 @@ class _ChatInfoPageState extends State<ChatInfoPage> {
     );
     if (name == null) return;
     await _chat.renameConversation(widget.conversationId, name);
+  }
+
+  Future<void> _disband(BuildContext context) async {
+    final confirmed = await _confirm(context, context.l10n.chatDisbandConfirm);
+    if (!confirmed || !context.mounted) return;
+    await _chat.disbandChannel(widget.conversationId);
+    if (!context.mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _clear(BuildContext context) async {
+    final confirmed = await _confirm(
+      context,
+      context.l10n.chatClearHistoryConfirm,
+    );
+    if (!confirmed || !context.mounted) return;
+    await _chat.clearHistory(widget.conversationId);
+  }
+
+  Future<void> _deleteDirect(BuildContext context) async {
+    final confirmed = await _confirm(
+      context,
+      context.l10n.chatDeleteConversationConfirm,
+    );
+    if (!confirmed || !context.mounted) return;
+    await _chat.removeConversation(widget.conversationId);
+    if (!context.mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<void> _leave(BuildContext context) async {
+    final confirmed = await _confirm(context, context.l10n.chatLeaveConfirm);
+    if (!confirmed || !context.mounted) return;
+    await _chat.leaveChannel(widget.conversationId);
+    if (!context.mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  Future<bool> _confirm(BuildContext context, String message) async {
+    final l10n = context.l10n;
+    final answer = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          content: Text(message),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(l10n.commonCancel),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(MaterialLocalizations.of(context).okButtonLabel),
+            ),
+          ],
+        );
+      },
+    );
+    return answer == true;
   }
 
   Future<void> _add(BuildContext context) async {

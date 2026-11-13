@@ -1384,7 +1384,7 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get chatTitle => '聊天';
 
   @override
-  String get chatEmpty => '可以在这里发起私聊，或新建一个群。别人把你加进他的频道后，也会出现在这里。';
+  String get chatEmpty => '可以在这里发起私聊，或新建一个频道。别人把你加进他的频道后，也会出现在这里。';
 
   @override
   String get chatHint => '输入消息';
@@ -1416,6 +1416,9 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get chatFileMissing => '文件不在了';
 
   @override
+  String get chatFileDownload => '点击下载';
+
+  @override
   String get chatMyChannel => '我的频道';
 
   @override
@@ -1425,13 +1428,40 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get chatKindDirect => '私聊';
 
   @override
-  String get chatKindGroup => '群';
+  String get chatKindGroup => '频道';
 
   @override
-  String get chatNewGroup => '新建群';
+  String get chatNewGroup => '新建频道';
 
   @override
   String get chatNewDirect => '发起私聊';
+
+  @override
+  String get chatRemoveConversation => '移除会话';
+
+  @override
+  String get chatRemoveConversationConfirm => '移除后，这个会话会从列表里消失。';
+
+  @override
+  String get chatDeleteConversation => '删除会话';
+
+  @override
+  String get chatDeleteConversationConfirm => '删除后，这个私聊和里面的消息会从本机去掉。';
+
+  @override
+  String get chatClearHistory => '清空聊天记录';
+
+  @override
+  String get chatClearHistoryConfirm => '清空后，这里的消息会从本机去掉，会话还在。';
+
+  @override
+  String get chatRemoveSelectedConfirm => '移除后，选中的会话会从列表里消失。';
+
+  @override
+  String get chatDisbandSelectedConfirm => '解散后，选中的频道和里面的消息会从本机去掉。';
+
+  @override
+  String get chatApplySelectedConfirm => '确认后，自己主持的频道会解散，加入的频道会退出，私聊会从列表去掉。';
 
   @override
   String get chatInfo => '会话信息';
@@ -1452,10 +1482,10 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get chatNoDevices => '没有可选的设备。先在连接页连上设备。';
 
   @override
-  String get chatReachable => '当前能送达';
+  String get chatReachable => '通道已接上';
 
   @override
-  String get chatUnreachable => '当前送不到';
+  String get chatUnreachable => '连不上通道';
 
   @override
   String get chatNameLabel => '名称';
@@ -1473,7 +1503,42 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get chatSelect => '选择一个会话';
 
   @override
-  String get chatRoleOwner => '群主';
+  String get chatRoleOwner => '频道主';
+
+  @override
+  String get chatDisband => '解散频道';
+
+  @override
+  String get chatDisbandConfirm => '解散后，这个频道和里面的消息会从本机去掉。';
+
+  @override
+  String get chatLeave => '退出频道';
+
+  @override
+  String get chatLeaveConfirm => '退出后，这个频道会从本机列表里消失。';
+
+  @override
+  String get chatForward => '转发';
+
+  @override
+  String get chatCopy => '复制';
+
+  @override
+  String get chatCopied => '已复制';
+
+  @override
+  String get chatSelectMore => '多选';
+
+  @override
+  String chatSelected(int count) {
+    return '已选 $count';
+  }
+
+  @override
+  String get chatForwardTo => '转发到';
+
+  @override
+  String get chatNoForward => '没有其他会话可以转发。';
 
   @override
   String get chatRoleMember => '成员';
@@ -1483,6 +1548,74 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
 
   @override
   String get chatNeedMembers => '还没有其他成员。打开右上角的会话信息，把设备加进来。';
+
+  @override
+  String get chatPlazaEmpty => '还没有帖子';
+
+  @override
+  String get chatNewPost => '发帖';
+
+  @override
+  String get chatEditPost => '编辑帖子';
+
+  @override
+  String get chatPostTitle => '标题';
+
+  @override
+  String get chatPostBody => '正文';
+
+  @override
+  String get chatPreview => '预览';
+
+  @override
+  String get chatBold => '粗体';
+
+  @override
+  String get chatList => '列表';
+
+  @override
+  String get chatInsertImage => '插入图片';
+
+  @override
+  String get chatAddFile => '添加附件';
+
+  @override
+  String get chatDiscuss => '讨论';
+
+  @override
+  String get chatDiscussHint => '写下讨论';
+
+  @override
+  String get chatImagePending => '图片还没到';
+
+  @override
+  String get chatRemoveImage => '移除图片';
+
+  @override
+  String get chatSelfDirect => '这是本机私聊，记录留在这里';
+
+  @override
+  String get chatPeerOnline => '通道已接上';
+
+  @override
+  String get chatPeerOffline => '通道没接上，消息先留在本机';
+
+  @override
+  String get chatHostOnline => '已连上频道主';
+
+  @override
+  String get chatHostOffline => '连不上频道主，现在发不出去';
+
+  @override
+  String get chatDesktopOnline => '电脑端通道已接上';
+
+  @override
+  String get chatNobodyReached => '通道没接上，内容会留在本机';
+
+  @override
+  String chatReachCount(int count) {
+    return '通道已接上，当前能送达 $count 人';
+  }
 
   @override
   String get logClear => '清理';

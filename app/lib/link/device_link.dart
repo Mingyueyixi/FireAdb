@@ -58,7 +58,18 @@ class DeviceLink {
 
   static void Function(String serial, FireDataResponse frame)? onAppFrame;
 
+  /// 手机上的聊天应用连上或断开。ADB 连着不等于这条链路通着。
+  static void Function(String serial, bool up)? onAppLink;
+
   static bool serviceReady(String serial) => _doors[serial]?.service != null;
+
+  static bool appReady(String serial) => _doors[serial]?.app != null;
+
+  /// 这台设备上聊天应用在 hello 里报的身份。断开后为空。
+  static String? appSelfIdOf(String serial) {
+    final id = _doors[serial]?.appSelfId ?? '';
+    return id.isEmpty ? null : id;
+  }
 
   static Future<void> open(ConnectedDevice device) {
     return _door(device).open();
@@ -96,13 +107,26 @@ class DeviceLink {
     if (_peerSpliceInstalled) return;
     _peerSpliceInstalled = true;
     AdbConnection.onPeerOpen = (AdbStream stream, String destination) {
-      final port = _tcpPort(destination);
+      final port = _splicePort(stream, destination);
       if (port == null) {
         unawaited(stream.close());
         return;
       }
       unawaited(_splice(stream, port));
     };
+  }
+
+  /// 设备回连的目标必须是这台设备已经在听的本机端口。
+  /// 打开帧里的端口对不上时，仍交到该连接对应的门口。
+  static int? _splicePort(AdbStream stream, String destination) {
+    for (final door in _doors.values) {
+      final adb = door.device.adbConnection;
+      final host = door.hostPort;
+      if (adb != null && host != null && identical(adb, stream.connection)) {
+        return host;
+      }
+    }
+    return _tcpPort(destination);
   }
 
   static int? _tcpPort(String destination) {
@@ -171,6 +195,8 @@ class _DeviceDoor {
   String? token;
   LinkPeer? service;
   LinkPeer? app;
+  String? appSelfId;
+  var _reversed = false;
   Future<void>? _opening;
 
   Future<void> open() {
@@ -197,13 +223,16 @@ class _DeviceDoor {
     final port = hostPort;
     final secret = token;
     if (port == null || secret == null) return;
-    try {
-      await device.reverse(
-        remote: 'tcp:$deviceLinkPort',
-        local: 'tcp:$port',
-      );
-    } catch (error, stack) {
-      log.warning('登记反向端口失败 ${device.serial}', error, stack);
+    if (!_reversed) {
+      try {
+        await device.reverse(
+          remote: 'tcp:$deviceLinkPort',
+          local: 'tcp:$port',
+        );
+        _reversed = true;
+      } catch (error, stack) {
+        log.warning('登记反向端口失败 ${device.serial}', error, stack);
+      }
     }
     if (_exec != null) return;
     await ensureFireAppService(device);
@@ -222,6 +251,8 @@ class _DeviceDoor {
     final appSocket = app?.socket;
     service = null;
     app = null;
+    appSelfId = null;
+    _reversed = false;
     final server = _server;
     final exec = _exec;
     _server = null;
@@ -315,6 +346,8 @@ class _DeviceDoor {
       app?.socket.destroy();
       app?.failPending(StateError('聊天通道已重连'));
       app = peer;
+      appSelfId = '${frame.json['selfId'] ?? ''}';
+      DeviceLink.onAppLink?.call(device.serial, true);
     }
     log.info('已接入 ${device.serial} $role');
     return peer;
@@ -343,7 +376,12 @@ class _DeviceDoor {
       service = null;
       fireAppSession(device).markLinkDown();
     }
-    if (identical(app, peer)) app = null;
+    if (identical(app, peer)) {
+      app = null;
+      appSelfId = null;
+      log.info('聊天应用链路断开 ${device.serial}');
+      DeviceLink.onAppLink?.call(device.serial, false);
+    }
     socket.destroy();
   }
 }

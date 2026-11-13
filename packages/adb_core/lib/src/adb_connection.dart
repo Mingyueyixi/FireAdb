@@ -42,6 +42,9 @@ class AdbStream {
   final AdbConnection _connection;
   final int localId;
 
+  /// 这条流属于哪条 ADB 连接。反向转发要据此找到本机端口。
+  AdbConnection get connection => _connection;
+
   /// 设备端分配给这条流的 remote id；OPEN 成功的 OKAY 之后才有值。
   int? _remoteId;
   Future<void> _writeLock = Future.value();

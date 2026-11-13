@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../../log/app_log.dart';
+
 const int fireAppMessageMaxHeader = 8 * 1024;
 
 /// 发给设备的一条请求。
@@ -170,6 +172,7 @@ class FireDataResponseReader {
     if (_pending.length < end) return null;
     final body = Uint8List.fromList(_pending.sublist(colon + 1, end));
     _pending.removeRange(0, end);
+    _logFrame('收', parts[0], parts[1], id, body);
     return FireDataResponse._(
       name: parts[0],
       type: parts[1],
@@ -192,7 +195,25 @@ Uint8List _encode({
   final bytes = Uint8List(header.length + body.length);
   bytes.setRange(0, header.length, header);
   bytes.setRange(header.length, bytes.length, body);
+  _logFrame('发', name, type, id, body);
   return bytes;
+}
+
+void _logFrame(String direction, String name, String type, int id, List<int> body) {
+  log.info('协议 $direction ${_frameText(name: name, type: type, id: id, body: body)}');
+}
+
+String _frameText({
+  required String name,
+  required String type,
+  required int id,
+  required List<int> body,
+}) {
+  final head = '$name $type $id ${body.length}:';
+  if (type == 'bytes' || body.isEmpty) return head;
+  final text = utf8.decode(body, allowMalformed: true);
+  if (text.length <= 16384) return '$head$text';
+  return '$head…正文 ${text.length} 字符';
 }
 
 String _display({
