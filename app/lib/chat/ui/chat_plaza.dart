@@ -91,11 +91,7 @@ class ChatPlaza extends StatelessWidget {
                                   onTap: (imageIndex) {
                                     final path = _chat.placed(images[imageIndex]);
                                     if (path == null) return;
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (_) => ChatImagePage(path: path),
-                                      ),
-                                    );
+                                    openChatImage(context, path);
                                   },
                                 ),
                               ],

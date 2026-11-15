@@ -1075,6 +1075,8 @@
   "clipboardReadFromDevice": "查看设备剪贴板",
   "clipboardReadEmpty": "还没有记录。设备上复制内容后会出现在这里",
   "clipboardReadDone": "已复制到本机剪贴板",
+  "clipboardDelete": "删除",
+  "clipboardDeleted": "已从设备剪贴板删除",
   "clipboardSendDone": "已写入设备剪贴板",
   "clipboardDeviceDisconnected": "设备未连接",
   "clipboardOperationFailed": "操作失败：{error}",

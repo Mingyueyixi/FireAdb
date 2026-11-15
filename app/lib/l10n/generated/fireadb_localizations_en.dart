@@ -1881,6 +1881,12 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
   String get clipboardReadDone => 'Copied to local clipboard';
 
   @override
+  String get clipboardDelete => 'Delete';
+
+  @override
+  String get clipboardDeleted => 'Removed from the device clipboard';
+
+  @override
   String get clipboardSendDone => 'Written to the device clipboard';
 
   @override

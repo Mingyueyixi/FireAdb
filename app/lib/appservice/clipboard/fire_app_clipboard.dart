@@ -49,6 +49,25 @@ Future<List<String>> getFireAppClipHistory(ConnectedDevice device) {
   });
 }
 
+/// 从设备剪贴板历史删掉这条文本。
+/// 若它正是系统当前剪贴板，设备侧会一并清掉，避免下次读取又记回来。
+/// 厂商自己的剪贴板历史面板没有公开接口，清不掉。
+Future<void> removeFireAppClip(ConnectedDevice device, String text) {
+  return _exchange(device, (session, id) async {
+    await session.send(
+      FireDataRequest.json(
+        name: 'clipboard.remove',
+        id: id,
+        body: <String, String>{'text': text},
+      ),
+    );
+    final message = await session.reply(id, const Duration(seconds: 10));
+    if (message.name != 'clipboard.ok') {
+      throw StateError('剪贴板删除响应无效');
+    }
+  });
+}
+
 /// 开关设备剪贴板变化监听。变化经
 /// [setFireAppClipListener] 推送。开启后进程常驻，空闲时不退出。
 Future<void> watchFireAppClip(ConnectedDevice device, bool on) {

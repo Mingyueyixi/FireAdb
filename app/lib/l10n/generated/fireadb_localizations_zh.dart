@@ -1814,6 +1814,12 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get clipboardReadDone => '已复制到本机剪贴板';
 
   @override
+  String get clipboardDelete => '删除';
+
+  @override
+  String get clipboardDeleted => '已从设备剪贴板删除';
+
+  @override
   String get clipboardSendDone => '已写入设备剪贴板';
 
   @override

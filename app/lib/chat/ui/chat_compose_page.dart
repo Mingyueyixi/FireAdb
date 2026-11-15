@@ -109,11 +109,7 @@ class _ChatComposePageState extends State<ChatComposePage> {
                     onTap: (index) {
                       final path = _images[index].path;
                       if (path == null) return;
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => ChatImagePage(path: path),
-                        ),
-                      );
+                      openChatImage(context, path);
                     },
                     onRemove: (index) {
                       setState(() {

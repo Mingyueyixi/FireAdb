@@ -103,7 +103,7 @@ class _ClipboardPageState extends State<ClipboardPage> {
     }
   }
 
-  /// 查看设备剪贴板历史（新的在前）。点某条可看全文并复制到本机。
+  /// 查看设备剪贴板历史（新的在前）。每条可以复制到本机，也可以从设备删掉。
   Future<void> _viewHistory() async {
     final device = _manager.deviceOf(widget.serial);
     if (!mounted) return;
@@ -115,106 +115,19 @@ class _ClipboardPageState extends State<ClipboardPage> {
     try {
       final texts = await getFireAppClipHistory(device);
       if (!mounted) return;
-      await _showHistoryDialog(texts);
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => _ClipboardHistoryDialog(
+          serial: widget.serial,
+          texts: texts,
+        ),
+      );
     } catch (error, stackTrace) {
       log.warning('读取设备剪贴板历史失败 ${widget.serial}', error, stackTrace);
       if (mounted) _showFailed(error);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  Future<void> _showHistoryDialog(List<String> texts) async {
-    final l10n = context.l10n;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.clipboardHistoryTitle),
-        content: SizedBox(
-          width: 440,
-          child: texts.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Text(
-                    l10n.clipboardReadEmpty,
-                    textAlign: TextAlign.center,
-                  ),
-                )
-              : ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 420),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: texts.length,
-                    separatorBuilder: (context, index) =>
-                        const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final text = texts[index];
-                      return ListTile(
-                        dense: true,
-                        title: Text(
-                          text.replaceAll('\n', ' ').trim(),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: IconButton(
-                          tooltip: l10n.clipboardOfferCopy,
-                          icon: const Icon(Icons.copy, size: 20),
-                          onPressed: () => unawaited(
-                            _copyFromDialog(dialogContext, text),
-                          ),
-                        ),
-                        onTap: () => unawaited(
-                          _showClipDetail(dialogContext, text),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(
-              MaterialLocalizations.of(dialogContext).closeButtonTooltip,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _copyFromDialog(BuildContext dialogContext, String text) async {
-    final messenger = ScaffoldMessenger.of(dialogContext);
-    final message = dialogContext.l10n.clipboardReadDone;
-    await Clipboard.setData(ClipboardData(text: text));
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  Future<void> _showClipDetail(BuildContext dialogContext, String text) async {
-    await showDialog<void>(
-      context: dialogContext,
-      builder: (detailContext) => AlertDialog(
-        title: Text(dialogContext.l10n.clipboardHistoryTitle),
-        content: SingleChildScrollView(child: SelectableText(text)),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(detailContext).pop(),
-            child: Text(
-              MaterialLocalizations.of(detailContext).closeButtonTooltip,
-            ),
-          ),
-          FilledButton(
-            onPressed: () {
-              unawaited(_copyFromDialog(detailContext, text));
-              Navigator.of(detailContext).pop();
-            },
-            child: Text(dialogContext.l10n.clipboardOfferCopy),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showInfo(String message) {
@@ -225,5 +138,153 @@ class _ClipboardPageState extends State<ClipboardPage> {
 
   void _showFailed(Object error) {
     _showInfo(context.l10n.clipboardOperationFailed('$error'));
+  }
+}
+
+class _ClipboardHistoryDialog extends StatefulWidget {
+  const _ClipboardHistoryDialog({required this.serial, required this.texts});
+
+  final String serial;
+  final List<String> texts;
+
+  @override
+  State<_ClipboardHistoryDialog> createState() => _ClipboardHistoryDialogState();
+}
+
+class _ClipboardHistoryDialogState extends State<_ClipboardHistoryDialog> {
+  late final List<String> _texts = List<String>.of(widget.texts);
+  var _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return AlertDialog(
+      title: Text(l10n.clipboardHistoryTitle),
+      content: SizedBox(
+        width: 440,
+        child: _texts.isEmpty
+            ? Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(l10n.clipboardReadEmpty, textAlign: TextAlign.center),
+              )
+            : ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 420),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _texts.length,
+                  separatorBuilder: (context, index) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final text = _texts[index];
+                    return ListTile(
+                      dense: true,
+                      title: Text(
+                        text.replaceAll('\n', ' ').trim(),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          IconButton(
+                            tooltip: l10n.clipboardOfferCopy,
+                            icon: const Icon(Icons.copy, size: 20),
+                            onPressed: _busy ? null : () => unawaited(_copy(text)),
+                          ),
+                          IconButton(
+                            tooltip: l10n.clipboardDelete,
+                            icon: const Icon(Icons.delete_outline, size: 20),
+                            onPressed: _busy ? null : () => unawaited(_delete(text)),
+                          ),
+                        ],
+                      ),
+                      onTap: _busy ? null : () => unawaited(_showDetail(text)),
+                    );
+                  },
+                ),
+              ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(MaterialLocalizations.of(context).closeButtonTooltip),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _copy(String text) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final message = context.l10n.clipboardReadDone;
+    await Clipboard.setData(ClipboardData(text: text));
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<bool> _delete(String text) async {
+    if (_busy) return false;
+    final device = Get.find<ConnectionManager>().deviceOf(widget.serial);
+    if (!mounted) return false;
+    if (device == null) {
+      _snack(context.l10n.clipboardDeviceDisconnected);
+      return false;
+    }
+    setState(() => _busy = true);
+    try {
+      await removeFireAppClip(device, text);
+      if (!mounted) return false;
+      setState(() => _texts.remove(text));
+      _snack(context.l10n.clipboardDeleted);
+      return true;
+    } catch (error, stackTrace) {
+      log.warning('删除设备剪贴板失败 ${widget.serial}', error, stackTrace);
+      if (mounted) _snack(context.l10n.clipboardOperationFailed('$error'));
+      return false;
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _showDetail(String text) async {
+    final removed = await showDialog<bool>(
+      context: context,
+      builder: (detailContext) => AlertDialog(
+        title: Text(context.l10n.clipboardHistoryTitle),
+        content: SingleChildScrollView(child: SelectableText(text)),
+        actions: <Widget>[
+          TextButton(
+            onPressed: _busy ? null : () => Navigator.of(detailContext).pop(false),
+            child: Text(MaterialLocalizations.of(detailContext).closeButtonTooltip),
+          ),
+          TextButton(
+            onPressed: _busy
+                ? null
+                : () async {
+                    final ok = await _delete(text);
+                    if (ok && detailContext.mounted) {
+                      Navigator.of(detailContext).pop(true);
+                    }
+                  },
+            child: Text(context.l10n.clipboardDelete),
+          ),
+          FilledButton(
+            onPressed: _busy
+                ? null
+                : () {
+                    unawaited(_copy(text));
+                    Navigator.of(detailContext).pop(false);
+                  },
+            child: Text(context.l10n.clipboardOfferCopy),
+          ),
+        ],
+      ),
+    );
+    if (removed == true && mounted) setState(() {});
+  }
+
+  void _snack(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 }

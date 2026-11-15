@@ -3293,6 +3293,18 @@ abstract class FireAdbLocalizations {
   /// **'已复制到本机剪贴板'**
   String get clipboardReadDone;
 
+  /// No description provided for @clipboardDelete.
+  ///
+  /// In zh, this message translates to:
+  /// **'删除'**
+  String get clipboardDelete;
+
+  /// No description provided for @clipboardDeleted.
+  ///
+  /// In zh, this message translates to:
+  /// **'已从设备剪贴板删除'**
+  String get clipboardDeleted;
+
   /// No description provided for @clipboardSendDone.
   ///
   /// In zh, this message translates to:

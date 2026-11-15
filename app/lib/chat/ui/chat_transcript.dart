@@ -289,9 +289,7 @@ class _ChatTranscriptState extends State<ChatTranscript> {
     }
     final path = _chat.placed(message);
     if (message.kind == 'image' && path != null) {
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => ChatImagePage(path: path)),
-      );
+      openChatImage(context, path);
       return;
     }
     if (message.isText || message.kind == 'image') return;
@@ -500,6 +498,32 @@ class _ChatTranscriptState extends State<ChatTranscript> {
   }
 }
 
+bool _chatImageDialog(BuildContext context) {
+  switch (Theme.of(context).platform) {
+    case TargetPlatform.windows:
+    case TargetPlatform.linux:
+    case TargetPlatform.macOS:
+      return true;
+    case TargetPlatform.android:
+    case TargetPlatform.iOS:
+    case TargetPlatform.fuchsia:
+      return false;
+  }
+}
+
+Future<void> openChatImage(BuildContext context, String path) {
+  if (_chatImageDialog(context)) {
+    return showDialog<void>(
+      context: context,
+      barrierColor: const Color(0xCC000000),
+      builder: (context) => _ChatImageDialog(path: path),
+    );
+  }
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => ChatImagePage(path: path)),
+  );
+}
+
 class ChatImagePage extends StatelessWidget {
   const ChatImagePage({super.key, required this.path});
 
@@ -512,11 +536,57 @@ class ChatImagePage extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        leading: const CloseButton(color: Colors.white),
       ),
-      body: InteractiveViewer(
-        minScale: 0.5,
-        maxScale: 4,
-        child: Center(child: Image.file(File(path), fit: BoxFit.contain)),
+      body: SafeArea(
+        top: false,
+        child: InteractiveViewer(
+          minScale: 0.5,
+          maxScale: 4,
+          child: Center(child: Image.file(File(path), fit: BoxFit.contain)),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatImageDialog extends StatelessWidget {
+  const _ChatImageDialog({required this.path});
+
+  final String path;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    const inset = EdgeInsets.symmetric(horizontal: 72, vertical: 48);
+    return Dialog(
+      backgroundColor: Colors.black,
+      insetPadding: inset,
+      child: SizedBox(
+        width: size.width - inset.horizontal,
+        height: size.height - inset.vertical,
+        child: Stack(
+          children: <Widget>[
+            Positioned.fill(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4,
+                child: Center(
+                  child: Image.file(File(path), fit: BoxFit.contain),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: IconButton(
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

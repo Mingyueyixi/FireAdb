@@ -3,6 +3,7 @@ package com.fire.adb.appservice.clipboard;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.os.Build;
 import android.util.Log;
 
 import com.fire.adb.appservice.protocol.CommandHandler;
@@ -22,10 +23,13 @@ import java.util.ArrayDeque;
 
 /**
  * 剪贴板：{@code clipboard.get}、{@code clipboard.set}、{@code clipboard.history}、
- * {@code clipboard.watch}。变化经 {@code clipboard.event} 推送，请求号为 0。
+ * {@code clipboard.remove}、{@code clipboard.watch}。变化经 {@code clipboard.event}
+ * 推送，请求号为 0。
  *
  * <p>调用方传入的上下文必须是 shell 包名（{@code com.android.shell}），
- * 否则剪贴板服务会拒绝。Android 只有当前一条剪贴板，历史由这里记录并落盘，新的在前。
+ * 否则剪贴板服务会拒绝。系统只暴露当前一条剪贴板，厂商的剪贴板历史面板没有接口。
+ * 这里的历史是自己记下并落盘的，新的在前。删掉的条目若正是当前剪贴板，同时清掉它，
+ * 否则下次读取历史会把它再记回来。
  * 变化回调在主 Looper 上，和命令线程一起写标准输出。
  */
 public final class ClipboardProtocol implements CommandHandler {
@@ -58,6 +62,10 @@ public final class ClipboardProtocol implements CommandHandler {
         }
         if ("clipboard.history".equals(request.name)) {
             handleHistory(request.id);
+            return true;
+        }
+        if ("clipboard.remove".equals(request.name)) {
+            handleRemove(request);
             return true;
         }
         if ("clipboard.set".equals(request.name)) {
@@ -140,6 +148,41 @@ public final class ClipboardProtocol implements CommandHandler {
         } catch (Throwable error) {
             out.sendQuiet(FireDataResponse.error(id, String.valueOf(error.getMessage())));
         }
+    }
+
+    /**
+     * 从落盘历史删掉这条文本。内容和当前剪贴板相同就清掉系统当前剪贴板。
+     * Android 9 起用 {@link ClipboardManager#clearPrimaryClip()}；更早的版本没有这个接口，
+     * 改写成空文本。
+     */
+    private void handleRemove(FireDataRequest request) {
+        try {
+            String text = request.json().optString("text", "");
+            if (text.length() == 0) {
+                out.send(FireDataResponse.none("clipboard.ok", request.id));
+                return;
+            }
+            synchronized (history) {
+                history.remove(text);
+            }
+            saveHistory();
+            if (text.equals(clipText())) {
+                clearCurrentClip();
+            }
+            out.send(FireDataResponse.none("clipboard.ok", request.id));
+        } catch (Throwable error) {
+            Log.w(TAG, "clipboard.remove 失败", error);
+            out.sendQuiet(FireDataResponse.error(request.id, "删除剪贴板失败: " + error.getMessage()));
+        }
+    }
+
+    private void clearCurrentClip() {
+        ClipboardManager clips = clipboard();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            clips.clearPrimaryClip();
+            return;
+        }
+        clips.setPrimaryClip(ClipData.newPlainText(CLIP_LABEL, ""));
     }
 
     private void handleSet(FireDataRequest request) {

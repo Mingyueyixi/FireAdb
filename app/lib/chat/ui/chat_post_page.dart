@@ -108,11 +108,7 @@ class _ChatPostPageState extends State<ChatPostPage> {
                       onTap: (index) {
                         final path = _chat.placed(images[index]);
                         if (path == null) return;
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => ChatImagePage(path: path),
-                          ),
-                        );
+                        openChatImage(context, path);
                       },
                     ),
                   ],

@@ -1070,6 +1070,8 @@
   "clipboardReadFromDevice": "View device clipboard",
   "clipboardReadEmpty": "No records yet — copy something on the device and it will appear here",
   "clipboardReadDone": "Copied to local clipboard",
+  "clipboardDelete": "Delete",
+  "clipboardDeleted": "Removed from the device clipboard",
   "clipboardSendDone": "Written to the device clipboard",
   "clipboardDeviceDisconnected": "Device not connected",
   "clipboardOperationFailed": "Failed: {error}",
