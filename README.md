@@ -1,66 +1,56 @@
+中文 | [English](README.en.md)
+
 # FireAdb
 
-跨平台 ADB 工具箱（可不调用系统 adb 二进制，协议自实现）。
+跨平台 ADB 工具箱。电脑和手机使用同一套界面：连上设备后，可以查看设备信息、管理应用和文件、截图录屏、执行命令，也可以在设备之间聊天、互传剪贴板。
 
-## 平台
+支持 Windows、Linux、macOS 和 Android。
 
-- Windows / Linux / macOS：Flutter，桌面 USB 走 libusb
-- Android：Flutter，设备列表走本机 5037
+## 界面
 
-## 功能
+电脑端的连接页。可以填写地址直接连接，也可以用配对码或二维码做无线调试，已出现的设备会列在右侧。
 
-**设备连接**
+![FireAdb 电脑端](docs/img/pc.png)
 
-- 设备列表：USB / 模拟器 / 无线设备统一展示，支持自动刷新（间隔可配、可后台刷新）
-- 无线调试（Android 11+）：mDNS 发现服务，配对码配对 / 二维码扫码配对，配对后自动连接
-- 手动连接：输入主机地址与端口直连；历史连接快速重连
+手机端同样从连接页开始，底部可以切到聊天、日志和关于。
 
-**设备工作区**（连接后按设备打开，断线自动重连）
+<img src="docs/img/android.png" alt="FireAdb 手机端" width="280">
 
-- 设备总览：型号、品牌、制造商、系统版本、API 级别等基本信息
-- 设备应用：查看已安装应用、导出 APK、卸载与冻结
-- 文件传输：推送文件到设备 / 从设备拉取文件
-- 文件管理：浏览设备文件，支持删除、重命名、复制粘贴、编辑、搜索、改权限、导出和上传
-- 截图：screencap 截取屏幕，PNG 保存到本机
-- 录屏：可选系统或内置录屏，保存到本机
-- 命令面板：执行 adb shell 命令并查看输出
+## 能做的事
 
-## 源码
+**连接设备**
 
-`third_party/` 是参考源（git submodule），不参与构建。需要对照时再 `git submodule update --init --recursive`。
+- USB、模拟器和无线设备出现在同一个列表里，可以自动刷新
+- 无线调试的配对接法见文末
+- 手动填写主机地址和端口；连过的地址留在历史里
 
-## 开发
+**连上之后**
 
-pub workspace，命令在仓库根执行。
+- 设备总览：型号、品牌、系统版本
+- 应用：查看已安装应用，导出 APK，卸载或冻结
+- 文件：浏览设备上的文件，上传、下载、编辑、改名和改权限
+- 截图和录屏，结果保存在本机
+- 命令面板：执行 shell 命令并查看输出
+- 剪贴板：本机和设备互相复制
 
-| 目的 | 命令 |
-|---|---|
-| 拉取依赖 | `flutter pub get` |
-| 静态分析 | `dart analyze` |
-| 格式化 | `dart format .` |
-| adb_core 测试 | `dart test packages/adb_core` |
-| 应用测试 | `flutter test app` |
-| 运行 | `cd app && flutter run` |
+**聊天**
 
-## 编译环境
+- 私聊，或新建频道把其他设备加进来
+- 可以发送文字、图片和文件
 
-- Dart SDK：`^3.13.1`
-- Flutter：3.48
-- JDK：17
-- Android Gradle Plugin：9.1.0
-- Kotlin：2.4.0
-- Gradle：9.4.1
-- NDK：Flutter 默认版本
-- 应用字节码：Java 17
-- `fire_app_service` 字节码：Java 8
-- `app/android/gradlew`、`gradlew.bat` 已修改：启动 Java 前读取 `app/android/local.properties` 的 `org.gradle.java.home`，覆盖 `JAVA_HOME`。
+## 无线调试
 
-```properties
-org.gradle.java.home=C:/Program Files/Java/jdk-17
-```
+Android 11 及以上，打开「设置 → 开发者选项 → 无线调试」，手机和 FireAdb 在同一 Wi-Fi。
 
-- Zig + Ninja + Python：仅 Linux 交叉编译 `fire_usb` 时需要（在 Windows / macOS 上产出 Linux 各架构 `.so`）。
-  全平台一键编译（Windows x64/arm64 + Linux x64/arm64，产物进 `vendor/`）：
-  `python packages/libadb/native/fire_usb/tool/build_all.py`；
-  只编 Linux 换成 `tool/build_linux.py`，只编 Windows（无需 Zig/Ninja）换成 `tool/build_windows.py`。
-  工具清单与细节见 [`packages/libadb/native/fire_usb/README.md`](packages/libadb/native/fire_usb/README.md#linux-交叉编译zig)。
+还没配对过时，把系统的配对码页面留在上面（分屏或悬浮窗），下面用 FireAdb 扫描。离开配对码页面后，系统会关掉配对服务。
+
+<img src="docs/img/wifi_pair.png" alt="配对" width="280">
+
+1、手机系统设置的开发者选项中打开无线调试选项，打开「使用配对码配对设备」，停在显示配对码的页面。
+2. 对该页面开启系统悬浮窗。
+3. FireAdb 点「自动扫描」。带钥匙的一行是配对服务，点「配对」，输入页面上的配对码。
+4. 配对成功后，设备列表会出现对应的可连接的设备，点击即可连接。
+
+已经配对过的设备不用再打开配对码，可直接在设备列表中连接。
+
+同一页的「二维码配对」是另一条路：手机用系统里的「使用二维码配对设备」扫描FireAdb生成的二维码，配对和连接会被自动完成。同一个手机连接自身，基本无法扫描到本机上的FireAdb，除非有外置摄像头，这个主要提供二维码，在其他安卓设备完成adb连接，管理其他安卓设备的。
