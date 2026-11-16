@@ -11,8 +11,7 @@ pluginManagement {
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
     repositories {
-        // 解析 Gradle 插件（AGP / Kotlin / flutter-plugin-loader）用，与下面的
-        // dependencyResolutionManagement 是两套独立配置，两者都要配镜像。
+        // 本机和 GitHub Actions 用同一份仓库。
         maven {
             url = uri("https://maven.aliyun.com/repository/gradle-plugin")
         }
@@ -43,9 +42,9 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    id("com.android.application") version "9.1.0" apply false
-    id("com.android.library") version "9.1.0" apply false
-    id("org.jetbrains.kotlin.android") version "2.4.0" apply false
+    id("com.android.application") version "9.3.1" apply false
+    id("com.android.library") version "9.3.1" apply false
+    id("org.jetbrains.kotlin.android") version "2.4.20" apply false
 }
 
 dependencyResolutionManagement {
@@ -58,8 +57,8 @@ dependencyResolutionManagement {
         // Flutter 引擎产物仓库。io.flutter:armeabi_v7a_debug / arm64_v8a_debug /
         // flutter_embedding_debug 等只发布在这里，Maven Central 与 Google 都没有。
         //
-        // 官方地址是 https://storage.googleapis.com/download.flutter.io，
-        // 这里用国内镜像 https://storage.flutter-io.cn/download.flutter.io（已实测可用）。
+        // 官方地址是 https://storage.googleapis.com/download.flutter.io。
+        // 本机和 GitHub Actions 都用国内镜像 https://storage.flutter-io.cn/download.flutter.io。
         // flutter-gradle-plugin 拼 URL 的规则是
         //   ${FLUTTER_STORAGE_BASE_URL ?: "https://storage.googleapis.com"}/${engineRealm}download.flutter.io
         // 本机 $FLUTTER_SDK/bin/cache/engine.realm 为空，故无 engineRealm 前缀。
@@ -95,11 +94,10 @@ dependencyResolutionManagement {
     }
 }
 
-// Flutter 插件工程（如 shared_preferences_android）自带 legacy buildscript 块，里面只写了
-// google()/mavenCentral()。pluginManagement 里的镜像对它无效，会直连 dl.google.com 下载 AGP 8.13.1 并超时：
-//   Could not download builder-8.13.1.jar (com.android.tools.build:builder:8.13.1) > Read timed out
-// buildscript 类路径不受上面的 dependencyResolutionManagement 管辖，唯一生效的位置是
-// 「该工程自己的 buildscript 仓库列表」，这里在每个工程求值前插到最前面（顺序靠前优先）。
+// Flutter 插件工程（如 file_selector_android）自带 legacy buildscript 块，里面只写了
+// google()/mavenCentral()。pluginManagement 里的镜像对它无效，会直连 dl.google.com
+// 下载旧 AGP 并超时。buildscript 类路径不受 dependencyResolutionManagement 管辖，
+// 只能写进该工程自己的仓库列表，并插到最前面。
 gradle.beforeProject {
     buildscript.repositories.apply {
         maven {

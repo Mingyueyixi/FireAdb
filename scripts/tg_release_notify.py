@@ -33,8 +33,8 @@ CAPTION_LIMIT = 1024
 
 INTRO = "FireAdb 是一个跨平台 ADB 工具箱，支持设备连接、文件管理、应用管理、截图录屏、shell 命令等功能。"
 
-# 固定输入路径（与 .github/workflows/build-multi-platform.yml 的 notify-release 步骤对应，
-# gh release view/download 均在仓库根目录执行）
+# 固定输入路径（与 .github/workflows/build-multi-platform.yml 的 publish 步骤对应，
+# 三端都成功后才写 release.json，并把产物放进 tg_assets）
 RELEASE_JSON = Path("release.json")
 ASSETS_DIR = Path("tg_assets")
 

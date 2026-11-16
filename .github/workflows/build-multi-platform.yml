@@ -23,6 +23,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.50.0'
           cache: true
 
       - name: Get dependencies
@@ -39,18 +40,6 @@ jobs:
           path: ${{ steps.build.outputs.artifact }}
           if-no-files-found: error
           retention-days: 7
-
-      - name: Upload to Release (only on tag)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ steps.build.outputs.artifact }}
-          fail_on_unmatched_files: true
-          # 不用 generate_release_notes：那是「追加」语义，重打 tag 重跑会
-          # 重复追加 changelog；固定正文由 softprops 覆盖更新，重跑幂等
-          body: |
-            FireAdb 是一个跨平台 ADB 工具箱，支持设备连接、文件管理、应用管理、截图录屏、shell 命令等功能。
-            更新内容见 [提交记录](${{ github.server_url }}/${{ github.repository }}/commits/${{ github.ref_name }})。
 
   build-linux:
     name: Build Linux
@@ -77,6 +66,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.50.0'
           cache: true
 
       - name: Get dependencies
@@ -94,51 +84,6 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload to Release (only on tag)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ steps.build.outputs.artifact }}
-          fail_on_unmatched_files: true
-          # 不用 generate_release_notes：那是「追加」语义，重打 tag 重跑会
-          # 重复追加 changelog；固定正文由 softprops 覆盖更新，重跑幂等
-          body: |
-            FireAdb 是一个跨平台 ADB 工具箱，支持设备连接、文件管理、应用管理、截图录屏、shell 命令等功能。
-            更新内容见 [提交记录](${{ github.server_url }}/${{ github.repository }}/commits/${{ github.ref_name }})。
-
-  notify-release:
-    name: Notify Telegram
-    needs: [build-windows, build-linux, build-android]
-    if: startsWith(github.ref, 'refs/tags/') # 仅 tag 发布时通知
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Fetch release info & download assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json name,body,url > release.json
-          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir tg_assets --clobber
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: Install requests
-        run: pip install requests
-
-      - name: Send release to Telegram
-        continue-on-error: true # 通知失败不影响发布结果
-        env:
-          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
-          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-        run: python scripts/tg_release_notify.py
-
   build-android:
     name: Build Android
     runs-on: ubuntu-latest
@@ -148,16 +93,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      # AGP 自带的 lint 会调用 List.removeLast()，这个方法从 Java 21 才有。
+      # 用 17 跑 Gradle 时，file_selector_android 的 lintVitalAnalyzeRelease 会崩溃。
+      # 应用字节码仍是 Java 17，这里只提高运行 Gradle 的 JDK。
+      - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.50.0'
           cache: true
 
       - name: Get dependencies
@@ -175,14 +124,55 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Upload to Release (only on tag)
-        if: startsWith(github.ref, 'refs/tags/')
+  publish:
+    name: Publish release
+    needs: [build-windows, build-linux, build-android]
+    # 自定义 if 会盖掉默认的成功条件，这里要写上 success()，任一端失败都不发布。
+    if: startsWith(github.ref, 'refs/tags/') && success()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fire-adb-*
+          path: release_assets
+          merge-multiple: true
+
+      - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.build.outputs.artifact }}
+          files: release_assets/*
           fail_on_unmatched_files: true
           # 不用 generate_release_notes：那是「追加」语义，重打 tag 重跑会
           # 重复追加 changelog；固定正文由 softprops 覆盖更新，重跑幂等
           body: |
             FireAdb 是一个跨平台 ADB 工具箱，支持设备连接、文件管理、应用管理、截图录屏、shell 命令等功能。
             更新内容见 [提交记录](${{ github.server_url }}/${{ github.repository }}/commits/${{ github.ref_name }})。
+
+      - name: Prepare Telegram inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json name,body,url > release.json
+          mkdir -p tg_assets
+          cp -a release_assets/. tg_assets/
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Send release to Telegram
+        continue-on-error: true # 通知失败不影响已经上传的 Release
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: python scripts/tg_release_notify.py
