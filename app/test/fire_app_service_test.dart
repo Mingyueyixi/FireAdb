@@ -24,6 +24,16 @@ void main() {
     );
   });
 
+  test('cmdline 以空字节分隔时仍能认出常驻服务', () {
+    expect(
+      fireAppServiceProcess(
+        'app_process\u0000/system/bin\u0000com.fire.adb.appservice.FireAppService\u0000link=28170',
+      ),
+      isTrue,
+    );
+    expect(fireAppServiceProcess('No such file or directory'), isFalse);
+  });
+
   test('常驻服务脱离 adb 会话后在后台启动', () {
     final command = fireAppServiceDaemonCommand(
       '/data/local/tmp/fire-app-service.jar',

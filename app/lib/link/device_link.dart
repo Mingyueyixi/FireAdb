@@ -169,14 +169,24 @@ class DeviceLink {
         port,
         timeout: const Duration(seconds: 3),
       );
+      var toLocal = Future<void>.value();
       final fromDevice = stream.readStream().listen(
         (chunk) {
-          socket.add(chunk);
+          toLocal = toLocal.catchError((Object _) {}).then((_) async {
+            try {
+              socket.add(chunk);
+              await socket.flush();
+            } catch (error, stack) {
+              log.warning('设备回连写到本机失败', error, stack);
+              socket.destroy();
+            }
+          });
         },
         onDone: () {
           socket.destroy();
         },
-        onError: (Object _) {
+        onError: (Object error, StackTrace stack) {
+          log.warning('设备回连写到本机失败', error, stack);
           socket.destroy();
         },
       );
@@ -289,10 +299,8 @@ class _DeviceDoor {
     try {
       final pid = (await device.shell('cat $fireAppServicePidPath')).trim();
       if (int.tryParse(pid) == null) return;
-      final found = await device.shell(
-        'grep -a -o com.fire.adb.appservice.FireAppService /proc/$pid/cmdline',
-      );
-      if (!fireAppServiceProcess(found)) return;
+      final cmdline = await device.shell('cat /proc/$pid/cmdline');
+      if (!fireAppServiceProcess(cmdline)) return;
       await device.shell('kill $pid');
     } catch (_) {}
     for (var attempt = 0; attempt < 20; attempt++) {
@@ -344,15 +352,14 @@ class _DeviceDoor {
     }
   }
 
+  /// pid 文件里的进程还在，并且命令行是常驻的应用服务。
+  /// `cat` 读完 `/proc/pid/cmdline` 就退出。
   Future<bool> _serviceAlive() async {
     try {
-      final pid = (await device.shell('cat $fireAppServicePidPath')).trim();
-      if (int.tryParse(pid) == null) return false;
-      // cmdline 以空字节分隔，直接 cat 会在类名之前被截断，误以为进程不在。
-      final found = await device.shell(
-        'grep -a -o com.fire.adb.appservice.FireAppService /proc/$pid/cmdline',
+      final cmdline = await device.shell(
+        'cat /proc/\$(cat $fireAppServicePidPath)/cmdline',
       );
-      return fireAppServiceProcess(found);
+      return fireAppServiceProcess(cmdline);
     } catch (_) {
       return false;
     }
@@ -411,15 +418,19 @@ class _DeviceDoor {
     }
     _adoptToken = true;
     _attached = remote;
+    var toLocal = Future<void>.value();
     var toDevice = Future<void>.value();
     remote.readStream.listen(
       (chunk) {
-        try {
-          socket.add(chunk);
-        } catch (error, stack) {
-          log.warning('已有应用服务写到本机失败 ${device.serial}', error, stack);
-          socket.destroy();
-        }
+        toLocal = toLocal.catchError((Object _) {}).then((_) async {
+          try {
+            socket.add(chunk);
+            await socket.flush();
+          } catch (error, stack) {
+            log.warning('已有应用服务写到本机失败 ${device.serial}', error, stack);
+            socket.destroy();
+          }
+        });
       },
       onDone: () {
         socket.destroy();
