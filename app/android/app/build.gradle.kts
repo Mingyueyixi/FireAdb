@@ -32,6 +32,14 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // --split-per-abi 已经按架构拆包，再写 abiFilters 会和 splits 冲突。
+        // 不拆包时才用过滤器，避免把 armeabi-v7a 打进去。
+        if (!splits.abi.isEnable) {
+            ndk {
+                abiFilters.clear()
+                abiFilters.addAll(listOf("arm64-v8a", "x86_64"))
+            }
+        }
     }
 
     signingConfigs {
@@ -40,6 +48,15 @@ android {
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // 把 so 放进 APK 时压缩。安装时系统会解出来再加载。
+            // 所有 Android 版本都能安装这种包。Android 6 起也可以不压缩、直接从 APK 映射，
+            // 那样安装包更大。resources.arsc 在 Android 11 起必须不压缩对齐，这里不动它。
+            useLegacyPackaging = true
         }
     }
 

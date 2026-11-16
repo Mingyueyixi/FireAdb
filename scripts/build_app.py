@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """统一打包入口：编译 + 注入构建信息 + 产出带版本号的安装包。
 
-产物命名 fireadb-<平台>-<版本>-<日期>-<构建类型>.<后缀>，输出到
-build/dist/，例如 fireadb-android-1.0.1-20261108-release.apk。git 提交号
-打进应用不进文件名，拿不到时记为 unknown；构建时间以 Unix 秒注入，
-显示时由应用格式化为本地时间。
+APK 命名 fireadb-android-<版本>-<架构>-<commit>.apk，就地留在
+app/build/app/outputs/flutter-apk/，与上传到 GitHub 的文件名相同。
+提交号拿不到时记为 unknown。构建时间以 Unix 秒注入，显示时由应用格式化为本地时间。
 
 用法（多余参数透传给 flutter build / flutter run）：
 
@@ -12,7 +11,7 @@ build/dist/，例如 fireadb-android-1.0.1-20261108-release.apk。git 提交号
     python scripts/build_app.py run -d <设备id>            # 指定设备调试
     python scripts/build_app.py windows --release         # 出包
     python scripts/build_app.py linux --release
-    python scripts/build_app.py apk --release --target-platform android-arm64
+    python scripts/build_app.py apk --release
 
 GitHub Actions 下自动把产物路径写入 $GITHUB_OUTPUT（artifact / artifact_name）。
 """
@@ -71,6 +70,25 @@ def flutter_command() -> list[str]:
     return [found]
 
 
+def apk_build_args(rest: list[str]) -> list[str]:
+    """一次编译拆成 arm64-v8a 和 x86_64 两个 APK。已指定平台时不再追加。"""
+    args = list(rest)
+    specified = any(
+        arg == "--target-platform" or arg.startswith("--target-platform=")
+        for arg in args
+    )
+    if not specified:
+        args += [
+            "--target-platform",
+            "android-arm64",
+            "--target-platform",
+            "android-x64",
+        ]
+    if "--split-per-abi" not in args:
+        args.append("--split-per-abi")
+    return args
+
+
 def run_flutter(subcommand: str, commit: str, build_time: str, rest: list[str]) -> None:
     """带构建信息执行 flutter run / flutter build；stdin 原样继承，
     flutter run 的热重载按键（r/R/q）可直接使用。"""
@@ -89,11 +107,10 @@ def run_flutter(subcommand: str, commit: str, build_time: str, rest: list[str]) 
         sys.exit(result.returncode)
 
 
-def package(target: str, version: str, rest: list[str]) -> Path:
+def package(target: str, version: str, commit: str, rest: list[str]) -> Path:
     """把 flutter build 的产物压成带版本号的安装包，返回路径。
 
-    命名 fireadb-<平台>-<版本>-<日期>-<构建类型>.<后缀>，例如
-    fireadb-android-1.0.1-20261108-release.apk。
+    APK 在 Flutter 的 flutter-apk 目录里就地改名，不再另拷一份。
     """
     mode = "release"
     for flag in ("--release", "--debug", "--profile"):
@@ -115,13 +132,63 @@ def package(target: str, version: str, rest: list[str]) -> Path:
             DIST_DIR / f"fireadb-linux-{suffix}.tar.gz",
         )
     if target == "apk":
-        source = APP_DIR / "build/app/outputs/flutter-apk/app-release.apk"
+        return _package_apks(version, commit, mode)
+    sys.exit(f"目标 {target} 没有打包规则，请自行从 app/build/ 取产物")
+
+
+def _package_apks(version: str, commit: str, mode: str) -> Path:
+    """在 Flutter 的 flutter-apk 目录里就地改名，供同一次上传。"""
+    out = APP_DIR / "build/app/outputs/flutter-apk"
+    if not out.is_dir():
+        sys.exit(f"找不到 APK 目录 {out}")
+    # 清掉以前另拷到 dist 的 APK，避免和这次产物并存。
+    stale_dir = DIST_DIR / "android"
+    if stale_dir.exists():
+        shutil.rmtree(stale_dir)
+    for leftover in DIST_DIR.glob("fireadb-android-*.apk"):
+        leftover.unlink()
+    for old in out.glob("fireadb-android-*.apk"):
+        old.unlink()
+    mode_suffix = "" if mode == "release" else f"-{mode}"
+    splits = sorted(out.glob(f"app-*-{mode}.apk"))
+    if not splits:
+        source = out / f"app-{mode}.apk"
         if not source.is_file():
             sys.exit(f"找不到 APK 产物 {source}")
-        dest = DIST_DIR / f"fireadb-android-{suffix}.apk"
-        shutil.copy2(source, dest)
-        return dest
-    sys.exit(f"目标 {target} 没有打包规则，请自行从 app/build/ 取产物")
+        _rename_apk(source, out / f"fireadb-android-{version}-{commit}{mode_suffix}.apk")
+        _drop_gradle_apk_copies(mode)
+        return out
+    for source in splits:
+        abi = source.name.removeprefix("app-").removesuffix(f"-{mode}.apk")
+        _rename_apk(
+            source,
+            out / f"fireadb-android-{version}-{abi}-{commit}{mode_suffix}.apk",
+        )
+    # 拆包后同目录里的整包是上一次没拆包留下的，和这次产物不是同一个文件。
+    universal = out / f"app-{mode}.apk"
+    if universal.is_file():
+        universal.unlink()
+        checksum = universal.with_name(universal.name + ".sha1")
+        if checksum.is_file():
+            checksum.unlink()
+    _drop_gradle_apk_copies(mode)
+    return out
+
+
+def _drop_gradle_apk_copies(mode: str) -> None:
+    """Flutter 已经把 APK 复制到 flutter-apk，Gradle 目录里的同内容文件删掉。"""
+    gradle_out = APP_DIR / "build/app/outputs/apk" / mode
+    if not gradle_out.is_dir():
+        return
+    for apk in gradle_out.glob("*.apk"):
+        apk.unlink()
+
+
+def _rename_apk(source: Path, dest: Path) -> None:
+    source.replace(dest)
+    checksum = source.with_name(source.name + ".sha1")
+    if checksum.is_file():
+        checksum.unlink()
 
 
 def _zip_dir(source: Path, dest: Path) -> Path:
@@ -182,9 +249,20 @@ def main() -> None:
     if args.target == "run":
         run_flutter("run", commit, build_time, rest)
         return
-    run_flutter("build", commit, build_time, [args.target, *rest])
-    artifact = package(args.target, version, rest)
-    print(f"产物：{artifact}")
+    build_args = rest
+    if args.target == "apk":
+        build_args = apk_build_args(rest)
+    run_flutter("build", commit, build_time, [args.target, *build_args])
+    artifact = package(args.target, version, commit, rest)
+    named = sorted(artifact.glob("fireadb-android-*.apk")) if artifact.is_dir() else []
+    if named:
+        for item in named:
+            print(f"产物：{item}")
+    elif artifact.is_dir():
+        for item in sorted(artifact.iterdir()):
+            print(f"产物：{item}")
+    else:
+        print(f"产物：{artifact}")
     emit_github_output(artifact)
 
 

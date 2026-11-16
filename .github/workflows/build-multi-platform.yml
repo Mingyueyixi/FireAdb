@@ -114,13 +114,13 @@ jobs:
 
       - name: Build & package Android APK
         id: build
-        run: python scripts/build_app.py apk --release --target-platform android-arm64 # 脚本注入构建信息并重命名 APK；只要 arm64-v8a
+        run: python scripts/build_app.py apk --release # 一次编译拆出 arm64-v8a 与 x86_64
 
       - name: Upload Android artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fire-adb-android-arm64
-          path: ${{ steps.build.outputs.artifact }}
+          name: fire-adb-android
+          path: ${{ steps.build.outputs.artifact }}/fireadb-android-*.apk
           if-no-files-found: error
           retention-days: 7
 
@@ -160,7 +160,7 @@ jobs:
         run: |
           gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json name,body,url > release.json
           mkdir -p tg_assets
-          cp -a release_assets/. tg_assets/
+          find release_assets -type f ! -name '*x86_64*' -exec cp -t tg_assets {} +
 
       - name: Setup Python
         uses: actions/setup-python@v5
