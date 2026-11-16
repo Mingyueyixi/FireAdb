@@ -13,6 +13,20 @@ import '../log/app_log.dart';
 /// 每台手机上 adbd 监听的端口。桌面为每台设备另分配本机端口。
 const int deviceLinkPort = 28170;
 
+/// 已经在跑的应用服务另外听这个本机端口。后来的客户端从这里接入，不再起第二个进程。
+const int deviceServicePort = 28171;
+
+/// 设备上那个进程的标记。和 jar 里的路径一致。
+const String fireAppServicePidPath = '/data/local/tmp/fire-app-service.pid';
+const String fireAppServiceOwnerPath = '/data/local/tmp/fire-app-service.owner';
+
+/// `cmdline` 里是不是常驻的应用服务。短命的录屏进程不是。
+bool fireAppServiceProcess(String cmdline) {
+  final text = cmdline.replaceAll('\u0000', ' ');
+  if (text.contains('ScreenRecorder') || text.contains(' LIST')) return false;
+  return text.contains('com.fire.adb.appservice.FireAppService');
+}
+
 /// 手机应用和 FireAppService 连上桌面后的第一条消息。
 const String linkHelloName = 'session.hello';
 
@@ -202,8 +216,11 @@ class _DeviceDoor {
   final ConnectedDevice device;
   ServerSocket? _server;
   ConnectedShell? _exec;
+  ConnectedShell? _attached;
   int? hostPort;
   String? token;
+  var _adoptToken = false;
+  Future<void>? _claiming;
   LinkPeer? service;
   LinkPeer? app;
   String? appSelfId;
@@ -234,25 +251,230 @@ class _DeviceDoor {
     final port = hostPort;
     final secret = token;
     if (port == null || secret == null) return;
-    if (!_reversed) {
+    if (_exec != null || _attached != null || service != null) return;
+    final updated = await ensureFireAppService(device);
+    if (updated) await _stopService();
+    if (await _serviceAlive()) {
+      await _attachRunning();
+      return;
+    }
+    if (!await _claimOwner()) {
+      if (await _waitForService()) {
+        await _joinWithRetry();
+        return;
+      }
+      await _releaseClaim();
+      if (!await _claimOwner()) return;
+    }
+    try {
+      await _ensureReverse();
+      await _spawnDaemon(secret);
+      for (var attempt = 0; attempt < 25; attempt++) {
+        if (service != null) return;
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      }
+      if (await _serviceAlive()) {
+        await _joinWithRetry();
+        return;
+      }
+      await _releaseClaim();
+    } catch (error) {
+      if (!await _serviceAlive()) await _releaseClaim();
+      rethrow;
+    }
+  }
+
+  /// 换上新 jar 时停掉还在用旧代码的后台进程。
+  Future<void> _stopService() async {
+    try {
+      final pid = (await device.shell('cat $fireAppServicePidPath')).trim();
+      if (int.tryParse(pid) == null) return;
+      final found = await device.shell(
+        'grep -a -o com.fire.adb.appservice.FireAppService /proc/$pid/cmdline',
+      );
+      if (!fireAppServiceProcess(found)) return;
+      await device.shell('kill $pid');
+    } catch (_) {}
+    for (var attempt = 0; attempt < 20; attempt++) {
+      if (!await _serviceAlive()) {
+        await _releaseClaim();
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+  }
+
+  /// 已经在跑的进程连过来，或从本机端口接上。不再另起一个。
+  Future<void> _attachRunning() async {
+    if (await _joinExisting()) return;
+    await _ensureReverse();
+    for (var attempt = 0; attempt < 15; attempt++) {
+      if (service != null) return;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+  }
+
+  /// 启动命令马上返回。shell 若一直开着，会占住这条 adb，两边的连接都会卡住。
+  Future<void> _spawnDaemon(String secret) async {
+    final command =
+        '${fireAppServiceDaemonCommand(fireAppServiceRemotePath, argument: 'link=$deviceLinkPort token=$secret')}; '
+        'echo fire-app-started';
+    final shell = await device.openShell(command);
+    try {
+      await collectServiceText(shell.readStream);
+    } catch (error, stack) {
+      log.warning('后台服务启动没有立刻返回 ${device.serial}', error, stack);
+    } finally {
+      await shell.close();
+    }
+  }
+
+  Future<void> _ensureReverse() async {
+    if (_reversed) return;
+    final port = hostPort;
+    if (port == null) return;
+    try {
+      await device.reverse(
+        remote: 'tcp:$deviceLinkPort',
+        local: 'tcp:$port',
+      );
+      _reversed = true;
+    } catch (error, stack) {
+      log.warning('登记反向端口失败 ${device.serial}', error, stack);
+    }
+  }
+
+  Future<bool> _serviceAlive() async {
+    try {
+      final pid = (await device.shell('cat $fireAppServicePidPath')).trim();
+      if (int.tryParse(pid) == null) return false;
+      // cmdline 以空字节分隔，直接 cat 会在类名之前被截断，误以为进程不在。
+      final found = await device.shell(
+        'grep -a -o com.fire.adb.appservice.FireAppService /proc/$pid/cmdline',
+      );
+      return fireAppServiceProcess(found);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _claimOwner() async {
+    try {
+      final text = await device.shell(
+        'mkdir $fireAppServiceOwnerPath 2>/dev/null && echo owner || echo busy',
+      );
+      return text.contains('owner');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _releaseClaim() async {
+    try {
+      await device.shell('rmdir $fireAppServiceOwnerPath');
+    } catch (_) {}
+  }
+
+  Future<bool> _waitForService() async {
+    for (var attempt = 0; attempt < 40; attempt++) {
+      if (await _serviceAlive()) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+    return false;
+  }
+
+  Future<void> _joinWithRetry() async {
+    for (var attempt = 0; attempt < 10; attempt++) {
+      if (await _joinExisting()) return;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+  }
+
+  /// 连到已经在听的本机端口，把字节送进自己的门口。不改设备上的反向端口。
+  Future<bool> _joinExisting() async {
+    final port = hostPort;
+    if (port == null) return false;
+    final ConnectedShell remote;
+    try {
+      remote = await device.openService('tcp:$deviceServicePort');
+    } catch (error, stack) {
+      log.warning('没有连上已有的应用服务 ${device.serial}', error, stack);
+      return false;
+    }
+    final Socket socket;
+    try {
+      socket = await Socket.connect(InternetAddress.loopbackIPv4, port);
+    } catch (error, stack) {
+      log.warning('没有把已有应用服务交到本机 ${device.serial}', error, stack);
+      await remote.close();
+      return false;
+    }
+    _adoptToken = true;
+    _attached = remote;
+    var toDevice = Future<void>.value();
+    remote.readStream.listen(
+      (chunk) {
+        try {
+          socket.add(chunk);
+        } catch (error, stack) {
+          log.warning('已有应用服务写到本机失败 ${device.serial}', error, stack);
+          socket.destroy();
+        }
+      },
+      onDone: () {
+        socket.destroy();
+        if (identical(_attached, remote)) _attached = null;
+      },
+      onError: (Object error, StackTrace stack) {
+        log.warning('已有应用服务断开 ${device.serial}', error, stack);
+        socket.destroy();
+        if (identical(_attached, remote)) _attached = null;
+      },
+    );
+    socket.listen(
+      (chunk) {
+        toDevice = toDevice.catchError((Object _) {}).then((_) {
+          return remote.write(chunk);
+        });
+      },
+      onDone: () {
+        unawaited(remote.close());
+      },
+      onError: (Object _) {
+        unawaited(remote.close());
+      },
+    );
+    return true;
+  }
+
+  /// 拉起方已经离开。把反向端口改到自己这边，进程会重新连上来。
+  void _claimReverse() {
+    final pending = _claiming;
+    if (pending != null) return;
+    final done = _claimReverseNow();
+    _claiming = done.whenComplete(() {
+      if (identical(_claiming, done)) _claiming = null;
+    });
+  }
+
+  Future<void> _claimReverseNow() async {
+    for (var attempt = 0; attempt < 10; attempt++) {
+      if (_reversed) return;
+      final port = hostPort;
+      if (port == null) return;
       try {
         await device.reverse(
           remote: 'tcp:$deviceLinkPort',
           local: 'tcp:$port',
         );
         _reversed = true;
+        log.info('已接过应用服务端口 ${device.serial}');
+        return;
       } catch (error, stack) {
-        log.warning('登记反向端口失败 ${device.serial}', error, stack);
+        log.warning('接过应用服务端口失败 ${device.serial}', error, stack);
+        await Future<void>.delayed(const Duration(milliseconds: 300));
       }
     }
-    if (_exec != null) return;
-    await ensureFireAppService(device);
-    _exec = await device.openExec(
-      fireAppServiceCommand(
-        fireAppServiceRemotePath,
-        argument: 'link=$deviceLinkPort token=$secret',
-      ),
-    );
   }
 
   Future<void> close() async {
@@ -266,8 +488,10 @@ class _DeviceDoor {
     _reversed = false;
     final server = _server;
     final exec = _exec;
+    final attached = _attached;
     _server = null;
     _exec = null;
+    _attached = null;
     hostPort = null;
     try {
       await serviceSocket?.close();
@@ -277,6 +501,9 @@ class _DeviceDoor {
     } catch (_) {}
     try {
       await server?.close();
+    } catch (_) {}
+    try {
+      await attached?.close();
     } catch (_) {}
     if (exec == null) return;
     try {
@@ -346,8 +573,20 @@ class _DeviceDoor {
     if (frame.name != linkHelloName) return null;
     final role = '${frame.json['role'] ?? ''}';
     final secret = '${frame.json['token'] ?? ''}';
-    if (secret.isEmpty || secret != token) return null;
+    if (secret.isEmpty) return null;
     if (role != 'service' && role != 'app') return null;
+    // 已经在后台的进程带着自己的口令连上来。门口原先生成的口令作废，
+    // 否则手机会一直用链接文件里的口令，被这边拒绝。
+    if (role == 'service' && service == null) {
+      token = secret;
+      _adoptToken = false;
+    } else if (_adoptToken) {
+      token = secret;
+      _adoptToken = false;
+    } else if (secret != token) {
+      log.info('拒绝接入 ${device.serial} $role');
+      return null;
+    }
     final peer = LinkPeer(socket);
     if (role == 'service') {
       service?.socket.destroy();
@@ -365,6 +604,10 @@ class _DeviceDoor {
   }
 
   void _dispatch(LinkPeer peer, FireDataResponse frame) {
+    if (frame.name == 'session.release' && frame.id == 0) {
+      if (identical(peer, service)) _claimReverse();
+      return;
+    }
     if (frame.id != 0) {
       final waiter = peer.pending.remove(frame.id);
       if (waiter != null && !waiter.isCompleted) {

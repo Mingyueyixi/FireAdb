@@ -21,19 +21,17 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 应用目录：{@code catalog.list}、{@code catalog.show}。
+ * 应用目录：{@code catalog.list}、{@code catalog.names}、{@code catalog.icon}、
+ * {@code catalog.show}。
  *
- * <p>列表先逐条写出应用，名称在旁路线程解析后按包再写一条。
- * 查看一个应用先写 JSON，再写 PNG。
+ * <p>列表一次写出全部包名、版本、标记和体积。应用名按给定包名一次返回，不含图标。
+ * 图标按单个包名返回，调用方只问当前看得到的那些。查看一个应用先写 JSON，再写 PNG。
  */
 public final class AppCatalogProtocol implements CommandHandler {
     private static final String TAG = "FireAdb";
@@ -62,6 +60,14 @@ public final class AppCatalogProtocol implements CommandHandler {
             writeList(request.id);
             return true;
         }
+        if ("catalog.names".equals(request.name)) {
+            writeNames(request);
+            return true;
+        }
+        if ("catalog.icon".equals(request.name)) {
+            writeIcon(request);
+            return true;
+        }
         if ("catalog.show".equals(request.name)) {
             writeShow(request);
             return true;
@@ -70,10 +76,8 @@ public final class AppCatalogProtocol implements CommandHandler {
     }
 
     /**
-     * 先写出包名、版本、标记和 APK 路径，界面可以马上显示。
-     * 应用名在另一条线程里按包解析，写完列表后一次补上。不含图标。
+     * 一次写出全部已安装包。应用名和图标另请求，列表不必等它们。
      */
-    @SuppressWarnings("deprecation")
     public void writeList(int id) throws Exception {
         long started = SystemClock.elapsedRealtime();
         List<PackageInfo> packages;
@@ -84,87 +88,84 @@ public final class AppCatalogProtocol implements CommandHandler {
             return;
         }
         long listed = SystemClock.elapsedRealtime();
-        if (packages == null) {
-            packages = Collections.emptyList();
-        }
-        List<PackageInfo> apps = new ArrayList<PackageInfo>();
-        for (PackageInfo info : packages) {
-            if (info == null || info.packageName == null || info.packageName.length() == 0) {
-                continue;
-            }
-            apps.add(info);
-        }
-        // Resolve labels on a side thread while the catalog is written, then
-        // stream each LABEL as soon as it is ready. Never join() before the
-        // first LABEL — that silent window made the host's 5s idle timeout
-        // fire with "已收 620 包名、0 名称" even though USB was fine.
-        final String[] labels = new String[apps.size()];
-        // Prefix length of indices whose label slot is published (happens-before
-        // via AtomicInteger). Plain boolean[] is not cross-thread visible.
-        final AtomicInteger labelsReadyThrough = new AtomicInteger(0);
-        Thread naming = new Thread(
-                () -> fillLabels(apps, labels, labelsReadyThrough),
-                "fire-app-labels");
-        naming.start();
-        for (PackageInfo info : apps) {
-            writeApp(id, info, "");
-        }
-        long catalogDone = SystemClock.elapsedRealtime();
-        int labelCount = 0;
-        int next = 0;
-        while (next < apps.size()) {
-            if (next >= labelsReadyThrough.get()) {
-                if (!naming.isAlive()) {
-                    break;
+        JSONArray items = new JSONArray();
+        byPackage.clear();
+        if (packages != null) {
+            for (PackageInfo info : packages) {
+                if (info == null || info.packageName == null || info.packageName.length() == 0) {
+                    continue;
                 }
-                try {
-                    Thread.sleep(5);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-                continue;
+                byPackage.put(info.packageName, info);
+                items.put(appJson(info, ""));
             }
-            String label = labels[next];
-            String packageName = apps.get(next).packageName;
-            next++;
-            if (label == null) {
-                continue;
-            }
-            label = label.trim();
-            if (label.length() == 0 || label.equals(packageName)) {
-                continue;
-            }
-            writeApp(id, apps.get(next - 1), label);
-            labelCount++;
         }
-        try {
-            naming.join();
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-        }
-        long named = SystemClock.elapsedRealtime();
-        out.send(FireDataResponse.done(id));
+        JSONObject json = new JSONObject();
+        json.put("items", items);
+        out.send(FireDataResponse.json("catalog.apps", id, json));
         long finished = SystemClock.elapsedRealtime();
         Log.i(
                 TAG,
                 "应用列表 "
-                        + apps.size()
+                        + items.length()
                         + " 个，包 "
                         + (listed - started)
-                        + " ms，列表 "
-                        + (catalogDone - listed)
-                        + " ms，名称 "
-                        + labelCount
-                        + " 个 "
-                        + (named - catalogDone)
                         + " ms，写出 "
-                        + (finished - named)
+                        + (finished - listed)
                         + " ms");
     }
 
-    private void writeApp(int id, PackageInfo info, String label) throws Exception {
-        out.send(FireDataResponse.json("catalog.app", id, appJson(info, label)));
+    /** 按请求里的包名顺序解析应用名，一次返回。不含图标。 */
+    private void writeNames(FireDataRequest request) {
+        long started = SystemClock.elapsedRealtime();
+        try {
+            JSONArray wanted = request.json().optJSONArray("packages");
+            JSONArray items = new JSONArray();
+            int count = wanted == null ? 0 : wanted.length();
+            for (int index = 0; index < count; index++) {
+                String packageName = wanted.optString(index, "").trim();
+                if (packageName.length() == 0) {
+                    continue;
+                }
+                PackageInfo info = packageInfo(packageName);
+                ApplicationInfo app = info == null ? null : info.applicationInfo;
+                String label = app == null ? "" : labelOf(app);
+                JSONObject item = new JSONObject();
+                item.put("package", packageName);
+                item.put("label", label == null ? "" : label);
+                items.put(item);
+            }
+            JSONObject json = new JSONObject();
+            json.put("items", items);
+            out.send(FireDataResponse.json("catalog.names", request.id, json));
+            Log.i(
+                    TAG,
+                    "应用名 "
+                            + items.length()
+                            + " 个，"
+                            + (SystemClock.elapsedRealtime() - started)
+                            + " ms");
+        } catch (Throwable error) {
+            Log.w(TAG, "catalog.names 失败", error);
+            out.sendQuiet(FireDataResponse.error(request.id, "读取应用名失败: " + error.getMessage()));
+        }
+    }
+
+    /** 只返回一个包的图标。空字节表示没有可用图标。 */
+    private void writeIcon(FireDataRequest request) {
+        try {
+            String packageName = packageOf(request);
+            if (packageName.length() == 0) {
+                out.send(FireDataResponse.error(request.id, "缺少包名"));
+                return;
+            }
+            PackageInfo info = packageInfo(packageName);
+            ApplicationInfo app = info == null ? null : info.applicationInfo;
+            byte[] png = app == null ? new byte[0] : iconOf(app, false);
+            out.send(FireDataResponse.bytes("catalog.icon", request.id, png));
+        } catch (Throwable error) {
+            Log.w(TAG, "catalog.icon 失败", error);
+            out.sendQuiet(FireDataResponse.error(request.id, "读取应用图标失败: " + error.getMessage()));
+        }
     }
 
     private void writeShow(FireDataRequest request) throws Exception {
@@ -179,7 +180,7 @@ public final class AppCatalogProtocol implements CommandHandler {
             out.send(FireDataResponse.error(request.id, "找不到应用"));
             return;
         }
-        byte[] png = app == null ? new byte[0] : iconOf(app);
+        byte[] png = app == null ? new byte[0] : iconOf(app, true);
         String[] directories = directories(app, packageName);
         String label = app == null ? "" : labelOf(app);
         out.send(FireDataResponse.json(
@@ -240,23 +241,6 @@ public final class AppCatalogProtocol implements CommandHandler {
             }
         }
         return paths;
-    }
-
-    private void fillLabels(
-            List<PackageInfo> apps,
-            String[] labels,
-            AtomicInteger labelsReadyThrough) {
-        try {
-            for (int index = 0; index < apps.size(); index++) {
-                PackageInfo info = apps.get(index);
-                ApplicationInfo app = info.applicationInfo;
-                labels[index] = app == null ? info.packageName : labelOf(app);
-                labelsReadyThrough.set(index + 1);
-            }
-        } catch (Throwable error) {
-            Log.w(TAG, "读取应用名失败", error);
-            labelsReadyThrough.set(apps.size());
-        }
     }
 
     private static String apkPaths(ApplicationInfo app) {
@@ -407,24 +391,28 @@ public final class AppCatalogProtocol implements CommandHandler {
         return info.versionCode;
     }
 
-    private byte[] iconOf(ApplicationInfo info) {
+    private byte[] iconOf(ApplicationInfo info, boolean log) {
         String packageName = info.packageName == null ? "" : info.packageName;
         Drawable loaded = loadIcon(info);
         byte[] png = iconBytes(loaded);
         if (png.length > 0 && !isDefaultIcon(png)) {
-            logIcon(packageName, "loadIcon", loaded);
+            if (log) {
+                logIcon(packageName, "loadIcon", loaded);
+            }
             return png;
         }
-        if (png.length > 0) {
+        if (log && png.length > 0) {
             logIcon(packageName, "loadIcon 默认图标", loaded);
         }
         Drawable packaged = packageIcon(info);
         byte[] fromPackage = iconBytes(packaged);
         if (fromPackage.length > 0) {
-            logIcon(packageName, "安装包", packaged);
+            if (log) {
+                logIcon(packageName, "安装包", packaged);
+            }
             return fromPackage;
         }
-        if (png.length == 0) {
+        if (log && png.length == 0) {
             logIcon(packageName, "loadIcon", loaded);
         }
         return new byte[0];

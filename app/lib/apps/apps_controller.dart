@@ -4,7 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
+import '../appservice/fire_app_service.dart';
 import '../connection/connection_manager.dart';
+import '../connection/model/connected_device.dart';
 import '../l10n/generated/fireadb_localizations.dart';
 import '../log/app_log.dart';
 import 'data/bean/app_freeze.dart';
@@ -12,7 +14,6 @@ import 'data/bean/installed_app.dart';
 import 'data/repo/device_app_repository.dart';
 import 'data/source/app_freeze_settings.dart';
 import 'data/source/app_inventory.dart';
-import '../appservice/fire_app_service.dart';
 import 'loader/app_display_loader.dart';
 
 /// 一次操作结束后给界面看的提示。
@@ -57,13 +58,17 @@ class AppTask {
   }
 }
 
-/// 一台设备上的应用列表：过滤、多选、详情加载和批量任务。
+/// 先补齐眼前这一屏的应用名。图标按当前能看见的行另取。
+const int _appListFirstPage = 24;
+
+/// 一台设备上的应用列表：过滤、多选、外观加载和批量任务。
 class AppsController extends GetxController {
   AppsController(this.serial);
 
   final String serial;
   final TextEditingController search = TextEditingController();
-  late final AppDisplayLoader _display;
+  final Map<String, Uint8List> _icons = <String, Uint8List>{};
+  final Set<String> _iconStarted = <String>{};
 
   final RxString query = ''.obs;
   final RxList<InstalledApp> apps = <InstalledApp>[].obs;
@@ -95,21 +100,31 @@ class AppsController extends GetxController {
     return apps.where((app) => selected.contains(app.packageName)).toList();
   }
 
-  Uint8List? iconOf(String packageName) => _display.iconOf(packageName);
+  Uint8List? iconOf(String packageName) {
+    final png = _icons[packageName];
+    if (png == null || png.isEmpty) return null;
+    return png;
+  }
 
-  void ensure(InstalledApp app) => _display.ensure(app);
+  /// 这一行已经画出来了，就补它的图标。同一包只请求一次。
+  void ensureIcon(InstalledApp app) {
+    final packageName = app.packageName;
+    if (_closed || _icons.containsKey(packageName) || !_iconStarted.add(packageName)) {
+      return;
+    }
+    final device = _manager.deviceOf(serial);
+    if (device == null) {
+      _iconStarted.remove(packageName);
+      return;
+    }
+    unawaited(_fetchIcon(_generation, device, packageName));
+  }
 
   void setFilter(AppListFilter value) => filter.value = value;
 
   @override
   void onInit() {
     super.onInit();
-    _display = AppDisplayLoader(
-      onUpdated: _onDisplayUpdated,
-      deviceOf: () => _manager.deviceOf(serial),
-      repositoryOf: _repository,
-      appOf: _appByName,
-    );
     search.addListener(_onSearch);
     unawaited(_loadFreezeMethod());
     unawaited(reload());
@@ -119,7 +134,6 @@ class AppsController extends GetxController {
   void onClose() {
     _generation++;
     _closed = true;
-    _display.dispose();
     search.removeListener(_onSearch);
     search.dispose();
     super.onClose();
@@ -160,7 +174,8 @@ class AppsController extends GetxController {
 
   Future<void> reload() async {
     final generation = ++_generation;
-    _display.reset();
+    _icons.clear();
+    _iconStarted.clear();
     final repo = _repository();
     loading.value = true;
     error.value = null;
@@ -201,33 +216,10 @@ class AppsController extends GetxController {
             );
           });
         },
-        onNames: (items, timing) {
-          if (_closed || generation != _generation) return;
-          _replaceApps(items);
-          final named = items
-              .where(
-                (item) =>
-                    item.label.isNotEmpty && item.label != item.packageName,
-              )
-              .length;
-          void logNames() {
-            if (_closed || generation != _generation) return;
-            final now = began.elapsedMilliseconds;
-            final nameMs = shownAtMs < 0 ? 0 : now - shownAtMs;
-            log.info(
-              '应用名称已更新：有名称 $named 个，距开始 $now ms（名称 $nameMs）',
-            );
-          }
-
-          if (shownAtMs >= 0) {
-            logNames();
-          } else {
-            WidgetsBinding.instance.addPostFrameCallback((_) => logNames());
-          }
-        },
       );
       if (_closed || generation != _generation) return;
       unawaited(_loadAmFrozen(generation, repo));
+      await _loadNames(generation, device, began);
     } catch (loadError, stackTrace) {
       log.severe('读取应用列表失败：$serial', loadError, stackTrace);
       if (_closed || generation != _generation) return;
@@ -266,23 +258,104 @@ class AppsController extends GetxController {
     }
   }
 
-  void _onDisplayUpdated() {
-    if (_closed) return;
-    final current = apps.toList();
+  /// 应用名先补第一页。这一页返回前，看得见的行会把图标请求排进去，
+  /// 其余应用名排在那些图标后面，不挡住眼前的图标。
+  Future<void> _loadNames(
+    int generation,
+    ConnectedDevice device,
+    Stopwatch began,
+  ) async {
+    final listed = <String>[for (final app in apps) app.packageName];
+    if (listed.isEmpty) return;
+    final first = <String>[
+      for (final app in visible.take(_appListFirstPage)) app.packageName,
+    ];
+    final page = first.isEmpty ? listed.take(_appListFirstPage).toList() : first;
+    final pageSet = page.toSet();
+    final rest = <String>[
+      for (final name in listed)
+        if (!pageSet.contains(name)) name,
+    ];
+    await _applyNames(
+      generation,
+      device,
+      page,
+      timeout: const Duration(seconds: 20),
+      label: '第一页',
+      began: began,
+    );
+    if (rest.isEmpty || _closed || generation != _generation) return;
+    unawaited(
+      _applyNames(
+        generation,
+        device,
+        rest,
+        timeout: const Duration(seconds: 90),
+        label: '其余',
+        began: began,
+      ),
+    );
+  }
+
+  Future<void> _applyNames(
+    int generation,
+    ConnectedDevice device,
+    List<String> packages, {
+    required Duration timeout,
+    required String label,
+    required Stopwatch began,
+  }) async {
+    if (packages.isEmpty) return;
+    try {
+      final names = await loadFireAppNames(device, packages, timeout: timeout);
+      if (_closed || generation != _generation) return;
+      _applyNameList(names);
+      final named = names
+          .where((item) => item.label.isNotEmpty && item.label != item.packageName)
+          .length;
+      log.info(
+        '应用列表$label名称 ${names.length} 个，有名称 $named 个，距开始 ${began.elapsedMilliseconds} ms',
+      );
+    } on FireAppLoadCancelled {
+      return;
+    } catch (error, stackTrace) {
+      log.severe('读取$label应用名失败：$serial', error, stackTrace);
+    }
+  }
+
+  void _applyNameList(List<FireAppName> names) {
+    if (names.isEmpty) return;
+    final labels = <String, String>{
+      for (final item in names)
+        if (item.label.isNotEmpty && item.label != item.packageName)
+          item.packageName: item.label,
+    };
+    if (labels.isEmpty) return;
     apps.assignAll(<InstalledApp>[
-      for (final app in current)
-        switch (_display[app.packageName]) {
-          final details? => applyAppDisplay(app, details),
+      for (final app in apps)
+        switch (labels[app.packageName]) {
+          final label? => app.copyWith(label: label),
           _ => app,
         },
     ]);
   }
 
-  InstalledApp? _appByName(String packageName) {
-    for (final app in apps) {
-      if (app.packageName == packageName) return app;
+  Future<void> _fetchIcon(
+    int generation,
+    ConnectedDevice device,
+    String packageName,
+  ) async {
+    try {
+      final png = await loadFireAppIcon(device, packageName);
+      if (_closed || generation != _generation) return;
+      if (png == null || png.isEmpty) return;
+      _icons[packageName] = png;
+      apps.refresh();
+    } on FireAppLoadCancelled {
+      return;
+    } catch (error, stackTrace) {
+      log.warning('读取应用图标失败：$packageName', error, stackTrace);
     }
-    return null;
   }
 
   void toggleSelecting() {

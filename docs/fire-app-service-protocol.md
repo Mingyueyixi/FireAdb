@@ -62,12 +62,15 @@ clipboard.set json 3 16:{"text":"hello"}
 clipboard.ok none 3 0:
 ```
 
-应用列表条数不固定，最后用文本消息收尾：
+应用列表一次返回全部包名。应用名、单张图标另是一条请求：
 
 ```text
 catalog.list none 4 0:
-catalog.app json 4 78:{"package":"com.android.settings","versionName":"14","versionCode":34,"size":12345678}
-session.done text 4 2:ok
+catalog.apps json 4 120:{"items":[{"package":"com.android.settings","versionName":"14","versionCode":34,"size":12345678}]}
+catalog.names json 6 42:{"packages":["com.android.settings"]}
+catalog.names json 6 58:{"items":[{"package":"com.android.settings","label":"设置"}]}
+catalog.icon json 7 39:{"package":"com.android.settings"}
+catalog.icon bytes 7 4821:<4821 字节的 PNG>
 ```
 
 查看一个应用时，回复是约定好的两条：先是 JSON，再是图标。两条都到了就结束，不再另发 `session.done`。
@@ -99,8 +102,7 @@ session.ready text 0 1:1
 clipboard.get none 1 0:
 clipboard.data json 1 16:{"text":"hello"}
 catalog.list none 4 0:
-catalog.app json 4 78:{"package":"com.android.settings","versionName":"14","versionCode":34,"size":12345678}
-session.done text 4 2:ok
+catalog.apps json 4 120:{"items":[{"package":"com.android.settings","versionName":"14"}]}
 clipboard.event json 0 16:{"text":"hello"}
 session.quit none 9 0:
 ```
@@ -115,11 +117,14 @@ session.quit none 9 0:
 | 桌面 → 设备 | `session.quit` | 无 | 设备退出，无回复 |
 | 任意回复失败 | `session.error` | `text`，错误说明 | 这一条 |
 | 一批回复结束 | `session.done` | `text`，如 `ok` | 这一条 |
-| 桌面 → 设备 | `catalog.list` | 无 | 等到 `session.done` |
-| 设备 → 桌面 | `catalog.app` | `json`，一个应用 | 继续等 |
+| 桌面 → 设备 | `catalog.list` | 无 | 等到 `catalog.apps` |
+| 设备 → 桌面 | `catalog.apps` | `json`，`{"items":[一个应用]}`，全部包名，不含应用名和图标 | 这一条 |
+| 桌面 → 设备 | `catalog.names` | `json`，`{"packages":["com.android.settings"]}` | 等到同名回复 |
+| 设备 → 桌面 | `catalog.names` | `json`，`{"items":[{"package":"...","label":"设置"}]}` | 这一条 |
+| 桌面 → 设备 | `catalog.icon` | `json`，`{"package":"com.android.settings"}` | 等到 `catalog.icon` |
+| 设备 → 桌面 | `catalog.icon` | `bytes`，一张 PNG。空字节表示没有图标 | 这一条。详情里的图标也用这个名字，跟在 `catalog.show` 后面 |
 | 桌面 → 设备 | `catalog.show` | `json`，如 `{"package":"com.android.settings"}` | 等到 JSON 和图标都到齐 |
 | 设备 → 桌面 | `catalog.show` | `json`，名称、版本、标记、目录 | 还要等图标 |
-| 设备 → 桌面 | `catalog.icon` | `bytes`，PNG | 这一条 |
 | 桌面 → 设备 | `clipboard.get` | 无 | 等到 `clipboard.data` |
 | 设备 → 桌面 | `clipboard.data` | `json`，`{"text":"..."}` | 这一条 |
 | 桌面 → 设备 | `clipboard.set` | `json`，`{"text":"..."}` | 等到 `clipboard.ok` |

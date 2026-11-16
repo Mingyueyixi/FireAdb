@@ -278,7 +278,7 @@ class _AppsPageState extends State<AppsPage> {
       separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final app = visible[index];
-        controller.ensure(app);
+        controller.ensureIcon(app);
         return AppListTile(
           app: app,
           icon: controller.iconOf(app.packageName),

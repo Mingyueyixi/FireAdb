@@ -2,12 +2,39 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:fireadb/apps/data/bean/installed_app.dart';
+import 'package:fireadb/apps/loader/app_display_loader.dart';
 import 'package:fireadb/appservice/fire_app_service.dart';
 import 'package:fireadb/appservice/protocol/fire_app_message.dart';
-import 'package:fireadb/apps/loader/app_display_loader.dart';
+import 'package:fireadb/link/device_link.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('只有常驻的应用服务算已有进程', () {
+    expect(
+      fireAppServiceProcess(
+        'app_process /system/bin com.fire.adb.appservice.FireAppService link=28170',
+      ),
+      isTrue,
+    );
+    expect(
+      fireAppServiceProcess(
+        'app_process /system/bin com.fire.adb.appservice.ScreenRecorder --output /sdcard/a.mp4',
+      ),
+      isFalse,
+    );
+  });
+
+  test('常驻服务脱离 adb 会话后在后台启动', () {
+    final command = fireAppServiceDaemonCommand(
+      '/data/local/tmp/fire-app-service.jar',
+      argument: 'link=28170 token=abc',
+    );
+    expect(command, contains('setsid'));
+    expect(command, contains('com.fire.adb.appservice.FireAppService'));
+    expect(command, contains('link=28170 token=abc'));
+    expect(command, contains('&'));
+  });
+
   test('fireAppServiceCommand 带上 classpath 和入口类', () {
     expect(
       fireAppServiceCommand('/data/local/tmp/fire-app-service.jar'),
@@ -157,29 +184,42 @@ void main() {
     expect(shown.externalDir, '/sdcard/Android/data/com.example.app');
   });
 
-  test('列表先到应用，再按包补名称，最后 session.done', () {
-    final bytes = Uint8List.fromList(<int>[
-      ...FireDataResponse.json(
-        name: 'catalog.app',
-        id: 4,
-        body: _app(label: ''),
-      ).bytes,
-      ...FireDataResponse.json(
-        name: 'catalog.app',
-        id: 4,
-        body: _app(label: '设置'),
-      ).bytes,
-      ...FireDataResponse.text(name: 'session.done', id: 4, body: 'ok').bytes,
-    ]);
-    final messages = FireDataResponseReader().add(bytes);
-    expect(messages.map((message) => message.name), <String>[
-      'catalog.app',
-      'catalog.app',
-      'session.done',
-    ]);
-    expect(fireAppSummaryFromJson(_json(messages[0])).label, isEmpty);
-    expect(fireAppSummaryFromJson(_json(messages[1])).label, '设置');
-    expect(messages[2].text, 'ok');
+  test('列表一次带全部包名，应用名另一次返回', () {
+    final list = FireDataResponseReader()
+        .add(
+          FireDataResponse.json(
+            name: 'catalog.apps',
+            id: 4,
+            body: <String, Object>{
+              'items': <Map<String, Object>>[_app(label: '')],
+            },
+          ).bytes,
+        )
+        .single;
+    final summaries = fireAppSummariesFromJson(_json(list));
+    expect(summaries, hasLength(1));
+    expect(summaries.single.packageName, 'com.android.settings');
+    expect(summaries.single.label, isEmpty);
+
+    final names = FireDataResponseReader()
+        .add(
+          FireDataResponse.json(
+            name: 'catalog.names',
+            id: 6,
+            body: <String, Object>{
+              'items': <Map<String, Object>>[
+                <String, String>{
+                  'package': 'com.android.settings',
+                  'label': '设置',
+                },
+              ],
+            },
+          ).bytes,
+        )
+        .single;
+    final parsed = fireAppNamesFromJson(_json(names));
+    expect(parsed.single.packageName, 'com.android.settings');
+    expect(parsed.single.label, '设置');
   });
 
   test('剪贴板 JSON 保留 emoji', () {

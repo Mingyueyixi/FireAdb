@@ -146,27 +146,112 @@ class FireAppListLoad {
   final FireAppListTiming timing;
 }
 
-/// 一次取回全部应用的名称、版本、标记、APK 路径和体积。
-/// 服务进程会留给随后的图标查询，避免再启动一次。
+/// 一次取回全部应用的包名、版本、标记、APK 路径和体积。不含名称和图标。
+/// 服务进程会留给随后的外观查询，避免再启动一次。
 Future<FireAppListLoad> loadFireAppSummaries(
   ConnectedDevice device, {
   FireAppListProgress? onCatalog,
-  FireAppListProgress? onNames,
 }) {
   final session = fireAppSession(device);
   session.advanceEpoch();
   session.cancelIdle();
   return session.run(() async {
     try {
-      return await _loadList(session, device, onCatalog, onNames);
+      return await _loadList(session, device, onCatalog);
     } catch (error) {
       // 重连后首轮偶发半截超时：丢掉死会话再拉一次。
       await session.drop();
       try {
-        return await _loadList(session, device, onCatalog, onNames);
+        return await _loadList(session, device, onCatalog);
       } catch (_) {
         rethrow;
       }
+    } finally {
+      session.scheduleIdle();
+    }
+  });
+}
+
+/// 一批应用名。不含图标。
+class FireAppName {
+  const FireAppName({required this.packageName, required this.label});
+
+  final String packageName;
+  final String label;
+}
+
+/// 把 `catalog.names` 的 JSON 收成应用名。空包名跳过。
+List<FireAppName> fireAppNamesFromJson(Map<String, dynamic> json) {
+  final items = json['items'];
+  if (items is! List) return const <FireAppName>[];
+  return <FireAppName>[
+    for (final raw in items)
+      if (raw is Map)
+        FireAppName(
+          packageName: '${raw['package'] ?? ''}'.trim(),
+          label: '${raw['label'] ?? ''}'.trim(),
+        ),
+  ].where((item) => item.packageName.isNotEmpty).toList();
+}
+
+/// 一次取回这些包的应用名。包名顺序与请求一致。超时不再重试。
+Future<List<FireAppName>> loadFireAppNames(
+  ConnectedDevice device,
+  List<String> packages, {
+  Duration timeout = const Duration(seconds: 60),
+}) {
+  if (packages.isEmpty) {
+    return Future<List<FireAppName>>.value(const <FireAppName>[]);
+  }
+  final session = fireAppSession(device);
+  final epoch = session.epoch;
+  session.cancelIdle();
+  return session.run(() async {
+    try {
+      if (epoch != session.epoch) throw const FireAppLoadCancelled();
+      try {
+        return await _loadNames(session, device, packages, timeout);
+      } on FireAppLoadCancelled {
+        rethrow;
+      } on TimeoutException {
+        rethrow;
+      } catch (error) {
+        await session.drop();
+        if (epoch != session.epoch) throw const FireAppLoadCancelled();
+        return await _loadNames(session, device, packages, timeout);
+      }
+    } finally {
+      session.scheduleIdle();
+    }
+  });
+}
+
+/// 读取一个包的图标。空图返回空。失败不拆掉会话，避免挡住后面的图标。
+Future<Uint8List?> loadFireAppIcon(ConnectedDevice device, String packageName) {
+  final session = fireAppSession(device);
+  final epoch = session.epoch;
+  session.cancelIdle();
+  return session.run(() async {
+    try {
+      if (epoch != session.epoch) throw const FireAppLoadCancelled();
+      await session.ensureReady(device);
+      final id = session.nextId();
+      await session.send(
+        FireDataRequest.json(
+          name: 'catalog.icon',
+          id: id,
+          body: <String, String>{'package': packageName},
+        ),
+      );
+      final message = await session.next().timeout(const Duration(seconds: 15));
+      if (message.name == 'session.error') {
+        throw StateError(message.errorText('读取应用图标失败'));
+      }
+      if (message.id != id || message.name != 'catalog.icon') {
+        throw StateError('应用图标响应无效');
+      }
+      if (message.body.isEmpty) return null;
+      return message.body;
     } finally {
       session.scheduleIdle();
     }
@@ -202,7 +287,6 @@ Future<FireAppListLoad> _loadList(
   FireAppSession session,
   ConnectedDevice device,
   FireAppListProgress? onCatalog,
-  FireAppListProgress? onNames,
 ) async {
   final timing = FireAppListTiming();
   final ready = await session.ensureReady(device);
@@ -214,84 +298,59 @@ Future<FireAppListLoad> _loadList(
   await session.send(FireDataRequest.none(name: 'catalog.list', id: id));
 
   final readClock = Stopwatch()..start();
-  final summaries = <FireAppSummary>[];
-  final seen = <String>{};
-  final labels = <String, String>{};
-  var catalogSent = false;
-
-  void sendCatalog() {
-    if (catalogSent) return;
-    catalogSent = true;
-    timing.listMs = readClock.elapsedMilliseconds;
-    timing.readMs = timing.listMs;
-    onCatalog?.call(List<FireAppSummary>.of(summaries), timing);
+  final FireDataResponse message;
+  try {
+    message = await session.next().timeout(const Duration(seconds: 15));
+  } on TimeoutException {
+    throw TimeoutException(
+      '应用列表超过 15 秒没有返回（缓冲 ${session.pendingBytes} 字节）',
+    );
   }
-
-  List<FireAppSummary> withNames() {
-    if (labels.isEmpty) return List<FireAppSummary>.of(summaries);
-    return <FireAppSummary>[
-      for (final item in summaries)
-        switch (labels[item.packageName]) {
-          final name? => item.withLabel(name),
-          _ => item,
-        },
-    ];
+  if (message.name == 'session.error') {
+    throw StateError(message.errorText('读取应用列表失败'));
   }
-
-  void sendNames() {
-    if (labels.isEmpty) return;
-    timing.readMs = readClock.elapsedMilliseconds;
-    timing.nameMs = timing.readMs - timing.listMs;
-    onNames?.call(withNames(), timing);
+  if (message.id != id || message.name != 'catalog.apps') {
+    throw StateError('应用列表响应无效');
   }
+  final summaries = fireAppSummariesFromJson(message.json);
+  timing.listMs = readClock.elapsedMilliseconds;
+  timing.readMs = timing.listMs;
+  onCatalog?.call(List<FireAppSummary>.of(summaries), timing);
+  return FireAppListLoad(summaries: summaries, timing: timing);
+}
 
-  while (true) {
-    final FireDataResponse message;
-    try {
-      message = await session.next().timeout(const Duration(seconds: 5));
-    } on TimeoutException {
-      final phase = catalogSent ? '名称' : '目录';
-      throw TimeoutException(
-        '应用列表$phase阶段超过 5 秒无数据'
-        '（已收 ${summaries.length} 包名、${labels.length} 名称，'
-        '缓冲 ${session.pendingBytes} 字节）',
-      );
-    } on StateError catch (error) {
-      if (summaries.isEmpty || !'$error'.contains('应用信息服务已结束')) {
-        rethrow;
-      }
-      log.warning('应用列表提前结束，已收到 ${summaries.length} 个', error);
-      sendCatalog();
-      final named = withNames();
-      if (labels.isNotEmpty) sendNames();
-      timing.readMs = readClock.elapsedMilliseconds;
-      return FireAppListLoad(summaries: named, timing: timing);
-    }
-    if (message.name == 'session.error') {
-      throw StateError(message.errorText('读取应用列表失败'));
-    }
-    if (message.id != id) throw StateError('应用列表响应无效');
-    if (message.name == 'catalog.app') {
-      final summary = fireAppSummaryFromJson(message.json);
-      if (!seen.add(summary.packageName)) {
-        if (!catalogSent) sendCatalog();
-        final name = summary.label.trim();
-        if (name.isNotEmpty && name != summary.packageName) {
-          labels[summary.packageName] = name;
-        }
-      } else {
-        summaries.add(summary);
-      }
-      continue;
-    }
-    if (message.name == 'session.done') {
-      if (!catalogSent) sendCatalog();
-      final named = withNames();
-      sendNames();
-      timing.readMs = readClock.elapsedMilliseconds;
-      return FireAppListLoad(summaries: named, timing: timing);
-    }
+List<FireAppSummary> fireAppSummariesFromJson(Map<String, dynamic> json) {
+  final items = json['items'];
+  if (items is! List) return const <FireAppSummary>[];
+  return <FireAppSummary>[
+    for (final item in items)
+      if (item is Map) fireAppSummaryFromJson(Map<String, dynamic>.from(item)),
+  ].where((item) => item.packageName.isNotEmpty).toList();
+}
+
+Future<List<FireAppName>> _loadNames(
+  FireAppSession session,
+  ConnectedDevice device,
+  List<String> packages,
+  Duration timeout,
+) async {
+  await session.ensureReady(device);
+  final id = session.nextId();
+  await session.send(
+    FireDataRequest.json(
+      name: 'catalog.names',
+      id: id,
+      body: <String, List<String>>{'packages': packages},
+    ),
+  );
+  final message = await session.next().timeout(timeout);
+  if (message.name == 'session.error') {
+    throw StateError(message.errorText('读取应用名失败'));
   }
+  if (message.id != id || message.name != 'catalog.names') {
+    throw StateError('应用名响应无效');
+  }
+  return fireAppNamesFromJson(message.json);
 }
 
 Future<FireAppShow> _loadShow(
