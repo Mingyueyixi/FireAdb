@@ -14,11 +14,13 @@ class LocalOpenRequest {
   final bool ignoreExitCode;
 }
 
-LocalOpenRequest localOpenRequest(
+LocalOpenRequest? localOpenRequest(
   String path, {
   required bool openFile,
   required String operatingSystem,
 }) {
+  // Android 没有 xdg-open。打开动作走系统查看器，不进这个命令。
+  if (operatingSystem == 'android') return null;
   if (operatingSystem == 'windows') {
     if (openFile) {
       return LocalOpenRequest('cmd.exe', <String>['/c', 'start', '', path]);
@@ -47,19 +49,30 @@ Future<String> androidExternalFilesDirectory() async {
   return path;
 }
 
-/// 用系统文件管理器打开目录。仅桌面端使用；Android 上应用私有目录
-/// 由应用内浏览器直接浏览，不走系统文件管理器。
+/// 用系统文件管理器打开目录。Android 上应用私有目录由应用内浏览器直接浏览。
+/// 共享存储里的目录仍交给系统文件管理器。
 Future<void> openSystemDirectory(String path) => openLocalPath(
       path,
       openFile: false,
     );
 
 Future<void> openLocalPath(String path, {required bool openFile}) async {
+  if (Platform.isAndroid) {
+    final opened = await _storageChannel.invokeMethod<bool>('openPath', {
+      'path': path,
+      'openFile': openFile,
+    });
+    if (opened == true) return;
+    throw StateError('无法打开');
+  }
   final request = localOpenRequest(
     path,
     openFile: openFile,
     operatingSystem: Platform.operatingSystem,
   );
+  if (request == null) {
+    throw StateError('无法打开');
+  }
   final result = await Process.run(request.executable, request.arguments);
   if (request.ignoreExitCode || result.exitCode == 0) return;
   final error = result.stderr.toString().trim();

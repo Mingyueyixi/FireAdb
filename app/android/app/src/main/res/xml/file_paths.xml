@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 截图录像在共享存储，聊天附件在应用私有目录。只对用户点开的那一个文件授权。 -->
+    <root-path name="root" path="." />
+</paths>

@@ -4,6 +4,7 @@ import android.content.AttributionSource;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.ContextWrapper;
+import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Process;
@@ -40,6 +41,50 @@ final class ShellContext extends ContextWrapper {
         return new AttributionSource.Builder(Process.myUid())
                 .setPackageName(PACKAGE_NAME)
                 .build();
+    }
+
+    /**
+     * 系统上下文查权限时对着 android 包，不认 shell 已经拿到的录音权限。
+     * 环回采集会因此拿不到录音器。这里按 shell 自己的授权回答。
+     */
+    @Override
+    public int checkPermission(String permission, int pid, int uid) {
+        if (uid == Process.myUid() && shellAudioPermission(permission)) {
+            return PackageManager.PERMISSION_GRANTED;
+        }
+        return super.checkPermission(permission, pid, uid);
+    }
+
+    @Override
+    public int checkSelfPermission(String permission) {
+        if (shellAudioPermission(permission)) {
+            return PackageManager.PERMISSION_GRANTED;
+        }
+        return super.checkSelfPermission(permission);
+    }
+
+    @Override
+    public int checkCallingOrSelfPermission(String permission) {
+        if (shellAudioPermission(permission)) {
+            return PackageManager.PERMISSION_GRANTED;
+        }
+        return super.checkCallingOrSelfPermission(permission);
+    }
+
+    @Override
+    public int checkCallingPermission(String permission) {
+        if (shellAudioPermission(permission)) {
+            return PackageManager.PERMISSION_GRANTED;
+        }
+        return super.checkCallingPermission(permission);
+    }
+
+    private static boolean shellAudioPermission(String permission) {
+        if (Process.myUid() != Process.SHELL_UID || permission == null) {
+            return false;
+        }
+        return "android.permission.MODIFY_AUDIO_ROUTING".equals(permission)
+                || "android.permission.CAPTURE_AUDIO_OUTPUT".equals(permission);
     }
 
     @Override

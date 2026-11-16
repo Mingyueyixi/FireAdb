@@ -7,7 +7,12 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.DocumentsContract
 import android.provider.Settings
+import android.webkit.MimeTypeMap
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.IOException
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -26,6 +31,7 @@ class MainActivity : FlutterActivity() {
                     "hasAllFilesAccess" -> result.success(hasAllFilesAccess())
                     "requestAllFilesAccess" -> requestAllFilesAccess(result)
                     "externalFilesDirectory" -> externalFilesDirectory(result)
+                    "openPath" -> openPath(call.arguments, result)
                     else -> result.notImplemented()
                 }
             }
@@ -103,6 +109,79 @@ class MainActivity : FlutterActivity() {
             checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
                 PackageManager.PERMISSION_GRANTED
         }
+    }
+
+    private fun openPath(arguments: Any?, result: MethodChannel.Result) {
+        val args = arguments as? Map<*, *>
+        val path = args?.get("path") as? String
+        val openFile = args?.get("openFile") as? Boolean ?: true
+        if (path.isNullOrEmpty()) {
+            result.error("open_failed", "empty path", null)
+            return
+        }
+        try {
+            if (openFile) {
+                openLocalFile(path)
+            } else {
+                openLocalDirectory(path)
+            }
+            result.success(true)
+        } catch (error: ActivityNotFoundException) {
+            result.error("open_failed", "没有可以打开它的应用", null)
+        } catch (error: Exception) {
+            result.error("open_failed", error.message ?: "无法打开", null)
+        }
+    }
+
+    private fun openLocalFile(path: String) {
+        val file = File(path)
+        if (!file.isFile) {
+            throw IllegalStateException("文件不存在")
+        }
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val extension = file.extension.lowercase()
+        val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "*/*"
+        val view = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mime)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(view)
+    }
+
+    private fun openLocalDirectory(path: String) {
+        val relative = sharedStorageRelative(path)
+            ?: throw IllegalStateException("这个目录不能用系统文件管理器打开")
+        val documentId = if (relative.isEmpty()) "primary:" else "primary:$relative"
+        val uri = DocumentsContract.buildDocumentUri(
+            "com.android.externalstorage.documents",
+            documentId,
+        )
+        val view = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, DocumentsContract.Document.MIME_TYPE_DIR)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(view)
+    }
+
+    private fun sharedStorageRelative(path: String): String? {
+        val file = File(path)
+        val absolute = try {
+            file.canonicalPath
+        } catch (_: IOException) {
+            file.absolutePath
+        }
+        val roots = listOf(
+            Environment.getExternalStorageDirectory().absolutePath,
+            "/sdcard",
+            "/storage/emulated/0",
+        )
+        for (root in roots) {
+            val trimmed = root.trimEnd('/')
+            if (absolute == trimmed) return ""
+            val prefix = "$trimmed/"
+            if (absolute.startsWith(prefix)) return absolute.removePrefix(prefix)
+        }
+        return null
     }
 
     private fun externalFilesDirectory(result: MethodChannel.Result) {

@@ -2306,7 +2306,7 @@ abstract class FireAdbLocalizations {
   /// No description provided for @screenrecordMethodBuiltinSubtitle.
   ///
   /// In zh, this message translates to:
-  /// **'用辅助服务编码，画面直接送进编码器。'**
+  /// **'用辅助服务编码画面，并采集正在播放的声音。'**
   String get screenrecordMethodBuiltinSubtitle;
 
   /// No description provided for @screenrecordMethodScrcpy.

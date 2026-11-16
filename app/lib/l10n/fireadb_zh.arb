@@ -837,7 +837,7 @@
   "screenrecordMethodSystem": "系统录屏",
   "screenrecordMethodSystemSubtitle": "调用设备自带的 screenrecord",
   "screenrecordMethodBuiltin": "内置录屏",
-  "screenrecordMethodBuiltinSubtitle": "用辅助服务编码，画面直接送进编码器。",
+  "screenrecordMethodBuiltinSubtitle": "用辅助服务编码画面，并采集正在播放的声音。",
   "screenrecordMethodScrcpy": "投屏录屏",
   "screenrecordMethodScrcpySubtitle": "即将支持。同一条连接以后用于画面预览和远程操作。",
   "screenrecordShellCopyFailed": "无法准备临时目录里的录屏程序",

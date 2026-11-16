@@ -1,11 +1,18 @@
 package com.fire.adb.appservice;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.hardware.display.VirtualDisplayConfig;
+import android.media.AudioAttributes;
+import android.media.AudioFormat;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
+import android.media.AudioRecord;
+import android.media.AudioTrack;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
@@ -36,6 +43,9 @@ import java.nio.ByteBuffer;
  * {@code --time-limit 0} 表示不限时。停止时由桌面端创建
  * {@code /data/local/tmp/fireadb_rec.stop}，这里写完索引再退出。
  * 画面经虚拟屏幕或显示控制直接送进编码器。前一种没有画面就换下一种。
+ * 优先环回采集正在播放的声音，扬声器继续出声。
+ * 环回打不开时改为采集远程混音，并把同一份声音送回扬声器。
+ * 采不到就只留画面。
  */
 public final class ScreenRecorder {
     static final String STOP_PATH = "/data/local/tmp/fireadb_rec.stop";
@@ -98,6 +108,7 @@ public final class ScreenRecorder {
         Surface surface = null;
         Mirror mirror = null;
         Mp4Writer writer = null;
+        PlaybackAudio audio = null;
         boolean saved = false;
         try {
             MediaFormat format = videoFormat(display.encodedX, display.encodedY, BITRATE);
@@ -108,6 +119,7 @@ public final class ScreenRecorder {
             surface = codec.createInputSurface();
             codec.start();
             writer = new Mp4Writer(output, codec);
+            audio = PlaybackAudio.tryStart(context, writer);
             mirror = "virtual".equals(method)
                     ? new VirtualMirror()
                     : new SurfaceMirror();
@@ -148,10 +160,16 @@ public final class ScreenRecorder {
             if (!writer.wrote) {
                 return false;
             }
+            if (audio != null) {
+                audio.end();
+            }
             writer.finish();
             saved = true;
             return true;
         } finally {
+            if (audio != null) {
+                audio.release();
+            }
             if (mirror != null) {
                 mirror.release();
             }
@@ -752,14 +770,538 @@ public final class ScreenRecorder {
         }
     }
 
+    /**
+     * 环回采集正在播放的声音，设备自己的播放不停。
+     * 打不开时调用方继续只录画面。
+     */
+    private static final class PlaybackAudio implements Runnable {
+        static final int SAMPLE_RATE = 48000;
+
+        final Context context;
+        final Mp4Writer writer;
+        final Thread thread = new Thread(this, "fireadb-audio");
+        AudioRecord record;
+        AudioTrack speaker;
+        Object policy;
+        MediaCodec codec;
+        int channels = 2;
+        int bytesPerFrame = 4;
+        long samples;
+        volatile boolean stop;
+        boolean ended;
+
+        PlaybackAudio(Context context, Mp4Writer writer) {
+            this.context = context;
+            this.writer = writer;
+        }
+
+        static PlaybackAudio tryStart(Context context, Mp4Writer writer) {
+            PlaybackAudio audio = new PlaybackAudio(context, writer);
+            try {
+                audio.open();
+                writer.enableAudio();
+                audio.thread.start();
+                return audio;
+            } catch (Throwable error) {
+                logThrowable("audio skipped", error);
+                audio.release();
+                writer.abandonAudio();
+                return null;
+            }
+        }
+
+        void end() {
+            if (ended) {
+                return;
+            }
+            stop = true;
+            AudioRecord current = record;
+            if (current != null) {
+                try {
+                    current.stop();
+                } catch (Throwable ignored) {
+                }
+            }
+            try {
+                if (thread.isAlive()) {
+                    thread.join(20000);
+                }
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            ended = !thread.isAlive();
+        }
+
+        void release() {
+            if (!ended) {
+                end();
+            }
+            if (!thread.isAlive()) {
+                releaseQuiet();
+            }
+        }
+
+        @SuppressLint("PrivateApi")
+        private void open() throws Exception {
+            boolean loopback = true;
+            try {
+                record = openLoopback();
+            } catch (Throwable error) {
+                logThrowable("loopback", error);
+                unregisterPolicy();
+                record = openPlaybackRecord();
+                speaker = openSpeaker();
+                loopback = false;
+            }
+            record.startRecording();
+            if (record.getRecordingState() != AudioRecord.RECORDSTATE_RECORDING) {
+                throw new IllegalStateException("audio recorder did not start");
+            }
+            MediaFormat format = MediaFormat.createAudioFormat(
+                    MediaFormat.MIMETYPE_AUDIO_AAC,
+                    SAMPLE_RATE,
+                    channels);
+            format.setInteger(
+                    MediaFormat.KEY_AAC_PROFILE,
+                    MediaCodecInfo.CodecProfileLevel.AACObjectLC);
+            format.setInteger(MediaFormat.KEY_BIT_RATE, 128000);
+            format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384);
+            codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC);
+            codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+            codec.start();
+            log(loopback ? "audio loopback" : "audio submix");
+        }
+
+        @SuppressLint({"MissingPermission", "WrongConstant"})
+        private AudioRecord openPlaybackRecord() {
+            int[] masks = new int[] {
+                    AudioFormat.CHANNEL_IN_STEREO,
+                    AudioFormat.CHANNEL_IN_MONO,
+            };
+            int[] counts = new int[] {2, 1};
+            for (int i = 0; i < masks.length; i++) {
+                int buffer = AudioRecord.getMinBufferSize(
+                        SAMPLE_RATE,
+                        masks[i],
+                        AudioFormat.ENCODING_PCM_16BIT);
+                if (buffer <= 0) {
+                    buffer = SAMPLE_RATE;
+                }
+                int size = Math.max(buffer * 4, counts[i] * 2 * 1024);
+                AudioRecord created = new AudioRecord.Builder()
+                        .setContext(new ShellContext(context))
+                        .setAudioSource(8)
+                        .setAudioFormat(new AudioFormat.Builder()
+                                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                                .setSampleRate(SAMPLE_RATE)
+                                .setChannelMask(masks[i])
+                                .build())
+                        .setBufferSizeInBytes(size)
+                        .build();
+                if (created.getState() == AudioRecord.STATE_INITIALIZED) {
+                    channels = counts[i];
+                    bytesPerFrame = counts[i] * 2;
+                    return created;
+                }
+                created.release();
+            }
+            throw new IllegalStateException("playback recorder unavailable");
+        }
+
+        private AudioTrack openSpeaker() {
+            int mask = channels == 2
+                    ? AudioFormat.CHANNEL_OUT_STEREO
+                    : AudioFormat.CHANNEL_OUT_MONO;
+            int buffer = AudioTrack.getMinBufferSize(
+                    SAMPLE_RATE,
+                    mask,
+                    AudioFormat.ENCODING_PCM_16BIT);
+            if (buffer < bytesPerFrame) {
+                buffer = bytesPerFrame * 4096;
+            }
+            AudioTrack track = new AudioTrack(
+                    new AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build(),
+                    new AudioFormat.Builder()
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setSampleRate(SAMPLE_RATE)
+                            .setChannelMask(mask)
+                            .build(),
+                    buffer * 2,
+                    AudioTrack.MODE_STREAM,
+                    AudioManager.AUDIO_SESSION_ID_GENERATE);
+            if (track.getState() != AudioTrack.STATE_INITIALIZED) {
+                track.release();
+                log("speaker unavailable");
+                return null;
+            }
+            AudioDeviceInfo speaker = builtinSpeaker();
+            if (speaker != null) {
+                track.setPreferredDevice(speaker);
+            }
+            track.play();
+            return track;
+        }
+
+        private AudioDeviceInfo builtinSpeaker() {
+            AudioManager manager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+            if (manager == null) {
+                return null;
+            }
+            AudioDeviceInfo[] devices = manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+            for (int i = 0; i < devices.length; i++) {
+                if (devices[i].getType() == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) {
+                    return devices[i];
+                }
+            }
+            return null;
+        }
+
+        private AudioRecord openLoopback() throws Exception {
+            channels = 2;
+            bytesPerFrame = 4;
+            Class<?> ruleClass = Class.forName("android.media.audiopolicy.AudioMixingRule");
+            Class<?> ruleBuilderClass = Class.forName("android.media.audiopolicy.AudioMixingRule$Builder");
+            Object ruleBuilder = ruleBuilderClass.getConstructor().newInstance();
+            try {
+                int role = ruleClass.getField("MIX_ROLE_PLAYERS").getInt(null);
+                ruleBuilderClass.getMethod("setTargetMixRole", int.class)
+                        .invoke(ruleBuilder, Integer.valueOf(role));
+            } catch (Throwable ignored) {
+            }
+            int matchUsage = ruleClass.getField("RULE_MATCH_ATTRIBUTE_USAGE").getInt(null);
+            Method addMixRule = null;
+            try {
+                addMixRule = ruleBuilderClass.getMethod("addMixRule", int.class, Object.class);
+            } catch (NoSuchMethodException ignored) {
+            }
+            Method addRule = addMixRule == null
+                    ? ruleBuilderClass.getMethod("addRule", AudioAttributes.class, int.class)
+                    : null;
+            int[] usages = new int[] {
+                    AudioAttributes.USAGE_MEDIA,
+                    AudioAttributes.USAGE_GAME,
+                    AudioAttributes.USAGE_UNKNOWN,
+                    AudioAttributes.USAGE_ALARM,
+                    AudioAttributes.USAGE_NOTIFICATION,
+                    AudioAttributes.USAGE_NOTIFICATION_RINGTONE,
+                    AudioAttributes.USAGE_ASSISTANCE_SONIFICATION,
+                    AudioAttributes.USAGE_VOICE_COMMUNICATION,
+            };
+            for (int i = 0; i < usages.length; i++) {
+                AudioAttributes attributes = new AudioAttributes.Builder().setUsage(usages[i]).build();
+                try {
+                    if (addMixRule != null) {
+                        addMixRule.invoke(ruleBuilder, Integer.valueOf(matchUsage), attributes);
+                    } else {
+                        addRule.invoke(ruleBuilder, attributes, Integer.valueOf(matchUsage));
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            try {
+                ruleBuilderClass.getMethod("voiceCommunicationCaptureAllowed", boolean.class)
+                        .invoke(ruleBuilder, Boolean.TRUE);
+            } catch (Throwable ignored) {
+            }
+            Object rule = ruleBuilderClass.getMethod("build").invoke(ruleBuilder);
+
+            Class<?> mixClass = Class.forName("android.media.audiopolicy.AudioMix");
+            Class<?> mixBuilderClass = Class.forName("android.media.audiopolicy.AudioMix$Builder");
+            Object mixBuilder = mixBuilderClass.getConstructor(ruleClass).newInstance(rule);
+            AudioFormat format = new AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(SAMPLE_RATE)
+                    .setChannelMask(AudioFormat.CHANNEL_IN_STEREO)
+                    .build();
+            mixBuilderClass.getMethod("setFormat", AudioFormat.class).invoke(mixBuilder, format);
+            int loopBack = mixClass.getField("ROUTE_FLAG_LOOP_BACK").getInt(null);
+            int render = mixClass.getField("ROUTE_FLAG_RENDER").getInt(null);
+            int route = loopBack | render;
+            try {
+                route = mixClass.getField("ROUTE_FLAG_LOOP_BACK_RENDER").getInt(null);
+            } catch (Throwable ignored) {
+            }
+            mixBuilderClass.getMethod("setRouteFlags", int.class)
+                    .invoke(mixBuilder, Integer.valueOf(route));
+            Object mix = mixBuilderClass.getMethod("build").invoke(mixBuilder);
+
+            Class<?> policyClass = Class.forName("android.media.audiopolicy.AudioPolicy");
+            Class<?> policyBuilderClass = Class.forName("android.media.audiopolicy.AudioPolicy$Builder");
+            Object policyBuilder = policyBuilderClass.getConstructor(Context.class)
+                    .newInstance(new ShellContext(context));
+            policyBuilderClass.getMethod("addMix", mixClass).invoke(policyBuilder, mix);
+            Object built = policyBuilderClass.getMethod("build").invoke(policyBuilder);
+            Method register = AudioManager.class.getDeclaredMethod(
+                    "registerAudioPolicyStatic",
+                    policyClass);
+            register.setAccessible(true);
+            Object result = register.invoke(null, built);
+            int code = result instanceof Integer ? ((Integer) result).intValue() : -1;
+            if (code != 0) {
+                throw new IllegalStateException("registerAudioPolicy " + result);
+            }
+            policy = built;
+            return openSink(built, policyClass, mix, mixClass);
+        }
+
+        private AudioRecord openSink(
+                Object built,
+                Class<?> policyClass,
+                Object mix,
+                Class<?> mixClass) throws Exception {
+            AudioRecord created = (AudioRecord) policyClass
+                    .getMethod("createAudioRecordSink", mixClass)
+                    .invoke(built, mix);
+            if (created != null && created.getState() == AudioRecord.STATE_INITIALIZED) {
+                return created;
+            }
+            int state = created == null ? -1 : created.getState();
+            if (created != null) {
+                try {
+                    created.release();
+                } catch (Throwable ignored) {
+                }
+            }
+            String address = mixAddress(mix, mixClass);
+            log("loopback sink state=" + state + " addr=" + address);
+            if (address.length() == 0) {
+                throw new IllegalStateException(
+                        "loopback recorder unavailable state=" + state);
+            }
+            return openTaggedSubmix(address);
+        }
+
+        private static String mixAddress(Object mix, Class<?> mixClass) {
+            try {
+                Object value = mixClass.getMethod("getRegistration").invoke(mix);
+                return value == null ? "" : String.valueOf(value);
+            } catch (Throwable ignored) {
+                return "";
+            }
+        }
+
+        private AudioRecord openTaggedSubmix(String address) throws Exception {
+            AudioAttributes.Builder attributes = new AudioAttributes.Builder();
+            AudioAttributes.Builder.class
+                    .getMethod("setInternalCapturePreset", int.class)
+                    .invoke(attributes, Integer.valueOf(8));
+            Method addTag = AudioAttributes.Builder.class.getMethod("addTag", String.class);
+            addTag.invoke(attributes, "addr=" + address);
+            addTag.invoke(attributes, "fixedVolume");
+            AudioFormat format = new AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(SAMPLE_RATE)
+                    .setChannelMask(AudioFormat.CHANNEL_IN_STEREO)
+                    .build();
+            int buffer = AudioRecord.getMinBufferSize(
+                    SAMPLE_RATE,
+                    AudioFormat.CHANNEL_IN_STEREO,
+                    AudioFormat.ENCODING_PCM_16BIT);
+            if (buffer < bytesPerFrame) {
+                buffer = bytesPerFrame * 4096;
+            }
+            Object builder = AudioRecord.Builder.class.getConstructor().newInstance();
+            Class<?> builderClass = builder.getClass();
+            builderClass.getMethod("setContext", Context.class)
+                    .invoke(builder, new ShellContext(context));
+            builderClass.getMethod("setAudioAttributes", AudioAttributes.class)
+                    .invoke(builder, attributes.build());
+            builderClass.getMethod("setAudioFormat", AudioFormat.class)
+                    .invoke(builder, format);
+            builderClass.getMethod("setBufferSizeInBytes", int.class)
+                    .invoke(builder, Integer.valueOf(Math.max(buffer * 4, bytesPerFrame * 1024)));
+            AudioRecord record = (AudioRecord) builderClass.getMethod("build").invoke(builder);
+            if (record.getState() != AudioRecord.STATE_INITIALIZED) {
+                record.release();
+                throw new IllegalStateException("loopback recorder unavailable");
+            }
+            return record;
+        }
+
+        @Override
+        public void run() {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);
+            try {
+                pump();
+            } catch (Throwable error) {
+                logThrowable("audio", error);
+                writer.abandonAudio();
+            }
+        }
+
+        private void pump() {
+            byte[] pcm = new byte[bytesPerFrame * 1024];
+            int pending = 0;
+            MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
+            while (!stop) {
+                int read = record.read(pcm, pending, pcm.length - pending);
+                if (read < 0) {
+                    break;
+                }
+                int total = pending + read;
+                int usable = total - (total % bytesPerFrame);
+                if (usable > 0) {
+                    play(pcm, usable);
+                    queuePcm(pcm, usable);
+                    drain(info, false);
+                }
+                int rest = total - usable;
+                if (rest > 0 && usable > 0) {
+                    System.arraycopy(pcm, usable, pcm, 0, rest);
+                }
+                pending = rest;
+            }
+            signalEos();
+            drain(info, true);
+        }
+
+        private void play(byte[] pcm, int size) {
+            AudioTrack track = speaker;
+            if (track == null || size <= 0) {
+                return;
+            }
+            try {
+                track.write(pcm, 0, size, AudioTrack.WRITE_NON_BLOCKING);
+            } catch (Throwable ignored) {
+            }
+        }
+
+        private void queuePcm(byte[] pcm, int size) {
+            int index = codec.dequeueInputBuffer(10000);
+            if (index < 0) {
+                return;
+            }
+            ByteBuffer input = codec.getInputBuffer(index);
+            if (input == null) {
+                return;
+            }
+            input.clear();
+            int accepted = Math.min(size, input.remaining());
+            accepted -= accepted % bytesPerFrame;
+            if (accepted <= 0) {
+                return;
+            }
+            input.put(pcm, 0, accepted);
+            long pts = samples * 1000000L / SAMPLE_RATE;
+            samples += accepted / bytesPerFrame;
+            codec.queueInputBuffer(index, 0, accepted, pts, 0);
+        }
+
+        private void signalEos() {
+            int index = codec.dequeueInputBuffer(10000);
+            if (index < 0) {
+                return;
+            }
+            codec.queueInputBuffer(
+                    index,
+                    0,
+                    0,
+                    samples * 1000000L / SAMPLE_RATE,
+                    MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+        }
+
+        private void drain(MediaCodec.BufferInfo info, boolean untilEos) {
+            while (true) {
+                int index = codec.dequeueOutputBuffer(info, untilEos ? 10000 : 0);
+                if (index == MediaCodec.INFO_TRY_AGAIN_LATER) {
+                    return;
+                }
+                if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    writer.addAudioFormat(codec.getOutputFormat());
+                    continue;
+                }
+                if (index < 0) {
+                    continue;
+                }
+                ByteBuffer buffer = codec.getOutputBuffer(index);
+                boolean eos = writer.acceptAudio(buffer, info);
+                codec.releaseOutputBuffer(index, false);
+                if (eos || (info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                    return;
+                }
+            }
+        }
+
+        private void unregisterPolicy() {
+            Object current = policy;
+            policy = null;
+            if (current == null) {
+                return;
+            }
+            try {
+                Class<?> policyClass = current.getClass();
+                Method method;
+                try {
+                    method = AudioManager.class.getDeclaredMethod(
+                            "unregisterAudioPolicyStatic",
+                            policyClass);
+                } catch (NoSuchMethodException missing) {
+                    method = AudioManager.class.getDeclaredMethod(
+                            "unregisterAudioPolicyAsyncStatic",
+                            policyClass);
+                }
+                method.setAccessible(true);
+                method.invoke(null, current);
+            } catch (Throwable error) {
+                log("audio policy: " + error);
+            }
+        }
+
+        private void releaseQuiet() {
+            if (codec != null) {
+                releaseCodec(codec);
+                codec = null;
+            }
+            if (record != null) {
+                try {
+                    record.release();
+                } catch (Throwable ignored) {
+                }
+                record = null;
+            }
+            if (speaker != null) {
+                try {
+                    speaker.release();
+                } catch (Throwable ignored) {
+                }
+                speaker = null;
+            }
+            unregisterPolicy();
+        }
+    }
+
+    private static final class PendingSample {
+        final boolean audio;
+        final byte[] data;
+        final MediaCodec.BufferInfo info;
+
+        PendingSample(boolean audio, byte[] data, MediaCodec.BufferInfo info) {
+            this.audio = audio;
+            this.data = data;
+            this.info = info;
+        }
+    }
+
     private static final class Mp4Writer {
         final String path;
         final MediaCodec codec;
+        final Object lock = new Object();
+        final java.util.ArrayList<PendingSample> pending =
+                new java.util.ArrayList<PendingSample>();
         MediaMuxer muxer;
-        int track = -1;
+        MediaFormat videoFormat;
+        MediaFormat audioFormat;
+        int videoTrack = -1;
+        int audioTrack = -1;
+        boolean audioEnabled;
         boolean started;
-        boolean wrote;
-        long lastPts = -1L;
+        volatile boolean wrote;
+        long lastVideoPts = -1L;
+        long lastAudioPts = -1L;
+        long videoOrigin = -1L;
 
         Mp4Writer(String path, MediaCodec codec) {
             this.path = path;
@@ -767,62 +1309,209 @@ public final class ScreenRecorder {
             new File(path).delete();
         }
 
+        void enableAudio() {
+            synchronized (lock) {
+                audioEnabled = true;
+            }
+        }
+
+        void addAudioFormat(MediaFormat format) {
+            synchronized (lock) {
+                if (audioFormat != null || !audioEnabled || started) {
+                    return;
+                }
+                audioFormat = format;
+                startIfReady();
+            }
+        }
+
+        void abandonAudio() {
+            synchronized (lock) {
+                if (started || !audioEnabled) {
+                    return;
+                }
+                audioEnabled = false;
+                audioFormat = null;
+                startIfReady();
+            }
+        }
+
         void onFormat(int index) throws java.io.IOException {
             if (index != MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                 return;
             }
-            if (started) {
-                throw new IllegalStateException("encoder format changed twice");
+            synchronized (lock) {
+                if (videoFormat != null) {
+                    throw new IllegalStateException("encoder format changed twice");
+                }
+                videoFormat = codec.getOutputFormat();
+                startIfReady();
             }
-            muxer = new MediaMuxer(path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
-            track = muxer.addTrack(codec.getOutputFormat());
-            muxer.start();
-            started = true;
         }
 
         boolean write(int index, MediaCodec.BufferInfo info) {
-            ByteBuffer buffer = codec.getOutputBuffer(index);
-            boolean sample = started
-                    && info.size > 0
-                    && buffer != null
-                    && (info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0;
-            if (sample) {
-                buffer.position(info.offset);
-                buffer.limit(info.offset + info.size);
-                if (info.presentationTimeUs <= lastPts) {
-                    info.presentationTimeUs = lastPts + 1;
-                }
-                lastPts = info.presentationTimeUs;
-                muxer.writeSampleData(track, buffer, info);
-                wrote = true;
+            boolean eos;
+            synchronized (lock) {
+                eos = acceptVideo(index, info);
             }
             codec.releaseOutputBuffer(index, false);
-            return (info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
+            return eos;
+        }
+
+        boolean acceptAudio(ByteBuffer buffer, MediaCodec.BufferInfo info) {
+            synchronized (lock) {
+                boolean sample = info.size > 0
+                        && buffer != null
+                        && (info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0;
+                if (sample && (audioEnabled || audioTrack >= 0)) {
+                    long pts = monotonic(info.presentationTimeUs, true);
+                    if (!started) {
+                        pending.add(copySample(true, buffer, info, pts));
+                        if (pending.size() > 300) {
+                            audioEnabled = false;
+                            startIfReady();
+                        }
+                    } else if (audioTrack >= 0) {
+                        writeTrack(audioTrack, buffer, info, pts);
+                    }
+                }
+                return (info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
+            }
         }
 
         void finish() {
-            if (!started) {
-                return;
+            synchronized (lock) {
+                if (!started) {
+                    audioEnabled = false;
+                    startIfReady();
+                }
+                if (!started || muxer == null) {
+                    return;
+                }
+                try {
+                    muxer.stop();
+                } catch (Throwable ignored) {
+                }
+                started = false;
             }
-            muxer.stop();
-            started = false;
         }
 
         void release() {
             releaseCodec(codec);
-            if (muxer == null) {
+            synchronized (lock) {
+                if (muxer == null) {
+                    return;
+                }
+                try {
+                    if (started) {
+                        muxer.stop();
+                    }
+                } catch (Throwable ignored) {
+                }
+                try {
+                    muxer.release();
+                } catch (Throwable ignored) {
+                }
+                muxer = null;
+                started = false;
+            }
+        }
+
+        private boolean acceptVideo(int index, MediaCodec.BufferInfo info) {
+            ByteBuffer buffer = codec.getOutputBuffer(index);
+            boolean sample = info.size > 0
+                    && buffer != null
+                    && (info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0;
+            if (sample) {
+                wrote = true;
+                long pts = rebaseVideo(info.presentationTimeUs);
+                if (!started) {
+                    pending.add(copySample(false, buffer, info, pts));
+                    if (pending.size() > 300 && audioEnabled && audioFormat == null) {
+                        audioEnabled = false;
+                        startIfReady();
+                    }
+                } else {
+                    writeTrack(videoTrack, buffer, info, pts);
+                }
+            }
+            return (info.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0;
+        }
+
+        private void startIfReady() {
+            if (started || videoFormat == null) {
+                return;
+            }
+            if (audioEnabled && audioFormat == null) {
                 return;
             }
             try {
-                if (started) {
-                    muxer.stop();
+                muxer = new MediaMuxer(path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+                videoTrack = muxer.addTrack(videoFormat);
+                if (audioFormat != null && audioEnabled) {
+                    audioTrack = muxer.addTrack(audioFormat);
                 }
-            } catch (Throwable ignored) {
+                muxer.start();
+                started = true;
+                for (int i = 0; i < pending.size(); i++) {
+                    PendingSample sample = pending.get(i);
+                    int track = sample.audio ? audioTrack : videoTrack;
+                    if (track < 0) {
+                        continue;
+                    }
+                    writeTrack(track, ByteBuffer.wrap(sample.data), sample.info, sample.info.presentationTimeUs);
+                }
+                pending.clear();
+            } catch (java.io.IOException error) {
+                throw new IllegalStateException(error);
             }
-            try {
-                muxer.release();
-            } catch (Throwable ignored) {
+        }
+
+        private PendingSample copySample(
+                boolean audio,
+                ByteBuffer buffer,
+                MediaCodec.BufferInfo info,
+                long pts) {
+            byte[] data = new byte[info.size];
+            buffer.position(info.offset);
+            buffer.limit(info.offset + info.size);
+            buffer.get(data);
+            MediaCodec.BufferInfo copy = new MediaCodec.BufferInfo();
+            copy.set(0, data.length, pts, info.flags);
+            return new PendingSample(audio, data, copy);
+        }
+
+        private void writeTrack(int track, ByteBuffer buffer, MediaCodec.BufferInfo info, long pts) {
+            buffer.position(info.offset);
+            buffer.limit(info.offset + info.size);
+            long saved = info.presentationTimeUs;
+            info.presentationTimeUs = pts;
+            muxer.writeSampleData(track, buffer, info);
+            info.presentationTimeUs = saved;
+        }
+
+        private long rebaseVideo(long pts) {
+            if (videoOrigin < 0) {
+                videoOrigin = pts;
             }
+            long relative = pts - videoOrigin;
+            if (relative < 0) {
+                relative = 0;
+            }
+            return monotonic(relative, false);
+        }
+
+        private long monotonic(long pts, boolean audio) {
+            long last = audio ? lastAudioPts : lastVideoPts;
+            if (pts <= last) {
+                pts = last + 1;
+            }
+            if (audio) {
+                lastAudioPts = pts;
+            } else {
+                lastVideoPts = pts;
+            }
+            return pts;
         }
     }
 

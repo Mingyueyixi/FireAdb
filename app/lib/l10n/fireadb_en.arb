@@ -832,7 +832,7 @@
   "screenrecordMethodSystem": "System",
   "screenrecordMethodSystemSubtitle": "Use the screenrecord program that comes with the device",
   "screenrecordMethodBuiltin": "Built-in",
-  "screenrecordMethodBuiltinSubtitle": "Encode with the helper service. The display goes straight into the encoder.",
+  "screenrecordMethodBuiltinSubtitle": "Encode the display with the helper service and record the audio that is playing.",
   "screenrecordMethodScrcpy": "Mirroring",
   "screenrecordMethodScrcpySubtitle": "Coming later. The same connection will also be used for preview and remote control.",
   "screenrecordShellCopyFailed": "Could not prepare the recorder in the device temp directory",

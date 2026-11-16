@@ -258,7 +258,7 @@ void main() {
       openFile: true,
       operatingSystem: 'windows',
     );
-    expect(windowsFile.executable, 'cmd.exe');
+    expect(windowsFile!.executable, 'cmd.exe');
     expect(windowsFile.arguments, <String>[
       '/c',
       'start',
@@ -270,14 +270,14 @@ void main() {
       openFile: false,
       operatingSystem: 'windows',
     );
-    expect(windowsFolder.executable, 'explorer.exe');
+    expect(windowsFolder!.executable, 'explorer.exe');
     expect(windowsFolder.ignoreExitCode, isTrue);
     expect(
       localOpenRequest(
         '/tmp/a.png',
         openFile: true,
         operatingSystem: 'macos',
-      ).executable,
+      )!.executable,
       'open',
     );
     expect(
@@ -285,8 +285,16 @@ void main() {
         '/tmp/a.png',
         openFile: false,
         operatingSystem: 'linux',
-      ).executable,
+      )?.executable,
       'xdg-open',
+    );
+    expect(
+      localOpenRequest(
+        '/sdcard/Download/FireAdb/captures/a.mp4',
+        openFile: true,
+        operatingSystem: 'android',
+      ),
+      isNull,
     );
   });
 

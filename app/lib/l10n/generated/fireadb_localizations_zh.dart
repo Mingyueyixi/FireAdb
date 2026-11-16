@@ -1288,7 +1288,7 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get screenrecordMethodBuiltin => '内置录屏';
 
   @override
-  String get screenrecordMethodBuiltinSubtitle => '用辅助服务编码，画面直接送进编码器。';
+  String get screenrecordMethodBuiltinSubtitle => '用辅助服务编码画面，并采集正在播放的声音。';
 
   @override
   String get screenrecordMethodScrcpy => '投屏录屏';

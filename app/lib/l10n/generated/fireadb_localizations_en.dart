@@ -1324,7 +1324,7 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
 
   @override
   String get screenrecordMethodBuiltinSubtitle =>
-      'Encode with the helper service. The display goes straight into the encoder.';
+      'Encode the display with the helper service and record the audio that is playing.';
 
   @override
   String get screenrecordMethodScrcpy => 'Mirroring';
