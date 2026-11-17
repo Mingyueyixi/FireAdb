@@ -89,6 +89,11 @@ class DeviceLink {
     return _door(device).open();
   }
 
+  /// 保证设备上的常驻进程在听 `127.0.0.1:28171`。不等反向会话的 `session.ready`。
+  static Future<void> ensureDaemon(ConnectedDevice device) {
+    return _door(device).ensureDaemon();
+  }
+
   static Future<void> close(String serial) async {
     final door = _doors.remove(serial);
     if (door == null) return;
@@ -247,6 +252,30 @@ class _DeviceDoor {
     return done;
   }
 
+  /// 进程不在时清掉留下的占位并重新拉起。不等反向会话。
+  Future<void> ensureDaemon() async {
+    if (await _serviceAlive()) return;
+    await _releaseClaim();
+    if (!await _claimOwner()) {
+      if (await _serviceAlive()) return;
+      await _releaseClaim();
+      if (!await _claimOwner()) return;
+    }
+    try {
+      token ??= _newToken();
+      await _spawnDaemon(token!);
+      for (var attempt = 0; attempt < 15; attempt++) {
+        if (await _serviceAlive()) return;
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      }
+      log.warning('应用服务没有留在后台 ${device.serial}');
+      if (!await _serviceAlive()) await _releaseClaim();
+    } catch (error, stack) {
+      log.warning('应用服务没有启动 ${device.serial}', error, stack);
+      if (!await _serviceAlive()) await _releaseClaim();
+    }
+  }
+
   Future<void> _start() async {
     DeviceLink._installSplice();
     if (_server == null) {
@@ -261,7 +290,10 @@ class _DeviceDoor {
     final port = hostPort;
     final secret = token;
     if (port == null || secret == null) return;
-    if (_exec != null || _attached != null || service != null) return;
+    if (_exec != null || _attached != null || service != null) {
+      if (await _serviceAlive()) return;
+      await _dropStaleService();
+    }
     final updated = await ensureFireAppService(device);
     if (updated) await _stopService();
     if (await _serviceAlive()) {
@@ -269,12 +301,18 @@ class _DeviceDoor {
       return;
     }
     if (!await _claimOwner()) {
-      if (await _waitForService()) {
-        await _joinWithRetry();
+      if (await _serviceAlive()) {
+        await _attachRunning();
         return;
       }
       await _releaseClaim();
-      if (!await _claimOwner()) return;
+      if (!await _claimOwner()) {
+        if (await _waitForService()) {
+          await _joinWithRetry();
+          return;
+        }
+        return;
+      }
     }
     try {
       await _ensureReverse();
@@ -292,6 +330,27 @@ class _DeviceDoor {
       if (!await _serviceAlive()) await _releaseClaim();
       rethrow;
     }
+  }
+
+  /// 进程已经没了，但门口还记着上一条连接。
+  Future<void> _dropStaleService() async {
+    service?.failPending(StateError('应用信息服务已断开'));
+    final socket = service?.socket;
+    final attached = _attached;
+    final exec = _exec;
+    service = null;
+    _attached = null;
+    _exec = null;
+    fireAppSession(device).markLinkDown();
+    try {
+      await socket?.close();
+    } catch (_) {}
+    try {
+      await attached?.close();
+    } catch (_) {}
+    try {
+      await exec?.close();
+    } catch (_) {}
   }
 
   /// 换上新 jar 时停掉还在用旧代码的后台进程。
@@ -391,9 +450,26 @@ class _DeviceDoor {
   }
 
   Future<void> _joinWithRetry() async {
-    for (var attempt = 0; attempt < 10; attempt++) {
+    for (var attempt = 0; attempt < 3; attempt++) {
       if (await _joinExisting()) return;
       await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+  }
+
+  /// 连 `28171`。端口没人听时尽快返回，避免把同一条 ADB 上的 getprop 堵住。
+  Future<ConnectedShell?> _openLocalService() async {
+    final opened = device.openService('tcp:$deviceServicePort');
+    try {
+      return await opened.timeout(const Duration(milliseconds: 800));
+    } catch (error, stack) {
+      unawaited(
+        opened.then<void>(
+          (shell) => shell.close(),
+          onError: (Object _) {},
+        ),
+      );
+      log.warning('没有连上已有的应用服务 ${device.serial}', error, stack);
+      return null;
     }
   }
 
@@ -401,13 +477,8 @@ class _DeviceDoor {
   Future<bool> _joinExisting() async {
     final port = hostPort;
     if (port == null) return false;
-    final ConnectedShell remote;
-    try {
-      remote = await device.openService('tcp:$deviceServicePort');
-    } catch (error, stack) {
-      log.warning('没有连上已有的应用服务 ${device.serial}', error, stack);
-      return false;
-    }
+    final remote = await _openLocalService();
+    if (remote == null) return false;
     final Socket socket;
     try {
       socket = await Socket.connect(InternetAddress.loopbackIPv4, port);

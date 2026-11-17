@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -60,7 +59,8 @@ class DeviceFileRepository {
       final files = parseRootList(output, directory);
       final failure = rootListFailure(output);
       if (failure != null && files.isEmpty) throw StateError(failure);
-      return _markDirectoryLinks(files, directory);
+      files.sort(compareRemoteFiles);
+      return files;
     }
     final sync = await _openSync();
     final List<RemoteFile> files;
@@ -84,6 +84,16 @@ class DeviceFileRepository {
     } finally {
       await _closeSync(sync);
     }
+    files.sort(compareRemoteFiles);
+    return files;
+  }
+
+  /// 同步列表先返回。链接是不是目录要另跑命令，不挡列表显示。
+  Future<List<RemoteFile>> classifyDirectoryLinks(
+    List<RemoteFile> files,
+    String directory,
+  ) {
+    if (!files.any((file) => file.isLink)) return Future.value(files);
     return _markDirectoryLinks(files, directory);
   }
 
@@ -619,22 +629,16 @@ class DeviceFileRepository {
     Future<String> Function() command, {
     Duration? timeout,
   }) async {
-    final shell = await _device.openShell(await command());
-    _shellSession = shell;
+    _ensureActive(null);
     try {
-      _ensureActive(null);
-      final bytes = await shell.readStream
-          .expand((chunk) => chunk)
-          .toList()
+      final text = await _device
+          .shell(await command())
           .timeout(timeout ?? _shellTimeout);
       _ensureActive(null);
-      return utf8.decode(bytes, allowMalformed: true);
+      return text;
     } catch (_) {
       if (_cancelled) throw const FileOperationCancelled();
       rethrow;
-    } finally {
-      if (identical(_shellSession, shell)) _shellSession = null;
-      await shell.close();
     }
   }
 

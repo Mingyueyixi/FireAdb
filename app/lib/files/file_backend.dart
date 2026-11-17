@@ -16,6 +16,12 @@ abstract class FileBackend {
   Future<List<FileEntry>> list(String directory);
   Future<List<FileEntry>> search(String directory, String keyword);
 
+  /// 列表已经显示之后，再确认哪些链接能当目录进入。没有变化时返回 null。
+  Future<List<FileEntry>?> classifyLinks(
+    String directory,
+    List<FileEntry> files,
+  ) async => null;
+
   // ── 数据与操作（签名保持批量：设备端一次 shell 往返）──
   Future<Uint8List> readBytes(String path, {required int maxBytes});
   Future<void> writeBytes(String path, List<int> bytes, {int mode = 0x81a4});

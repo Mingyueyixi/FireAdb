@@ -8,6 +8,7 @@ import android.util.Log;
 
 import com.fire.adb.appservice.catalog.AppCatalogProtocol;
 import com.fire.adb.appservice.clipboard.ClipboardProtocol;
+import com.fire.adb.appservice.image.ImageThumbProtocol;
 import com.fire.adb.appservice.protocol.CommandHandler;
 import com.fire.adb.appservice.protocol.FireDataReader;
 import com.fire.adb.appservice.protocol.FireDataRequest;
@@ -42,7 +43,7 @@ import java.nio.charset.StandardCharsets;
  * 反向端口暂时没人接时，通知还连着的客户端把端口接过去。
  * 第一条是 {@code session.hello}，角色 {@code service}。
  * {@code catalog.*} 由 {@link AppCatalogProtocol} 实现，{@code clipboard.*} 由
- * {@link ClipboardProtocol} 实现。
+ * {@link ClipboardProtocol} 实现，{@code image.thumb} 由 {@link ImageThumbProtocol} 实现。
  */
 public final class FireAppService {
     /** 与桌面端 {@code deviceServicePort} 相同。本机其他客户端从这里接入。 */
@@ -124,7 +125,8 @@ public final class FireAppService {
             catalog.writeList(0);
             return;
         }
-        CommandHandler[] handlers = new CommandHandler[] {catalog, clipboard};
+        ImageThumbProtocol images = new ImageThumbProtocol(stdout);
+        CommandHandler[] handlers = new CommandHandler[] {catalog, clipboard, images};
         Thread commands = new Thread(
                 () -> {
                     try {
@@ -297,7 +299,8 @@ public final class FireAppService {
             hello.put("token", token);
             out.send(FireDataResponse.json("session.hello", 0, hello));
             out.send(FireDataResponse.text("session.ready", 0, "1"));
-            CommandHandler[] handlers = new CommandHandler[] {catalog, clipboard};
+            ImageThumbProtocol images = new ImageThumbProtocol(out);
+            CommandHandler[] handlers = new CommandHandler[] {catalog, clipboard, images};
             readCommands(
                     new FireDataReader(socket.getInputStream()),
                     out,

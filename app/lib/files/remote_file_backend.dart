@@ -113,6 +113,20 @@ class RemoteFileBackend extends FileBackend {
       _require().list(directory);
 
   @override
+  Future<List<FileEntry>?> classifyLinks(
+    String directory,
+    List<FileEntry> files,
+  ) async {
+    if (files.every((file) => !file.isLink)) return null;
+    final marked = await _require().classifyDirectoryLinks(
+      <RemoteFile>[for (final file in files) file as RemoteFile],
+      directory,
+    );
+    if (marked.every((file) => !file.opensAsDirectory)) return null;
+    return marked;
+  }
+
+  @override
   Future<List<FileEntry>> search(String directory, String keyword) =>
       _require().search(directory, keyword);
 

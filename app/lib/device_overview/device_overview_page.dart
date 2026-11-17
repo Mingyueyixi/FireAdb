@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:fireadb/connection/connection_manager.dart';
+import 'package:fireadb/connection/model/connected_device.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -10,6 +12,27 @@ import '../log/app_log.dart';
 import '../shell/device_root.dart';
 import '../shell/device_root_store.dart';
 import '../workspace/workspace_controller.dart';
+
+const _overviewKeys = <String>[
+  'ro.product.model',
+  'ro.product.manufacturer',
+  'ro.product.brand',
+  'ro.build.version.release',
+  'ro.build.version.sdk',
+  'ro.product.cpu.abi',
+];
+
+/// 只读总览要显示的几项，不走会分配终端的 `shell:`。
+Future<Map<String, String>> _overviewProperties(ConnectedDevice device) async {
+  final text = await device.shell(
+    _overviewKeys.map((key) => 'getprop $key').join('; '),
+  );
+  final lines = const LineSplitter().convert(text);
+  return <String, String>{
+    for (var index = 0; index < _overviewKeys.length; index++)
+      _overviewKeys[index]: index < lines.length ? lines[index].trim() : '',
+  };
+}
 
 /// 设备基本信息面板（连接后按需读取 getprop）。
 class DeviceOverviewPage extends StatefulWidget {
@@ -94,7 +117,7 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
       setState(() => _error = null);
     }
     try {
-      final props = await device.getProperties().timeout(
+      final props = await _overviewProperties(device).timeout(
         const Duration(seconds: 10),
       );
       if (!mounted) return;
@@ -157,14 +180,7 @@ class _DeviceOverviewPageState extends State<DeviceOverviewPage> {
                   title: Text(l10n.deviceOverviewBasicInformation, style: theme.textTheme.titleMedium),
                 ),
                 const Divider(height: 1),
-                for (final key in const <String>[
-                  'ro.product.model',
-                  'ro.product.manufacturer',
-                  'ro.product.brand',
-                  'ro.build.version.release',
-                  'ro.build.version.sdk',
-                  'ro.product.cpu.abi',
-                ])
+                for (final key in _overviewKeys)
                   _InfoRow(
                     label: _fieldLabel(context, key),
                     value: _props[key],

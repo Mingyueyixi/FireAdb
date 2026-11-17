@@ -523,9 +523,15 @@ class AdbConnection {
       return;
     }
     final stream = _streams[localId];
-    if (stream != null) {
-      stream._onAck();
+    if (stream == null) return;
+    // 打开超时后设备才回 OKAY：补上 id 并关掉，避免留下无人读取的流。
+    if (stream.remoteId < 0) {
+      stream._completeOpen(remoteId);
+      _streams.remove(localId);
+      unawaited(stream.close());
+      return;
     }
+    stream._onAck();
   }
 
   void _onWrite(AdbMessage msg) {
@@ -580,6 +586,8 @@ class AdbConnection {
   }
 
   /// 打开一条服务流，如 `shell:getprop`、`shell:ls -l /`、`sync:`。
+  ///
+  /// 设备不回 OKAY 时不能一直等，否则总览和目录列表会停在转圈。
   Future<AdbStream> open(String destination) async {
     if (!_connected) {
       throw StateError('连接尚未建立，无法打开流');
@@ -589,11 +597,25 @@ class AdbConnection {
     _streams[localId] = stream;
     final waiter = Completer<AdbStream>();
     _openWaiters[localId] = waiter;
-    await _sendMessage(cmd.commandOpen, localId, 0, [
-      ...utf8.encode(destination),
-      0,
-    ]);
-    return waiter.future;
+    unawaited(
+      _sendMessage(cmd.commandOpen, localId, 0, [
+        ...utf8.encode(destination),
+        0,
+      ]).catchError((Object error, StackTrace stack) {
+        final pending = _openWaiters.remove(localId);
+        if (pending != null && !pending.isCompleted) {
+          pending.completeError(error, stack);
+        }
+      }),
+    );
+    try {
+      return await waiter.future.timeout(
+        writeTimeout ?? const Duration(seconds: 8),
+      );
+    } on TimeoutException {
+      _openWaiters.remove(localId);
+      throw AdbInvalidResponseError('打开 $destination 超时');
+    }
   }
 
   /// 单条服务：打开流，读取所有响应，返回字节。可选附带一次输入。

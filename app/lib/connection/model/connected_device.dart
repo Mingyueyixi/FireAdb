@@ -94,7 +94,30 @@ class ConnectedDevice {
     );
   }
 
+  /// 读完即关的命令。走 `shell,v2,raw:`，不分配终端。
+  ///
+  /// `shell:` 会建 PTY。这台设备上分配终端要一两秒，总览和目录确认都会卡住。
   Future<String> shell(String command) async {
+    try {
+      return await _shellRaw(command);
+    } on AdbInvalidResponseError {
+      return _shellPty(command);
+    } on AdbHostError {
+      return _shellPty(command);
+    }
+  }
+
+  Future<String> _shellRaw(String command) async {
+    final stream = await openService('shell,v2,raw:$command');
+    try {
+      final bytes = await stream.readStream.expand((chunk) => chunk).toList();
+      return decodeShellV2Stdout(Uint8List.fromList(bytes));
+    } finally {
+      await stream.close();
+    }
+  }
+
+  Future<String> _shellPty(String command) async {
     final stream = await openShell(command);
     try {
       final bytes = await stream.readStream.expand((chunk) => chunk).toList();
@@ -105,15 +128,8 @@ class ConnectedDevice {
   }
 
   Future<Map<String, String>> getProperties() async {
-    final device = _device;
-    if (device != null) return device.getProperties();
     final output = await shell('getprop');
-    final properties = <String, String>{};
-    for (final line in const LineSplitter().convert(output)) {
-      final match = RegExp(r'^\[([^\]]+)\]: \[(.*)\]$').firstMatch(line);
-      if (match != null) properties[match.group(1)!] = match.group(2)!;
-    }
-    return properties;
+    return parseGetprop(output);
   }
 
   /// 让设备上的 adbd 把 `remote` 上的连接交回本机 `local`。
@@ -262,6 +278,35 @@ class ConnectedShell {
     if (adbStream != null) return adbStream.closed;
     return null;
   }
+}
+
+/// `getprop` 的 `[key]: [value]` 行。
+Map<String, String> parseGetprop(String output) {
+  final properties = <String, String>{};
+  for (final line in const LineSplitter().convert(output)) {
+    final match = RegExp(r'^\[(.*)\]:\s*\[(.*)\]\s*$').firstMatch(line);
+    if (match != null) properties[match.group(1)!] = match.group(2)!;
+  }
+  return properties;
+}
+
+/// 拆开 `shell,v2` 帧，只留标准输出。
+String decodeShellV2Stdout(Uint8List bytes) {
+  final out = BytesBuilder(copy: false);
+  final data = ByteData.sublistView(bytes);
+  var offset = 0;
+  while (offset + 5 <= bytes.length) {
+    final id = bytes[offset];
+    final length = data.getUint32(offset + 1, Endian.little);
+    offset += 5;
+    if (offset + length > bytes.length) break;
+    if (id == 1 && length > 0) {
+      out.add(bytes.sublist(offset, offset + length));
+    }
+    offset += length;
+    if (id == 3) break;
+  }
+  return utf8.decode(out.toBytes(), allowMalformed: true);
 }
 
 /// 读到第一行，或对端关闭。没有换行时最多等 3 秒，已收到的字节仍然返回。

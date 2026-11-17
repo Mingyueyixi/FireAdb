@@ -46,6 +46,9 @@ class FireAppSession {
 
   int get epoch => _epoch;
 
+  /// 反向连接已经就绪，可以发命令。
+  bool get isReady => _linkReady && DeviceLink.serviceReady(serial);
+
   int get pendingBytes => 0;
 
   /// 刷新列表时递增，让还在排队的单条查询失效。

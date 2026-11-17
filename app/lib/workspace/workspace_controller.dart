@@ -98,6 +98,7 @@ class WorkspaceController extends GetxController {
     if (featureId == _currentFeature.value) return;
     _featureBySerial[selectedSerial.value] = featureId;
     _currentFeature.value = featureId;
+    _refreshVisibleFeature(selectedSerial.value);
   }
 
   void openFeature(String featureId) {
@@ -106,6 +107,29 @@ class WorkspaceController extends GetxController {
   }
 
   void closeFeature() => narrowFeatureOpen.value = false;
+
+  /// 只刷新当前功能。缓存里的其它页等用户打开时再加载。
+  void _refreshVisibleFeature(String serial) {
+    if (serial.isEmpty) return;
+    switch (_currentFeature.value) {
+      case 'apps':
+        if (Get.isRegistered<AppsController>(tag: serial)) {
+          unawaited(Get.find<AppsController>(tag: serial).reload());
+        }
+      case 'files':
+        if (Get.isRegistered<FilesController>(tag: serial)) {
+          unawaited(Get.find<FilesController>(tag: serial).reload());
+        }
+      case 'screenshot':
+        if (Get.isRegistered<ScreenshotController>(tag: serial)) {
+          unawaited(Get.find<ScreenshotController>(tag: serial).reload());
+        }
+      case 'screenrecord':
+        if (Get.isRegistered<ScreenrecordController>(tag: serial)) {
+          unawaited(Get.find<ScreenrecordController>(tag: serial).reload());
+        }
+    }
+  }
 
   void rememberProfile(DeviceProfile profile) {
     if (profile.serial.isEmpty) return;
@@ -173,18 +197,11 @@ class WorkspaceController extends GetxController {
     }
     if (restoredSerial.value == serial) restoredSerial.value = '';
     restoredSerial.value = serial;
-    if (selectedSerial.value == serial) sessionEpoch.value++;
-    if (Get.isRegistered<AppsController>(tag: serial)) {
-      unawaited(Get.find<AppsController>(tag: serial).reload());
-    }
-    if (Get.isRegistered<FilesController>(tag: serial)) {
-      unawaited(Get.find<FilesController>(tag: serial).reload());
-    }
-    if (Get.isRegistered<ScreenshotController>(tag: serial)) {
-      unawaited(Get.find<ScreenshotController>(tag: serial).reload());
-    }
-    if (Get.isRegistered<ScreenrecordController>(tag: serial)) {
-      unawaited(Get.find<ScreenrecordController>(tag: serial).reload());
+    if (selectedSerial.value == serial) {
+      sessionEpoch.value++;
+      // 功能页留在缓存里。重连时只刷新眼前这一页，
+      // 避免应用列表把同一条连接占住，总览和文件管理一直转圈。
+      _refreshVisibleFeature(serial);
     }
     if (_pending.isEmpty) _setReconnectProbe(false);
   }

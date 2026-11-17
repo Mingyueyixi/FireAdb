@@ -490,6 +490,8 @@ class _FileBrowserState extends State<FileBrowser> {
           selected: controller.selected.contains(file.path),
           busy: controller.busy.value,
           showExport: _canTransfer,
+          remote: _canTransfer,
+          serial: widget.serial,
           onToggleSelected: () => controller.toggleSelected(file),
           onStartSelecting: () => controller.startSelecting(file),
           onTap: () {

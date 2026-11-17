@@ -169,18 +169,36 @@ class FilesController extends GetxController {
     error.value = null;
     try {
       final query = keyword.value.trim();
-      final loaded = query.isEmpty
-          ? await backend.list(directory)
-          : await backend.search(directory, query);
+      final loaded = await (query.isEmpty
+              ? backend.list(directory)
+              : backend.search(directory, query))
+          .timeout(const Duration(seconds: 12));
       if (_closed || generation != _generation) return;
       entries.assignAll(loaded);
       selected.removeWhere((item) => !loaded.any((file) => file.path == item));
       loading.value = false;
+      await _classifyLinks(generation, directory, loaded);
     } catch (loadError, stackTrace) {
       log.severe('读取目录失败：$directory', loadError, stackTrace);
       if (_closed || generation != _generation) return;
       loading.value = false;
       if (loadError is! FileOperationCancelled) error.value = loadError;
+    }
+  }
+
+  Future<void> _classifyLinks(
+    int generation,
+    String directory,
+    List<FileEntry> loaded,
+  ) async {
+    if (loaded.every((file) => !file.isLink)) return;
+    try {
+      final marked = await backend.classifyLinks(directory, loaded);
+      if (_closed || generation != _generation || marked == null) return;
+      entries.assignAll(marked);
+      selected.removeWhere((item) => !marked.any((file) => file.path == item));
+    } catch (error, stackTrace) {
+      log.warning('目录链接没有确认：$directory', error, stackTrace);
     }
   }
 

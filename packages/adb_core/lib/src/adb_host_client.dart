@@ -117,7 +117,7 @@ class AdbHostClient {
   /// 读取 4 字节状态；OKAY 返回 true，FAIL 抛 [AdbHostError]。
   static Future<bool> _readStatus(AdbSizedReader reader, String service) async {
     final status = ascii.decode(
-      await reader.readExactly(4),
+      await reader.readExactly(4).timeout(const Duration(seconds: 8)),
       allowInvalid: true,
     );
     if (status == 'OKAY') {
