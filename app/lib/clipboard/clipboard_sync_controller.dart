@@ -69,11 +69,24 @@ class ClipboardSyncController extends GetxController {
     final device = manager.deviceOf(serial);
     if (device == null) return;
     try {
-      await watchFireAppClip(device, true);
-      log.info('已开启设备剪贴板监听 $serial');
+      await _watch(serial);
     } catch (error, stackTrace) {
       log.warning('开启设备剪贴板监听失败 $serial', error, stackTrace);
+      await Future<void>.delayed(const Duration(seconds: 2));
+      if (!watchEnabled(serial) || manager.deviceOf(serial) == null) return;
+      try {
+        await _watch(serial);
+      } catch (error, stackTrace) {
+        log.warning('再次开启设备剪贴板监听失败 $serial', error, stackTrace);
+      }
     }
+  }
+
+  Future<void> _watch(String serial) async {
+    final device = manager.deviceOf(serial);
+    if (device == null) return;
+    await watchFireAppClip(device, true);
+    log.info('已开启设备剪贴板监听 $serial');
   }
 
   /// 每设备开关。关闭时通知设备停掉 WATCH；重新开启且在线时立即补开。

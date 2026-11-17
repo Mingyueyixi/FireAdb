@@ -69,7 +69,7 @@ Future<void> removeFireAppClip(ConnectedDevice device, String text) {
 }
 
 /// 开关设备剪贴板变化监听。变化经
-/// [setFireAppClipListener] 推送。开启后进程常驻，空闲时不退出。
+/// [setFireAppClipListener] 从反向连接推上来。
 Future<void> watchFireAppClip(ConnectedDevice device, bool on) {
   _bindPush();
   return _exchange(device, (session, id) async {
@@ -84,7 +84,6 @@ Future<void> watchFireAppClip(ConnectedDevice device, bool on) {
     if (message.name != 'clipboard.ok') {
       throw StateError('剪贴板监听响应无效');
     }
-    session.watching = on;
   });
 }
 
@@ -103,14 +102,9 @@ Future<T> _exchange<T>(
   Future<T> Function(FireAppSession session, int id) action,
 ) {
   final session = fireAppSession(device);
-  session.cancelIdle();
   return session.run(() async {
-    try {
-      await session.ensureReady(device);
-      return await action(session, session.nextId());
-    } finally {
-      session.scheduleIdle();
-    }
+    await session.ensureReady(device);
+    return action(session, session.nextId());
   });
 }
 

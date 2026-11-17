@@ -14,9 +14,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:logging/logging.dart';
+
 import 'adb_connection.dart';
 import 'adb_exceptions.dart';
 import 'adb_stream_reader.dart';
+
+final Logger _syncLog = Logger('adb_core.sync');
 
 /// sync 帧 id（4 字节 ASCII）。
 const String kSyncIdStat = 'STAT';
@@ -111,12 +115,18 @@ class AdbSyncClient {
     final id = String.fromCharCodes(header.sublist(0, 4));
     final length = _readUint32LE(header, 4);
     final data = length > 0 ? await _reader.readExactly(length) : Uint8List(0);
+    if (id != kSyncIdData) {
+      _logFrame('收', id, length, _frameText(id, data));
+    }
     return (id, length, data);
   }
 
-  /// 发送一帧。
+  /// 发送一帧。DATA 是文件正文，由传输结束时汇总，不按块打印。
   Future<void> _writeFrame(String id, {Uint8List? data}) async {
     final d = data ?? Uint8List(0);
+    if (id != kSyncIdData) {
+      _logFrame('发', id, d.length, _frameText(id, d));
+    }
     final builder = BytesBuilder()..add(_encodeSyncId(id));
     _writeUint32LE(builder, d.length);
     builder.add(d);
@@ -141,11 +151,11 @@ class AdbSyncClient {
     if (id != kSyncIdStat && id != kSyncIdDone) {
       throw AdbInvalidResponseError('期望 STAT/DONE，收到 $id');
     }
-    return AdbFileStat(
-      mode: _readUint32LE(Uint8List.fromList(fields), 0),
-      size: _readUint32LE(Uint8List.fromList(fields), 4),
-      mtime: _readUint32LE(Uint8List.fromList(fields), 8),
-    );
+    final mode = _readUint32LE(Uint8List.fromList(fields), 0);
+    final size = _readUint32LE(Uint8List.fromList(fields), 4);
+    final mtime = _readUint32LE(Uint8List.fromList(fields), 8);
+    _logFrame('收', id, fields.length, 'mode=$mode size=$size mtime=$mtime');
+    return AdbFileStat(mode: mode, size: size, mtime: mtime);
   }
 
   /// 列出远端目录。
@@ -182,7 +192,10 @@ class AdbSyncClient {
     final builder = BytesBuilder();
     while (true) {
       final (id, length, data) = await _readFrame();
-      if (id == kSyncIdDone) break;
+      if (id == kSyncIdDone) {
+        _logFrame('收', kSyncIdData, builder.length, null);
+        break;
+      }
       if (id == kSyncIdData) {
         builder.add(data);
         onProgress?.call(builder.length, -1);
@@ -208,7 +221,10 @@ class AdbSyncClient {
     var received = 0;
     while (true) {
       final (id, _, data) = await _readFrame();
-      if (id == kSyncIdDone) return received;
+      if (id == kSyncIdDone) {
+        _logFrame('收', kSyncIdData, received, null);
+        return received;
+      }
       if (id == kSyncIdData) {
         sink.add(data);
         received += data.length;
@@ -287,6 +303,7 @@ class AdbSyncClient {
     if (id != kSyncIdOkay && id != kSyncIdDone) {
       throw AdbInvalidResponseError('期望 OKAY/FAIL，收到 $id');
     }
+    _logFrame('发', kSyncIdData, written, null);
   }
 
   static int _chunkSize(int remaining) =>
@@ -301,6 +318,32 @@ class AdbSyncClient {
     }
     await _close();
   }
+}
+
+void _logFrame(String direction, String id, int length, String? text) {
+  final head = '$id $length';
+  if (text == null || text.isEmpty) {
+    _syncLog.info('协议 $direction $head');
+    return;
+  }
+  if (text.length <= 16384) {
+    _syncLog.info('协议 $direction $head:$text');
+    return;
+  }
+  _syncLog.info('协议 $direction $head:…正文 ${text.length} 字符');
+}
+
+String? _frameText(String id, Uint8List data) {
+  if (data.isEmpty) return null;
+  if (id != kSyncIdStat &&
+      id != kSyncIdList &&
+      id != kSyncIdRecv &&
+      id != kSyncIdSend &&
+      id != kSyncIdFail) {
+    return null;
+  }
+  final end = data.isNotEmpty && data.last == 0 ? data.length - 1 : data.length;
+  return utf8.decode(data.sublist(0, end), allowMalformed: true);
 }
 
 /// [push]/[pull]/[stat]/[list] 等失败（设备回 FAIL）。

@@ -16,13 +16,13 @@ import java.lang.reflect.Constructor;
  * 系统上下文的包名是 android，进程实际却是 shell。
  * 创建虚拟屏幕时系统会核对包名和调用方 uid，必须改成 shell 自己的包名。
  */
-final class ShellContext extends ContextWrapper {
-    static final String PACKAGE_NAME = "com.android.shell";
+public final class ShellContext extends ContextWrapper {
+    public static final String PACKAGE_NAME = "com.android.shell";
     private static final String TAG = "FireAdb";
 
     private ClipboardManager mClipboardManager;
 
-    ShellContext(Context base) {
+    public ShellContext(Context base) {
         super(base);
     }
 

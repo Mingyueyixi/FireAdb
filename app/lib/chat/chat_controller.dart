@@ -6,7 +6,6 @@ import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../appservice/fire_app_session.dart';
 import '../appservice/protocol/fire_app_message.dart';
 import '../connection/connection_manager.dart';
 import '../connection/local_machine_serial.dart';
@@ -1167,7 +1166,6 @@ class ChatController extends GetxController with WidgetsBindingObserver {
 
   Future<void> onDeviceDisconnected(String serial) async {
     await DeviceLink.close(serial);
-    releaseChatHold(serial);
     _noteLink();
   }
 

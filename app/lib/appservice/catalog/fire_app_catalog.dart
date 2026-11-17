@@ -154,7 +154,6 @@ Future<FireAppListLoad> loadFireAppSummaries(
 }) {
   final session = fireAppSession(device);
   session.advanceEpoch();
-  session.cancelIdle();
   return session.run(() async {
     try {
       return await _loadList(session, device, onCatalog);
@@ -166,8 +165,6 @@ Future<FireAppListLoad> loadFireAppSummaries(
       } catch (_) {
         rethrow;
       }
-    } finally {
-      session.scheduleIdle();
     }
   });
 }
@@ -205,23 +202,18 @@ Future<List<FireAppName>> loadFireAppNames(
   }
   final session = fireAppSession(device);
   final epoch = session.epoch;
-  session.cancelIdle();
   return session.run(() async {
+    if (epoch != session.epoch) throw const FireAppLoadCancelled();
     try {
+      return await _loadNames(session, device, packages, timeout);
+    } on FireAppLoadCancelled {
+      rethrow;
+    } on TimeoutException {
+      rethrow;
+    } catch (error) {
+      await session.drop();
       if (epoch != session.epoch) throw const FireAppLoadCancelled();
-      try {
-        return await _loadNames(session, device, packages, timeout);
-      } on FireAppLoadCancelled {
-        rethrow;
-      } on TimeoutException {
-        rethrow;
-      } catch (error) {
-        await session.drop();
-        if (epoch != session.epoch) throw const FireAppLoadCancelled();
-        return await _loadNames(session, device, packages, timeout);
-      }
-    } finally {
-      session.scheduleIdle();
+      return await _loadNames(session, device, packages, timeout);
     }
   });
 }
@@ -230,31 +222,26 @@ Future<List<FireAppName>> loadFireAppNames(
 Future<Uint8List?> loadFireAppIcon(ConnectedDevice device, String packageName) {
   final session = fireAppSession(device);
   final epoch = session.epoch;
-  session.cancelIdle();
   return session.run(() async {
-    try {
-      if (epoch != session.epoch) throw const FireAppLoadCancelled();
-      await session.ensureReady(device);
-      final id = session.nextId();
-      await session.send(
-        FireDataRequest.json(
-          name: 'catalog.icon',
-          id: id,
-          body: <String, String>{'package': packageName},
-        ),
-      );
-      final message = await session.next().timeout(const Duration(seconds: 15));
-      if (message.name == 'session.error') {
-        throw StateError(message.errorText('读取应用图标失败'));
-      }
-      if (message.id != id || message.name != 'catalog.icon') {
-        throw StateError('应用图标响应无效');
-      }
-      if (message.body.isEmpty) return null;
-      return message.body;
-    } finally {
-      session.scheduleIdle();
+    if (epoch != session.epoch) throw const FireAppLoadCancelled();
+    await session.ensureReady(device);
+    final id = session.nextId();
+    await session.send(
+      FireDataRequest.json(
+        name: 'catalog.icon',
+        id: id,
+        body: <String, String>{'package': packageName},
+      ),
+    );
+    final message = await session.nextWithin(const Duration(seconds: 15));
+    if (message.name == 'session.error') {
+      throw StateError(message.errorText('读取应用图标失败'));
     }
+    if (message.id != id || message.name != 'catalog.icon') {
+      throw StateError('应用图标响应无效');
+    }
+    if (message.body.isEmpty) return null;
+    return message.body;
   });
 }
 
@@ -265,20 +252,15 @@ Future<FireAppShow> loadFireAppShow(
 ) {
   final session = fireAppSession(device);
   final epoch = session.epoch;
-  session.cancelIdle();
   return session.run(() async {
+    if (epoch != session.epoch) throw const FireAppLoadCancelled();
     try {
+      return await _loadShow(session, device, packageName);
+    } catch (error) {
+      if (error is FireAppLoadCancelled) rethrow;
+      await session.drop();
       if (epoch != session.epoch) throw const FireAppLoadCancelled();
-      try {
-        return await _loadShow(session, device, packageName);
-      } catch (error) {
-        if (error is FireAppLoadCancelled) rethrow;
-        await session.drop();
-        if (epoch != session.epoch) throw const FireAppLoadCancelled();
-        return await _loadShow(session, device, packageName);
-      }
-    } finally {
-      session.scheduleIdle();
+      return await _loadShow(session, device, packageName);
     }
   });
 }
@@ -300,7 +282,7 @@ Future<FireAppListLoad> _loadList(
   final readClock = Stopwatch()..start();
   final FireDataResponse message;
   try {
-    message = await session.next().timeout(const Duration(seconds: 15));
+    message = await session.nextWithin(const Duration(seconds: 15));
   } on TimeoutException {
     throw TimeoutException(
       '应用列表超过 15 秒没有返回（缓冲 ${session.pendingBytes} 字节）',
@@ -343,7 +325,7 @@ Future<List<FireAppName>> _loadNames(
       body: <String, List<String>>{'packages': packages},
     ),
   );
-  final message = await session.next().timeout(timeout);
+  final message = await session.nextWithin(timeout);
   if (message.name == 'session.error') {
     throw StateError(message.errorText('读取应用名失败'));
   }
@@ -371,7 +353,7 @@ Future<FireAppShow> _loadShow(
   Uint8List? png;
   var gotIcon = false;
   while (json == null || !gotIcon) {
-    final message = await session.next().timeout(const Duration(seconds: 20));
+    final message = await session.nextWithin(const Duration(seconds: 20));
     if (message.name == 'session.error') {
       throw StateError(message.errorText('读取应用信息失败'));
     }

@@ -12,19 +12,15 @@ final _sessions = <String, FireAppSession>{};
 FireAppSession fireAppSession(ConnectedDevice device) =>
     _sessions.putIfAbsent(device.serial, () => FireAppSession(device.serial));
 
-/// 设备断开时由连接层调用：关掉长活 exec，避免下次同 serial 复用死流。
-void releaseChatHold(String serial) {
-  _sessions[serial]?.releaseChat();
-}
-
 Future<void> releaseFireAppService(String serial) async {
   final session = _sessions.remove(serial);
   if (session == null) return;
   await session.dispose();
 }
 
-/// 一台设备上的长寿进程。只负责把请求送出去、把响应收回来。
+/// 一台设备上的反向连接。只负责把请求送出去、把响应和推送收回来。
 ///
+/// 服务进程停在反向端口上，连接一直留着。设备断开时才关掉电脑这边的门口。
 /// 应用目录和剪贴板各自组自己的 [FireDataRequest]，不共用一套命令实现。
 class FireAppSession {
   FireAppSession(this.serial);
@@ -44,16 +40,9 @@ class FireAppSession {
   final _responses = <FireDataResponse>[];
   Completer<void>? _wait;
   var _epoch = 0;
-  var _generation = 0;
+  var _waitGen = 0;
   var _nextRequestId = 1;
   var _linkReady = false;
-  Timer? _idle;
-
-  /// 监听开启时进程常驻，空闲不退出。
-  var watching = false;
-
-  /// 聊天需要这条进程留着，好让成员来拉。和剪贴板监听互不影响。
-  var chatHold = false;
 
   int get epoch => _epoch;
 
@@ -66,9 +55,6 @@ class FireAppSession {
 
   Future<void> dispose() async {
     _epoch++;
-    watching = false;
-    chatHold = false;
-    cancelIdle();
     await run(drop);
   }
 
@@ -87,46 +73,11 @@ class FireAppSession {
     return completer.future;
   }
 
-  /// 取消空闲退出。必须在 [run] 入队之前调用，否则 20 秒退出可能插进复用的进程。
-  void cancelIdle() {
-    _generation++;
-    _idle?.cancel();
-    _idle = null;
-  }
-
-  void holdChat() {
-    chatHold = true;
-    cancelIdle();
-  }
-
-  void releaseChat() {
-    chatHold = false;
-    scheduleIdle();
-  }
-
-  void scheduleIdle() {
-    _idle?.cancel();
-    if (watching || chatHold) return;
-    final generation = _generation;
-    _idle = Timer(const Duration(seconds: 20), () {
-      unawaited(
-        run(() async {
-          if (generation != _generation) return;
-          await _quit();
-        }),
-      );
-    });
-  }
-
   /// 服务那条连接断了。下一次就绪要重新等 `session.ready`。
   void markLinkDown() {
     _linkReady = false;
     _responses.clear();
-    final pending = _wait;
-    _wait = null;
-    if (pending != null && !pending.isCompleted) {
-      pending.completeError(StateError('应用信息服务已断开'));
-    }
+    _cancelWait(StateError('应用信息服务已断开'));
   }
 
   /// 反向连接上的一帧。hello 已由 [DeviceLink] 核对过。
@@ -157,7 +108,7 @@ class FireAppSession {
     }
     clock.reset();
     try {
-      final ready = await next().timeout(const Duration(seconds: 30));
+      final ready = await nextWithin(const Duration(seconds: 30));
       if (ready.name == 'session.error') {
         throw StateError(ready.errorText('应用信息服务启动失败'));
       }
@@ -177,7 +128,7 @@ class FireAppSession {
   }
 
   Future<FireDataResponse> reply(int id, Duration timeout) async {
-    final message = await next().timeout(timeout);
+    final message = await nextWithin(timeout);
     if (message.name == 'session.error') {
       throw StateError(message.errorText('应用信息服务失败'));
     }
@@ -185,7 +136,18 @@ class FireAppSession {
     return message;
   }
 
-  Future<FireDataResponse> next() async {
+  /// 等到下一帧。超时只取消这次等待，帧还留在队列里，不会被丢掉。
+  Future<FireDataResponse> nextWithin(Duration limit) {
+    final ticket = _waitGen;
+    final timer = Timer(limit, () {
+      if (ticket != _waitGen) return;
+      _cancelWait(TimeoutException('应用信息服务超时', limit));
+    });
+    return next(ticket).whenComplete(timer.cancel);
+  }
+
+  Future<FireDataResponse> next([int? ticket]) async {
+    final generation = ticket ?? _waitGen;
     while (_responses.isEmpty) {
       final pending = Completer<void>();
       _wait = pending;
@@ -195,28 +157,30 @@ class FireAppSession {
       } finally {
         if (identical(_wait, pending)) _wait = null;
       }
+      if (generation != _waitGen) {
+        throw TimeoutException('应用信息服务超时');
+      }
+    }
+    if (generation != _waitGen) {
+      throw TimeoutException('应用信息服务超时');
     }
     return _responses.removeAt(0);
   }
 
-  /// 丢掉当前进程。调用方可以接着再开一次。
-  Future<void> drop() async {
-    _linkReady = false;
-    _responses.clear();
+  void _cancelWait(Object error) {
+    _waitGen++;
     final pending = _wait;
     _wait = null;
     if (pending != null && !pending.isCompleted) {
-      pending.completeError(StateError('应用信息服务已结束'));
+      pending.completeError(error);
     }
-    await DeviceLink.close(serial);
   }
 
-  Future<void> _quit() async {
-    try {
-      await send(
-        FireDataRequest.none(name: 'session.quit', id: nextId()),
-      ).timeout(const Duration(seconds: 2));
-    } catch (_) {}
-    await drop();
+  /// 设备断开时关掉电脑这边的门口。不向反向端口发退出。
+  Future<void> drop() async {
+    _linkReady = false;
+    _responses.clear();
+    _cancelWait(StateError('应用信息服务已结束'));
+    await DeviceLink.close(serial);
   }
 }

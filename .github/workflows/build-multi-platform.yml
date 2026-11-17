@@ -116,11 +116,21 @@ jobs:
         id: build
         run: python scripts/build_app.py apk --release # 一次编译拆出 arm64-v8a 与 x86_64
 
-      - name: Upload Android artifact
-        uses: actions/upload-artifact@v4
+      # v4 总会把匹配到的文件打成一个 zip。v7 的 archive: false 一次只收一个文件，
+      # 产物名就是文件名，所以每个架构各传一次，Release 里直接是 apk。
+      - name: Upload arm64 APK
+        uses: actions/upload-artifact@v7
         with:
-          name: fire-adb-android
-          path: ${{ steps.build.outputs.artifact }}/fireadb-android-*.apk
+          path: ${{ steps.build.outputs.artifact }}/fireadb-android-*-arm64-v8a-*.apk
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload x86_64 APK
+        uses: actions/upload-artifact@v7
+        with:
+          path: ${{ steps.build.outputs.artifact }}/fireadb-android-*-x86_64-*.apk
+          archive: false
           if-no-files-found: error
           retention-days: 7
 
@@ -136,10 +146,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # 未压缩的 apk 要用 v8 下载。产物名是文件名 fireadb-android-*.apk，
+      # 不再是 fire-adb-android，所以用 fire* 把三端一起收进来。
       - name: Download all platform artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
-          pattern: fire-adb-*
+          pattern: fire*
           path: release_assets
           merge-multiple: true
 
