@@ -1,18 +1,16 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../files/android_storage_access.dart';
 import '../../files/data/source/remote_file_commands.dart';
 import '../../l10n/fireadb_localizations_ext.dart';
 import '../../l10n/generated/fireadb_localizations.dart';
 import '../../log/app_log.dart';
+import '../../log/log_directory_page.dart';
 import '../capture_notice.dart';
 import '../data/capture_paths.dart';
 import '../data/capture_store.dart';
-import '../data/local_opener.dart';
 import '../screenrecord_controller.dart';
 import 'capture_widgets.dart';
 
@@ -35,22 +33,6 @@ class _ScreenrecordPageState extends State<ScreenrecordPage> {
       ScreenrecordController(widget.serial),
       tag: widget.serial,
     );
-    if (Platform.isAndroid) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(_prepareDirectory());
-      });
-    }
-  }
-
-  Future<void> _prepareDirectory() async {
-    if (!mounted) return;
-    final granted = await ensureAllFilesAccess(context);
-    if (!mounted) return;
-    if (!granted) {
-      controller.loading.value = false;
-      return;
-    }
-    await controller.reload();
   }
 
   @override
@@ -62,10 +44,6 @@ class _ScreenrecordPageState extends State<ScreenrecordPage> {
   }
 
   Future<void> _start() async {
-    if (Platform.isAndroid) {
-      final granted = await ensureAllFilesAccess(context);
-      if (!granted || !mounted) return;
-    }
     final l10n = context.l10n;
     final result = await controller.start(l10n);
     if (!mounted) return;
@@ -81,12 +59,14 @@ class _ScreenrecordPageState extends State<ScreenrecordPage> {
   }
 
   Future<void> _openDirectory() async {
-    await _open(controller.directoryPath, openFile: false);
-  }
-
-  Future<void> _open(String path, {required bool openFile}) async {
+    final path = controller.directoryPath;
     try {
-      await openLocalPath(path, openFile: openFile);
+      await openAnchoredDirectory(
+        context,
+        title: context.l10n.workspaceScreenrecordTitle,
+        directory: path,
+        serial: widget.serial,
+      );
     } catch (error, stackTrace) {
       log.severe('打开录像路径失败：$path', error, stackTrace);
       if (!mounted) return;
@@ -169,10 +149,8 @@ class _ScreenrecordPageState extends State<ScreenrecordPage> {
                       busy: saving,
                       icon: Icons.movie_outlined,
                       embedded: true,
-                      onTap: (file) =>
-                          unawaited(_open(file.path, openFile: true)),
-                      onOpen: (file) =>
-                          unawaited(_open(file.path, openFile: true)),
+                      onTap: (file) => unawaited(_openDirectory()),
+                      onOpen: (file) => unawaited(_openDirectory()),
                       onDelete: (file) => unawaited(_delete(file)),
                     ),
                   ],

@@ -870,6 +870,7 @@
   },
   "storageAccessTitle": "需要文件访问权限",
   "storageAccessMessage": "浏览和保存手机上的目录需要授予「所有文件访问权限」。",
+  "storageAccessLegacyMessage": "浏览和保存手机上的目录需要存储读写权限。",
   "storageAccessGrant": "去授权",
   "localPickerChooseFolder": "选择文件夹",
   "localPickerChooseFiles": "选择文件",

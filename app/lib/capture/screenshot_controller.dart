@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:get/get.dart';
 
@@ -32,7 +31,6 @@ class ScreenshotController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    if (Platform.isAndroid) return;
     unawaited(reload());
   }
 

@@ -4,12 +4,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../files/android_storage_access.dart';
 import '../../l10n/fireadb_localizations_ext.dart';
 import '../../log/app_log.dart';
+import '../../log/log_directory_page.dart';
 import '../capture_notice.dart';
 import '../data/capture_store.dart';
-import '../data/local_opener.dart';
 import '../screenshot_controller.dart';
 import 'capture_widgets.dart';
 
@@ -32,22 +31,6 @@ class _ScreenshotPageState extends State<ScreenshotPage> {
       ScreenshotController(widget.serial),
       tag: widget.serial,
     );
-    if (Platform.isAndroid) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(_prepareDirectory());
-      });
-    }
-  }
-
-  Future<void> _prepareDirectory() async {
-    if (!mounted) return;
-    final granted = await ensureAllFilesAccess(context);
-    if (!mounted) return;
-    if (!granted) {
-      controller.loading.value = false;
-      return;
-    }
-    await controller.reload();
   }
 
   @override
@@ -59,10 +42,6 @@ class _ScreenshotPageState extends State<ScreenshotPage> {
   }
 
   Future<void> _capture() async {
-    if (Platform.isAndroid) {
-      final granted = await ensureAllFilesAccess(context);
-      if (!granted || !mounted) return;
-    }
     final l10n = context.l10n;
     final notice = await controller.capture(l10n);
     if (!mounted) return;
@@ -70,12 +49,14 @@ class _ScreenshotPageState extends State<ScreenshotPage> {
   }
 
   Future<void> _openDirectory() async {
-    await _open(controller.directoryPath, openFile: false);
-  }
-
-  Future<void> _open(String path, {required bool openFile}) async {
+    final path = controller.directoryPath;
     try {
-      await openLocalPath(path, openFile: openFile);
+      await openAnchoredDirectory(
+        context,
+        title: context.l10n.workspaceScreenshotTitle,
+        directory: path,
+        serial: widget.serial,
+      );
     } catch (error, stackTrace) {
       log.severe('打开截图路径失败：$path', error, stackTrace);
       if (!mounted) return;
@@ -164,8 +145,7 @@ class _ScreenshotPageState extends State<ScreenshotPage> {
                     busy: busy,
                     icon: Icons.image_outlined,
                     onTap: (file) => controller.select(file.path),
-                    onOpen: (file) =>
-                        unawaited(_open(file.path, openFile: true)),
+                    onOpen: (file) => unawaited(_openDirectory()),
                     onDelete: (file) => unawaited(_delete(file)),
                   ),
           ),

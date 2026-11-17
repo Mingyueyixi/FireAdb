@@ -15,10 +15,21 @@ Future<bool> hasAllFilesAccess() async {
   return granted == true;
 }
 
-/// 还没有权限时先说明原因，再打开系统授权页。用户拒绝或返回后仍未授权时返回 false。
+/// 安卓 11 及以上要去系统设置开「所有文件访问」。更早的系统没有这项，改为申请读写权限。
+Future<bool> _requestsManageAllFiles() async {
+  final manage = await _storageChannel.invokeMethod<bool>(
+    'requestsManageAllFiles',
+  );
+  return manage == true;
+}
+
+/// 还没有权限时先说明原因。安卓 11 及以上接着打开系统设置；
+/// 更低版本弹出存储读写授权。用户拒绝或返回后仍未授权时返回 false。
 Future<bool> ensureAllFilesAccess(BuildContext context) async {
   if (!Platform.isAndroid) return true;
   if (await hasAllFilesAccess()) return true;
+  if (!context.mounted) return false;
+  final manageAllFiles = await _requestsManageAllFiles();
   if (!context.mounted) return false;
   final proceed = await showDialog<bool>(
     context: context,
@@ -26,7 +37,11 @@ Future<bool> ensureAllFilesAccess(BuildContext context) async {
       final l10n = context.l10n;
       return AlertDialog(
         title: Text(l10n.storageAccessTitle),
-        content: Text(l10n.storageAccessMessage),
+        content: Text(
+          manageAllFiles
+              ? l10n.storageAccessMessage
+              : l10n.storageAccessLegacyMessage,
+        ),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(context, false),

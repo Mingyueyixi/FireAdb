@@ -1370,6 +1370,10 @@ class FireAdbLocalizationsEn extends FireAdbLocalizations {
       'Browsing and saving folders on this phone requires all-files access.';
 
   @override
+  String get storageAccessLegacyMessage =>
+      'Browsing and saving folders on this phone requires storage read and write permission.';
+
+  @override
   String get storageAccessGrant => 'Grant access';
 
   @override

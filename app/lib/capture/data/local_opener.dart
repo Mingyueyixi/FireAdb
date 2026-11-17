@@ -49,15 +49,11 @@ Future<String> androidExternalFilesDirectory() async {
   return path;
 }
 
-/// 用系统文件管理器打开目录。Android 上应用私有目录由应用内浏览器直接浏览。
-/// 共享存储里的目录仍交给系统文件管理器。
-Future<void> openSystemDirectory(String path) => openLocalPath(
-      path,
-      openFile: false,
-    );
-
 Future<void> openLocalPath(String path, {required bool openFile}) async {
   if (Platform.isAndroid) {
+    if (!openFile) {
+      throw StateError('无法在系统文件管理器中打开指定目录');
+    }
     final opened = await _storageChannel.invokeMethod<bool>('openPath', {
       'path': path,
       'openFile': openFile,

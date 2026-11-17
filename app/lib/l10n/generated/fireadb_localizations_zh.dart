@@ -1328,6 +1328,9 @@ class FireAdbLocalizationsZh extends FireAdbLocalizations {
   String get storageAccessMessage => '浏览和保存手机上的目录需要授予「所有文件访问权限」。';
 
   @override
+  String get storageAccessLegacyMessage => '浏览和保存手机上的目录需要存储读写权限。';
+
+  @override
   String get storageAccessGrant => '去授权';
 
   @override

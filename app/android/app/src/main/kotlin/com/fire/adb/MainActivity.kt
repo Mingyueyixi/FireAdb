@@ -7,12 +7,10 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
-import android.provider.DocumentsContract
 import android.provider.Settings
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import java.io.File
-import java.io.IOException
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -29,6 +27,8 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "hasAllFilesAccess" -> result.success(hasAllFilesAccess())
+                    "requestsManageAllFiles" ->
+                        result.success(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
                     "requestAllFilesAccess" -> requestAllFilesAccess(result)
                     "externalFilesDirectory" -> externalFilesDirectory(result)
                     "openPath" -> openPath(call.arguments, result)
@@ -103,12 +103,13 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun hasAllFilesAccess(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            Environment.isExternalStorageManager()
-        } else {
-            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
-                PackageManager.PERMISSION_GRANTED
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Environment.isExternalStorageManager()
         }
+        return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) ==
+            PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+            PackageManager.PERMISSION_GRANTED
     }
 
     private fun openPath(arguments: Any?, result: MethodChannel.Result) {
@@ -120,11 +121,11 @@ class MainActivity : FlutterActivity() {
             return
         }
         try {
-            if (openFile) {
-                openLocalFile(path)
-            } else {
-                openLocalDirectory(path)
+            if (!openFile) {
+                result.error("open_failed", "无法在系统文件管理器中打开指定目录", null)
+                return
             }
+            openLocalFile(path)
             result.success(true)
         } catch (error: ActivityNotFoundException) {
             result.error("open_failed", "没有可以打开它的应用", null)
@@ -146,42 +147,6 @@ class MainActivity : FlutterActivity() {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startActivity(view)
-    }
-
-    private fun openLocalDirectory(path: String) {
-        val relative = sharedStorageRelative(path)
-            ?: throw IllegalStateException("这个目录不能用系统文件管理器打开")
-        val documentId = if (relative.isEmpty()) "primary:" else "primary:$relative"
-        val uri = DocumentsContract.buildDocumentUri(
-            "com.android.externalstorage.documents",
-            documentId,
-        )
-        val view = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, DocumentsContract.Document.MIME_TYPE_DIR)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        startActivity(view)
-    }
-
-    private fun sharedStorageRelative(path: String): String? {
-        val file = File(path)
-        val absolute = try {
-            file.canonicalPath
-        } catch (_: IOException) {
-            file.absolutePath
-        }
-        val roots = listOf(
-            Environment.getExternalStorageDirectory().absolutePath,
-            "/sdcard",
-            "/storage/emulated/0",
-        )
-        for (root in roots) {
-            val trimmed = root.trimEnd('/')
-            if (absolute == trimmed) return ""
-            val prefix = "$trimmed/"
-            if (absolute.startsWith(prefix)) return absolute.removePrefix(prefix)
-        }
-        return null
     }
 
     private fun externalFilesDirectory(result: MethodChannel.Result) {
@@ -247,7 +212,8 @@ class MainActivity : FlutterActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != requestStorage) return
-        val granted = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
+        val granted = grantResults.isNotEmpty() &&
+            grantResults.all { it == PackageManager.PERMISSION_GRANTED }
         finishAccessRequest(granted && hasAllFilesAccess())
     }
 

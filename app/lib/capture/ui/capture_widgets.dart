@@ -80,13 +80,13 @@ class CaptureDirectoryBar extends StatelessWidget {
     super.key,
     required this.path,
     required this.enabled,
-    required this.onOpen,
+    this.onOpen,
     required this.onRefresh,
   });
 
   final String path;
   final bool enabled;
-  final VoidCallback onOpen;
+  final VoidCallback? onOpen;
   final VoidCallback onRefresh;
 
   @override
@@ -124,11 +124,12 @@ class CaptureDirectoryBar extends StatelessWidget {
             onPressed: enabled ? onRefresh : null,
             icon: const Icon(Icons.refresh),
           ),
-          IconButton(
-            tooltip: l10n.captureOpenFolder,
-            onPressed: enabled ? onOpen : null,
-            icon: const Icon(Icons.folder_open),
-          ),
+          if (onOpen != null)
+            IconButton(
+              tooltip: l10n.captureOpenFolder,
+              onPressed: enabled ? onOpen : null,
+              icon: const Icon(Icons.folder_open),
+            ),
         ],
       ),
     );

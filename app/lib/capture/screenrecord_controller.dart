@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:get/get.dart';
 
@@ -89,7 +88,7 @@ class ScreenrecordController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    if (!Platform.isAndroid) unawaited(reload());
+    unawaited(reload());
     _detectTask = _detectRecordMethodBody();
   }
 

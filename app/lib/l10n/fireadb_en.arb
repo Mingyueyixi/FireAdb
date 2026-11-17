@@ -865,6 +865,7 @@
   },
   "storageAccessTitle": "Storage access required",
   "storageAccessMessage": "Browsing and saving folders on this phone requires all-files access.",
+  "storageAccessLegacyMessage": "Browsing and saving folders on this phone requires storage read and write permission.",
   "storageAccessGrant": "Grant access",
   "localPickerChooseFolder": "Choose a folder",
   "localPickerChooseFiles": "Choose files",

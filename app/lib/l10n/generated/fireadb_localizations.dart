@@ -2375,6 +2375,12 @@ abstract class FireAdbLocalizations {
   /// **'浏览和保存手机上的目录需要授予「所有文件访问权限」。'**
   String get storageAccessMessage;
 
+  /// No description provided for @storageAccessLegacyMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'浏览和保存手机上的目录需要存储读写权限。'**
+  String get storageAccessLegacyMessage;
+
   /// No description provided for @storageAccessGrant.
   ///
   /// In zh, this message translates to:
